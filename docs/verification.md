@@ -1,6 +1,6 @@
 # Verification
 
-Run on 2026-10-19, macOS, Node 26.8.1, on commit-in-progress after `31402be`. Everything here was run locally against `127.0.0.1`. Nothing was deployed. Each server was started by PID and stopped with `kill <pid>`; `pgrep` confirmed no server process was left.
+Run on 2026-10-19 on macOS with Node 26.8.1, against the code in commit `46d5aea` (the commit that added this file). Everything here was run locally against `127.0.0.1`. Nothing was deployed. Each server was started by PID and stopped with `kill <pid>`; `pgrep` confirmed no server process was left.
 
 ## 1. Unit and integration tests
 
