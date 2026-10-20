@@ -1,0 +1,9 @@
+{
+  "name": "@learning-mcp/core",
+  "version": "0.1.0",
+  "description": "Content schema, branch engine, deterministic checks, xAPI builders and the learner-owned record for learning over MCP.",
+  "type": "module",
+  "license": "GPL-2.0-or-later",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {}
+}
