@@ -1,0 +1,1000 @@
+{
+  "@context": "https://w3id.org/xapi/profiles/context",
+  "id": "https://w3id.org/learning-mcp/xapi",
+  "type": "Profile",
+  "conformsTo": "https://w3id.org/xapi/profiles#1.0",
+  "prefLabel": {
+    "en": "learning-mcp"
+  },
+  "definition": {
+    "en": "Statements for learning that runs inside an AI agent through a Model Context Protocol course server: authored beats, server-validated branching, deterministic checks and planted-bug catches, about an anonymous learner who owns the record. Draft; unofficial."
+  },
+  "seeAlso": "https://github.com/derintolu/learning-mcp",
+  "versions": [
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "generatedAtTime": "2026-10-19T00:00:00Z"
+    }
+  ],
+  "author": {
+    "type": "Person",
+    "name": "Derin Tolu (draft by Claude)",
+    "url": "https://github.com/derintolu"
+  },
+  "concepts": [
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/verbs/placed",
+      "type": "Verb",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "placed"
+      },
+      "definition": {
+        "en": "The learner was placed into a learning path at a start lesson, by an agent choosing among authored options that the course server validated."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/verbs/branched",
+      "type": "Verb",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "branched"
+      },
+      "definition": {
+        "en": "After a checkpoint, the learner was sent along one authored branch. The agent chose the branch against the rubric; the course server validated it. The result extensions name the branch, its target and the agent rationale."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/verbs/caught",
+      "type": "Verb",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "caught"
+      },
+      "definition": {
+        "en": "The learner found and fixed a bug that the course author planted in AI-written code, as shown by the authored fix checks passing."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/activity-types/path",
+      "type": "ActivityType",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "learning path"
+      },
+      "definition": {
+        "en": "An ordered sequence of lessons within a course."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/activity-types/beat",
+      "type": "ActivityType",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "teaching beat"
+      },
+      "definition": {
+        "en": "One authored teaching step inside a lesson: a goal, the key content, and optionally a question for the learner. The agent delivers it in its own words."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
+      "type": "ActivityType",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "checkpoint"
+      },
+      "definition": {
+        "en": "A question inside a lesson whose answer decides which authored branch the learner takes. Free-text answers are judged by the agent against an authored rubric; code answers are decided by deterministic checks."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/activity-types/file",
+      "type": "ActivityType",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "learner file"
+      },
+      "definition": {
+        "en": "A text file the learner edits by hand and submits for deterministic checks."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/activity-types/planted-bug",
+      "type": "ActivityType",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "planted bug"
+      },
+      "definition": {
+        "en": "A deliberate mistake the course author planted in AI-written code. The course server never reveals it to the agent before it is fixed."
+      }
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/extensions/branch",
+      "type": "ResultExtension",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "branch"
+      },
+      "definition": {
+        "en": "The authored id of the branch taken."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\"}"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/extensions/to",
+      "type": "ResultExtension",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "branch target"
+      },
+      "definition": {
+        "en": "The activity IRI of the lesson the branch leads to, or null when the branch ends the path."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":[\"string\",\"null\"]}"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/extensions/rationale",
+      "type": "ResultExtension",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "judge rationale"
+      },
+      "definition": {
+        "en": "The agent's one-sentence reason for choosing the branch (agent-written, at most 300 characters)."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\",\"maxLength\":300}"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/extensions/checks",
+      "type": "ResultExtension",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "check results"
+      },
+      "definition": {
+        "en": "Per-check results of the authored deterministic checks, by check index. Empty for planted-bug fixes, so the record does not point at the bug."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"integer\"},\"passed\":{\"type\":\"boolean\"}},\"required\":[\"index\",\"passed\"]}}"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/extensions/start-lesson",
+      "type": "ResultExtension",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "start lesson"
+      },
+      "definition": {
+        "en": "The activity IRI of the lesson the learner starts at after placement."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\"}"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/extensions/skipped",
+      "type": "ResultExtension",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "skipped lessons"
+      },
+      "definition": {
+        "en": "Activity IRIs of lessons the placement skipped."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"array\",\"items\":{\"type\":\"string\"}}"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/extensions/rules-version",
+      "type": "ContextExtension",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "rules version"
+      },
+      "definition": {
+        "en": "The version of the learning-mcp agent rules the course server sent with this step, for example \"v0.1\"."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\"}"
+    }
+  ],
+  "templates": [
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/placed",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "placed into a path"
+      },
+      "definition": {
+        "en": "Emitted by choose_placement."
+      },
+      "verb": "https://w3id.org/learning-mcp/xapi/verbs/placed",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/path",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.extensions['https://w3id.org/learning-mcp/xapi/extensions/start-lesson']",
+          "presence": "included"
+        },
+        {
+          "location": "$.result.response",
+          "presence": "recommended",
+          "scopeNote": {
+            "en": "The agent-written placement reason."
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-experienced",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "experienced a beat"
+      },
+      "definition": {
+        "en": "Emitted when next_beat serves a beat."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/experienced",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/beat",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-answered",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "answered a beat question"
+      },
+      "definition": {
+        "en": "Emitted when next_beat carries the learner reply to the previous beat question."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/answered",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/beat",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.response",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The learner's own words."
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-answered",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "answered a checkpoint"
+      },
+      "definition": {
+        "en": "Emitted by submit_checkpoint."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/answered",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.response",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The learner's own words."
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-passed",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "passed a checkpoint"
+      },
+      "definition": {
+        "en": "Emitted by choose_branch when the branch has success: true."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/passed",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.success",
+          "all": [
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-failed",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "did not pass a checkpoint"
+      },
+      "definition": {
+        "en": "Emitted by choose_branch when the branch has success: false."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/failed",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.success",
+          "all": [
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/branched",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "branched at a checkpoint"
+      },
+      "definition": {
+        "en": "Emitted by choose_branch after the server validated the branch."
+      },
+      "verb": "https://w3id.org/learning-mcp/xapi/verbs/branched",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.extensions['https://w3id.org/learning-mcp/xapi/extensions/branch']",
+          "presence": "included"
+        },
+        {
+          "location": "$.result.extensions['https://w3id.org/learning-mcp/xapi/extensions/rationale']",
+          "presence": "included"
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-passed",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "file passed checks"
+      },
+      "definition": {
+        "en": "Emitted by check_code or submit_checkpoint when every authored check passes."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/passed",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/file",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.success",
+          "all": [
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-failed",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "file failed checks"
+      },
+      "definition": {
+        "en": "Emitted by check_code or submit_checkpoint when any authored check fails."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/failed",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/file",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.success",
+          "all": [
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/bug-caught",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "caught a planted bug"
+      },
+      "definition": {
+        "en": "Emitted by check_code when the authored fix checks pass."
+      },
+      "verb": "https://w3id.org/learning-mcp/xapi/verbs/caught",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/planted-bug",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.success",
+          "all": [
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/lesson-completed",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "completed a lesson"
+      },
+      "definition": {
+        "en": "Emitted when a lesson finishes: a success branch, or the end of a lesson with no checkpoint."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/completed",
+      "objectActivityType": "http://adlnet.gov/expapi/activities/lesson",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.completion",
+          "all": [
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/path-completed",
+      "type": "StatementTemplate",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "completed a path"
+      },
+      "definition": {
+        "en": "Emitted when a branch with target null ends the path, or the last lesson completes."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/completed",
+      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/path",
+      "contextGroupingActivityType": [
+        "http://adlnet.gov/expapi/activities/course"
+      ],
+      "rules": [
+        {
+          "location": "$.actor.account.homePage",
+          "all": [
+            "https://w3id.org/learning-mcp/learner"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/learning-mcp/xapi/v0.1"
+          ]
+        },
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.result.completion",
+          "all": [
+            true
+          ]
+        }
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beat",
+      "type": "Pattern",
+      "sequence": [
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-experienced",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-beat-answer"
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-beat-answer",
+      "type": "Pattern",
+      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-answered"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-result",
+      "type": "Pattern",
+      "alternates": [
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-passed",
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-failed"
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/bug-attempts",
+      "type": "Pattern",
+      "sequence": [
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-passed",
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/bug-caught"
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
+      "type": "Pattern",
+      "zeroOrMore": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-result"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint-outcome",
+      "type": "Pattern",
+      "alternates": [
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-passed",
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-failed"
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint",
+      "type": "Pattern",
+      "sequence": [
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-answered",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint-outcome",
+        "https://w3id.org/learning-mcp/xapi/v0.1/templates/branched"
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-bug",
+      "type": "Pattern",
+      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/bug-attempts"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-checkpoint",
+      "type": "Pattern",
+      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-lesson-completed",
+      "type": "Pattern",
+      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/lesson-completed"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beats",
+      "type": "Pattern",
+      "oneOrMore": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beat"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lesson",
+      "type": "Pattern",
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "One pass through a lesson: beats, then an optional planted bug, then an optional checkpoint, then completion when it was passed."
+      },
+      "definition": {
+        "en": "One pass through a lesson: beats, then an optional planted bug, then an optional checkpoint, then completion when it was passed."
+      },
+      "sequence": [
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beats",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-bug",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-checkpoint",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-lesson-completed"
+      ]
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lessons",
+      "type": "Pattern",
+      "zeroOrMore": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lesson"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-placed",
+      "type": "Pattern",
+      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/placed"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-path-completed",
+      "type": "Pattern",
+      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/path-completed"
+    },
+    {
+      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/course-registration",
+      "type": "Pattern",
+      "primary": true,
+      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "prefLabel": {
+        "en": "Everything one learner does in one course registration: an optional placement, any number of lesson passes, and path completion."
+      },
+      "definition": {
+        "en": "Everything one learner does in one course registration: an optional placement, any number of lesson passes, and path completion."
+      },
+      "sequence": [
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-placed",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lessons",
+        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-path-completed"
+      ]
+    }
+  ]
+}

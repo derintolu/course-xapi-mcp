@@ -4,6 +4,10 @@
   "description": "Content schema, branch engine, deterministic checks, xAPI builders and the learner-owned record for learning over MCP.",
   "type": "module",
   "license": "GPL-2.0-or-later",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": {}
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
 }

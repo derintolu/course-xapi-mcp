@@ -9,7 +9,10 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json",
+    "rules": "node scripts/sync-rules.mjs",
+    "profile": "node --experimental-strip-types scripts/build-profile.ts",
+    "start": "npm run start -w packages/server"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",

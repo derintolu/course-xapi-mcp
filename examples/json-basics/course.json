@@ -1,0 +1,109 @@
+{
+  "id": "json-basics",
+  "title": "JSON basics",
+  "description": "A two-lesson example course: what JSON is, and how to catch a type bug in an AI-written config file.",
+  "version": "0.1.0",
+  "language": "en",
+  "activityBase": "https://example.org/learning-mcp/courses/json-basics",
+  "license": "CC-BY-SA-4.0",
+  "rules": [
+    "When the learner writes JSON, ask them to read it back as data types (string, number, boolean, null, array, object) before you comment on it."
+  ],
+  "placement": {
+    "intro": "Find out whether the learner has written JSON by hand before. Ask at most two short questions.",
+    "maxQuestions": 2
+  },
+  "paths": {
+    "json": {
+      "id": "json",
+      "title": "Read and write JSON",
+      "tagline": "From the six value types to fixing a real config file.",
+      "status": "live",
+      "lessons": ["what-is-json", "fix-the-config"],
+      "placementHints": "Start at what-is-json for anyone new to JSON. Start at fix-the-config, skipping what-is-json, only if the learner already edits JSON files by hand and can name its value types."
+    }
+  },
+  "lessons": {
+    "what-is-json": {
+      "id": "what-is-json",
+      "pathId": "json",
+      "title": "What JSON is",
+      "minutes": 5,
+      "sources": [
+        { "title": "RFC 8259: The JavaScript Object Notation (JSON) Data Interchange Format", "url": "https://www.rfc-editor.org/rfc/rfc8259" },
+        { "title": "JSON.org", "url": "https://www.json.org/json-en.html" }
+      ],
+      "beats": [
+        {
+          "id": "text-format",
+          "goal": "The learner knows JSON is plain text that describes data.",
+          "content": "JSON is a text format for data. A JSON document is one value. A value is one of six types: an object (name/value pairs in curly braces), an array (an ordered list in square brackets), a string (in double quotes), a number, true or false, or null.",
+          "question": "Before we go on: which of these do you think is a string in JSON, 42 or \"42\"? Why?"
+        },
+        {
+          "id": "strict-rules",
+          "goal": "The learner knows the rules that trip people up.",
+          "content": "JSON is stricter than JavaScript. Names in objects must be strings in double quotes. Single quotes are not allowed. A trailing comma after the last item is an error. There are no comments.",
+          "question": "Predict: is {\"port\": 8080,} valid JSON? What would a parser say?"
+        }
+      ],
+      "checkpoint": {
+        "id": "types",
+        "kind": "free-text",
+        "question": "In your own words: what is the difference between {\"port\": 8080} and {\"port\": \"8080\"}, and why might a program care?",
+        "rubric": "A good answer says the first value is a number and the second is a string, and that a program reading the value may compare, add or validate it differently (for example, a server expecting a number may reject or mishandle a string). Exact wording does not matter.",
+        "branches": [
+          { "id": "ready", "when": "The answer identifies number versus string and gives any sensible reason a program might care.", "success": true, "to": "fix-the-config", "message": "You can tell the types apart. Next, a config file an AI wrote, with one planted bug." },
+          { "id": "review", "when": "The answer misses the number/string difference or gives no reason it matters.", "success": false, "to": "what-is-json", "message": "Let's go over the six value types once more before moving on." }
+        ]
+      }
+    },
+    "fix-the-config": {
+      "id": "fix-the-config",
+      "pathId": "json",
+      "title": "Fix the config",
+      "minutes": 8,
+      "sources": [
+        { "title": "RFC 8259, section 6: Numbers", "url": "https://www.rfc-editor.org/rfc/rfc8259#section-6" }
+      ],
+      "beats": [
+        {
+          "id": "read-as-types",
+          "goal": "The learner reads a JSON file by value types, not by eye.",
+          "content": "When you review JSON, read each value and name its type. Quoted means string, even if it looks like a number or a boolean. \"true\" is a string; true is a boolean.",
+          "question": "In {\"debug\": \"false\"}, what type is the value of debug, and what might a program do with it?"
+        }
+      ],
+      "starterFiles": {
+        "config.json": "{\n  \"name\": \"demo\",\n  \"port\": \"8080\",\n  \"debug\": false\n}\n"
+      },
+      "bug": {
+        "id": "port-type",
+        "file": "config.json",
+        "code": "{\n  \"name\": \"demo\",\n  \"port\": \"8080\",\n  \"debug\": false\n}\n",
+        "explanation": "port was the string \"8080\" instead of the number 8080. A server that expects a number can reject it, or treat it as text.",
+        "hint": "Read every value aloud with its type. One of them is not the type the server expects for a network port.",
+        "fixChecks": [
+          { "type": "json", "file": "config.json", "pointer": "/port", "equals": 8080, "message": "Not fixed yet." },
+          { "type": "json", "file": "config.json", "pointer": "/name", "equals": "demo", "message": "Not fixed yet." }
+        ]
+      },
+      "checkpoint": {
+        "id": "add-timeout",
+        "kind": "code",
+        "question": "Add a timeout setting of 30 seconds as a number, in config.json, then send the file and explain the type you chose.",
+        "rubric": "The checks decide whether the file is right. For the explanation, a good answer says timeout is a number because the program does arithmetic or comparisons with it.",
+        "file": "config.json",
+        "checks": [
+          { "type": "json", "file": "config.json", "pointer": "/timeout", "equals": 30, "message": "config.json needs a top-level \"timeout\" whose value is the number 30 (not a string)." },
+          { "type": "json", "file": "config.json", "pointer": "/port", "equals": 8080, "message": "Keep port as the number 8080." }
+        ],
+        "branches": [
+          { "id": "done", "when": "The checks passed and the learner explains why timeout is a number.", "success": true, "to": null, "message": "That's the path done. Your record has every step, and it's yours to keep." },
+          { "id": "explain-again", "when": "The checks passed but the explanation of the type is missing or wrong.", "success": false, "to": "fix-the-config", "message": "The file is right; let's make sure the reason is clear too." },
+          { "id": "retry", "when": "The checks failed.", "success": false, "to": "fix-the-config", "message": "Not quite yet. Look at the check messages and try again." }
+        ]
+      }
+    }
+  }
+}
