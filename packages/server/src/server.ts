@@ -1,6 +1,6 @@
 // Reference learning-mcp course server: one web-standard fetch handler over MCP Streamable HTTP.
 // Built on @modelcontextprotocol/server v2 (MCP 2026-07-28, with stateless service of 2025-era clients).
-import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
+import { createMcpHandler, fromJsonSchema, McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import {
   LIMITS,
@@ -47,8 +47,28 @@ type ToolResult = {
   isError?: boolean;
 };
 
-const RulesSchema = z.object({ version: z.string(), digest: z.array(z.string()), course: z.array(z.string()), full: z.string() });
-const Output = z.looseObject({ ok: z.boolean(), rules: RulesSchema });
+// Output schema as plain JSON Schema: every result has ok and rules, plus tool-specific fields.
+// Written by hand (not from zod) so free-form fields are spelled `additionalProperties: true`,
+// which the MCP Inspector's portability check accepts for every target dialect.
+const Output = fromJsonSchema({
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    rules: {
+      type: 'object',
+      properties: {
+        version: { type: 'string' },
+        digest: { type: 'array', items: { type: 'string' } },
+        course: { type: 'array', items: { type: 'string' } },
+        full: { type: 'string' },
+      },
+      required: ['version', 'digest', 'course', 'full'],
+      additionalProperties: false,
+    },
+  },
+  required: ['ok', 'rules'],
+  additionalProperties: true,
+});
 
 const handleArg = z.string().max(64).describe('The record handle returned by start_placement or link_record. Treat it as a secret.');
 
@@ -200,17 +220,15 @@ export function createCourseServer(opts: CourseServerOptions) {
 
     tool(
       'link_record',
-      'Continue from an exported record (the JSON from get_record or a learning-record.json file). Returns a new handle.',
-      z.object({ record: z.union([z.string().max(4_000_000), z.looseObject({})]) }),
+      'Continue from an exported record: pass the JSON text from get_record or a learning-record.json file. Returns a new handle.',
+      z.object({ record: z.string().max(4_000_000).describe('The exported record as JSON text.') }),
       { readOnlyHint: false },
       async ({ record }, ctx) => {
-        let raw: unknown = record;
-        if (typeof record === 'string') {
-          try {
-            raw = JSON.parse(record);
-          } catch {
-            return err('record is not valid JSON');
-          }
+        let raw: unknown;
+        try {
+          raw = JSON.parse(record);
+        } catch {
+          return err('record is not valid JSON');
         }
         const p = parseRecord(raw);
         if (!p.ok) return err(p.error);

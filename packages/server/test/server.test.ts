@@ -135,7 +135,7 @@ describe.each(['legacy', 'modern'] as const)('over MCP (%s era)', (era) => {
     const { handle } = await toFirstCheckpoint(call);
     const rec = (await call('get_record', { handle })).data.record;
     rec.statements[0].actor.mbox = 'mailto:someone@example.org';
-    const r = await call('link_record', { record: rec });
+    const r = await call('link_record', { record: JSON.stringify(rec) });
     expect(r.isError).toBe(true);
     expect(r.data.error).toMatch(/anonymous/);
   });
