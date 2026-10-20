@@ -21,7 +21,12 @@ export const isHandle = (h: unknown): h is string => typeof h === 'string' && HA
 /** In-memory store with an inactivity expiry. Fine for one process; use a durable store in production. */
 export class MemoryStore implements RecordStore {
   private items = new Map<string, { record: LearningRecord; touched: number }>();
-  constructor(private ttlMs = 30 * 24 * 60 * 60 * 1000, private now = () => Date.now()) {}
+  private ttlMs: number;
+  private now: () => number;
+  constructor(ttlMs = 30 * 24 * 60 * 60 * 1000, now = () => Date.now()) {
+    this.ttlMs = ttlMs;
+    this.now = now;
+  }
 
   async get(handle: string) {
     const it = this.items.get(handle);

@@ -116,7 +116,7 @@ Tool annotations MUST be honest: read-only tools set `readOnlyHint: true`; `dele
 
 ## 8. Learner text and prompt injection
 
-8.1. Any learner-written text a server returns to the agent MUST be wrapped as `<learner_input>…</learner_input>`. Any `<learner_input>` or `</learner_input>` tag inside the text, in any case or spacing, MUST be neutralised before wrapping.
+8.1. Any learner-written text a server returns to the agent MUST be wrapped as `<learner_input>…</learner_input>`. Any `<learner_input>` or `</learner_input>` tag inside the text, in any case or spacing, MUST be neutralised before wrapping. The one exception is the exported record from `get_record`: it is returned unchanged, as a JSON document, so it stays a faithful copy, and the result MUST say that it contains learner-written text to be treated as data.
 
 8.2. A server MUST treat learner text as data. It MUST NOT interpret it, use it as a pattern or a path, or let it change which branches are allowed.
 

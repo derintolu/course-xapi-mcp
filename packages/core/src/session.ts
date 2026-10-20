@@ -14,7 +14,14 @@ const fail = (error: string) => ({ ok: false as const, error });
 const ref = (l: Lesson) => ({ id: l.id, title: l.title });
 
 class Tx {
-  constructor(public record: LearningRecord, private course: Course, private ctx: Ctx) {}
+  record: LearningRecord;
+  private course: Course;
+  private ctx: Ctx;
+  constructor(record: LearningRecord, course: Course, ctx: Ctx) {
+    this.record = record;
+    this.course = course;
+    this.ctx = ctx;
+  }
   apply(...events: RecordEvent[]) {
     for (const e of events) this.record = applyEvent(this.record, this.course, e, this.ctx);
     return this;
