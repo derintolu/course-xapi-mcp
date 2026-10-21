@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { PROFILE_VERSION, RULES_VERSION, checkProfile, validateStatement } from '@learning-mcp/core';
+import { MemoryStore, PROFILE_VERSION, RULES_VERSION, StoreConflictError, StoreError, checkProfile, validateStatement, type LearningRecord } from '@learning-mcp/core';
 import { createCourseServer } from '../src/index.ts';
 import { connect, loadCourse, type Era } from './helpers.ts';
 
@@ -180,5 +180,82 @@ describe('HTTP guards', () => {
   it('serves a small JSON description at / and 404 elsewhere', async () => {
     expect(await (await app.fetch(new Request('http://localhost/'))).json()).toMatchObject({ mcp: '/mcp' });
     expect((await app.fetch(new Request('http://localhost/other'))).status).toBe(404);
+  });
+});
+
+/** A MemoryStore whose put, get or delete can be made to throw. */
+class FlakyStore extends MemoryStore {
+  failPut: Error | null = null;
+  failGet: Error | null = null;
+  failDelete: Error | null = null;
+  async get(h: string) {
+    if (this.failGet) throw this.failGet;
+    return super.get(h);
+  }
+  async put(h: string, r: LearningRecord) {
+    if (this.failPut) throw this.failPut;
+    return super.put(h, r);
+  }
+  async delete(h: string) {
+    if (this.failDelete) throw this.failDelete;
+    return super.delete(h);
+  }
+}
+
+describe.each(['legacy', 'modern'] as const)('store failures become tool errors (%s era)', (era) => {
+  const RETRY = 'the record was changed by another call at the same time; call this tool again';
+  const DOWN = 'the record store is unavailable right now; try again shortly';
+  const setup = async () => {
+    const store = new FlakyStore();
+    const s = await connect(era, createCourseServer({ course: loadCourse(), store }));
+    open.push(s);
+    const handle = (await s.call('start_placement')).data.handle;
+    await s.call('choose_placement', { handle, pathId: 'json', startLessonId: 'what-is-json', skip: [], reason: 'New to JSON.' });
+    return { ...s, store, handle };
+  };
+
+  it('a conflict on put is a retryable tool error and the record is unchanged', async () => {
+    const { call, store, handle } = await setup();
+    const before = (await call('get_record', { handle })).data.record;
+    store.failPut = new StoreConflictError();
+    const r = await call('next_beat', { handle });
+    expect(r.isError).toBe(true);
+    expect(r.data.error).toBe(RETRY);
+    store.failPut = null;
+    expect((await call('get_record', { handle })).data.record).toEqual(before);
+  });
+
+  it('an outage is a tool error that never echoes the inner message', async () => {
+    const { call, store, handle } = await setup();
+    store.failGet = new Error('secret detail');
+    for (const [name, args] of [
+      ['next_beat', { handle }],
+      ['get_record', { handle }],
+      ['start_placement', { handle }],
+    ] as const) {
+      const r = await call(name, args);
+      expect(r.isError, name).toBe(true);
+      expect(r.data.error, name).toBe(DOWN);
+      expect(JSON.stringify(r.raw), name).not.toContain('secret detail');
+    }
+    store.failGet = null;
+    store.failPut = new Error('secret detail');
+    for (const r of [await call('start_placement'), await call('link_record', { record: JSON.stringify((await call('get_record', { handle })).data.record) })]) {
+      expect(r.isError).toBe(true);
+      expect(r.data.error).toBe(DOWN);
+    }
+    store.failPut = null;
+    store.failDelete = new Error('secret detail');
+    const d = await call('delete_record', { handle });
+    expect(d.isError).toBe(true);
+    expect(d.data.error).toBe(DOWN);
+  });
+
+  it('a StoreError passes its public message through', async () => {
+    const { call, store, handle } = await setup();
+    store.failPut = new StoreError('this record has reached its size limit; export it with get_record to keep it');
+    const r = await call('next_beat', { handle });
+    expect(r.isError).toBe(true);
+    expect(r.data.error).toBe('this record has reached its size limit; export it with get_record to keep it');
   });
 });

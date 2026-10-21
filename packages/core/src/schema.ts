@@ -5,7 +5,14 @@ import { z } from 'zod';
 
 const text = z.string().trim().min(1);
 const id = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/, 'ids are 1-64 chars of a-z, 0-9 and -, starting with a letter or digit');
-const fileName = z.string().min(1).max(128).regex(/^[^\s/\\][^/\\]*$/, 'file names have no slashes and no leading space');
+// Relative POSIX paths such as "templates/index.html": no leading "/", no empty, "." or ".." segment,
+// no backslash, and no segment that starts with a space.
+const fileName = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[^\s/\\][^/\\]*(\/[^\s/\\][^/\\]*)*$/, 'file names are relative paths with no empty segments, backslashes or leading spaces')
+  .refine((f) => f.split('/').every((seg) => seg !== '.' && seg !== '..'), 'file names may not contain "." or ".." segments');
 
 export const CheckSchema = z.discriminatedUnion('type', [
   z.object({ type: z.enum(['contains', 'notContains']), file: fileName, value: z.string(), message: text }).strict(),

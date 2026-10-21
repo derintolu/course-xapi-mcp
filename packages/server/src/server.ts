@@ -19,6 +19,7 @@ import {
   parseRecord,
   rulesBlock,
   startPlacement,
+  StoreError,
   submitCheckpoint,
   type Course,
   type Ctx,
@@ -79,9 +80,31 @@ function platformOf(ctx: unknown): string | undefined {
   return typeof name === 'string' && /^[\w .:@+\/-]{1,64}$/.test(name) ? name : undefined;
 }
 
+const STORE_DOWN = 'the record store is unavailable right now; try again shortly';
+
+/** A failed store call, carrying the only message the agent may see. */
+class StoreFailure extends Error {}
+
+/** Wraps a store so every failure becomes a StoreFailure: a StoreError keeps its public message, anything else is hidden. */
+function guardStore(store: RecordStore): RecordStore {
+  const guard = async <T>(f: () => Promise<T>): Promise<T> => {
+    try {
+      return await f();
+    } catch (e) {
+      throw new StoreFailure(e instanceof StoreError ? e.message : STORE_DOWN);
+    }
+  };
+  return {
+    get: (h) => guard(() => store.get(h)),
+    put: (h, r) => guard(() => store.put(h, r)),
+    delete: (h) => guard(() => store.delete(h)),
+  };
+}
+
 export function createCourseServer(opts: CourseServerOptions) {
   const { course } = opts;
-  const store = opts.store ?? new MemoryStore();
+  const rawStore = opts.store ?? new MemoryStore();
+  const store = guardStore(rawStore);
   const endpoint = opts.endpoint ?? '/mcp';
   const makeCtx = opts.ctx ?? defaultCtx;
   const rules = rulesBlock(course);
@@ -120,7 +143,15 @@ export function createCourseServer(opts: CourseServerOptions) {
       server.registerTool(
         name,
         { title: name.replace(/_/g, ' '), description, inputSchema, outputSchema: Output, annotations: { openWorldHint: false, destructiveHint: false, ...annotations } },
-        handler as never,
+        (async (args: z.infer<S>, ctx: unknown) => {
+          try {
+            return await handler(args, ctx);
+          } catch (e) {
+            // Store failures become tool errors; the record was not changed. Anything else is a real bug.
+            if (e instanceof StoreFailure) return err(e.message);
+            throw e;
+          }
+        }) as never,
       );
 
     tool('list_paths', `List the paths and lessons of "${course.title}". Read-only.`, z.object({}), { readOnlyHint: true, idempotentHint: true }, () => ok(listPaths(course)));
@@ -284,5 +315,5 @@ export function createCourseServer(opts: CourseServerOptions) {
     return mcp.fetch(req);
   }
 
-  return { fetch, close: () => mcp.close(), store };
+  return { fetch, close: () => mcp.close(), store: rawStore };
 }
