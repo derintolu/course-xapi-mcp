@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCourse } from '../src/index.ts';
+import { activity, parseCourse, runChecks } from '../src/index.ts';
 import { rawCourse } from './fixtures.ts';
 
 const mutate = (f: (c: any) => void) => {
@@ -45,5 +45,28 @@ describe('CourseSchema', () => {
   it('rejects a path lesson from another path and duplicate beat ids', () => {
     expect(mutate((c) => (c.lessons['fix-the-config'].pathId = 'other')).ok).toBe(false);
     expect(mutate((c) => (c.lessons['what-is-json'].beats[1].id = 'text-format')).ok).toBe(false);
+  });
+
+  it('accepts nested file names, which run checks and encode into activity IRIs', () => {
+    const r = mutate((c) => {
+      const l = c.lessons['fix-the-config'];
+      l.starterFiles = { 'templates/index.html': '<!-- wp:site-title /-->', 'parts/header.html': '' };
+      l.checkpoint.file = 'templates/index.html';
+      for (const ch of l.checkpoint.checks) ch.file = 'templates/index.html';
+    });
+    expect(r.ok, r.ok ? '' : r.errors.join('\n')).toBe(true);
+    if (!r.ok) return;
+    const res = runChecks([{ type: 'contains', file: 'templates/index.html', value: 'wp:site-title', message: 'Add the site title.' }], {
+      'templates/index.html': '<!-- wp:site-title /-->',
+    });
+    expect(res.passed).toBe(true);
+    expect(activity.file(r.course, 'fix-the-config', 'templates/index.html')).toContain('templates%2Findex.html');
+  });
+
+  it('rejects unsafe file names', () => {
+    for (const bad of ['../x', '/x', 'a//b', 'a\\b', './x', 'x/', 'a/../b', ' x', '']) {
+      const r = mutate((c) => (c.lessons['fix-the-config'].starterFiles = { [bad]: '' }));
+      expect(r.ok, bad).toBe(false);
+    }
   });
 });

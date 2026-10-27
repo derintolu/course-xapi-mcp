@@ -7,6 +7,25 @@ export interface RecordStore {
   delete(handle: string): Promise<boolean>;
 }
 
+/**
+ * A store failure the agent can act on. Its message is safe to show: the server sends it as the tool error.
+ * Any other error a store throws is reported only as "the record store is unavailable".
+ */
+export class StoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StoreError';
+  }
+}
+
+/** Thrown by a store when another call changed the record between this call's get and its put. */
+export class StoreConflictError extends StoreError {
+  constructor() {
+    super('the record was changed by another call at the same time; call this tool again');
+    this.name = 'StoreConflictError';
+  }
+}
+
 const HANDLE = /^lr_[A-Za-z0-9_-]{32}$/;
 
 /** A new record handle: "lr_" plus 192 random bits, base64url. */
