@@ -3,6 +3,7 @@ export {
   CheckSchema,
   CourseJsonSchema,
   LessonJsonSchema,
+  DistributionLessonJsonSchema,
   courseJsonSchema,
   lessonJsonSchema,
   COURSE_SCHEMA_ID,

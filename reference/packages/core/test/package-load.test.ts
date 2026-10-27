@@ -75,6 +75,9 @@ const cases: Case[] = [
   ['distribution', 'CXM-PKG-034', 'cxm/course.json', '/flavour'],
 ];
 
+/** Fixtures whose single fault legitimately causes a second code. */
+const cascades: Record<string, IssueCode[]> = { 'dup-key': ['CXM-PKG-008', 'CXM-PKG-010'] };
+
 describe('loadPackage: one fixture per error code', () => {
   it.each(cases)('%s gives %s at %s %s', async (fixture, code, file, where) => {
     const r = await load(fixture);
@@ -85,6 +88,8 @@ describe('loadPackage: one fixture per error code', () => {
     expect(hit!.file).toBe(file);
     expect(hit!.xpath ?? hit!.pointer).toBe(where);
     expect(hit!.fix.length).toBeGreaterThan(0);
+    const errorCodes = [...new Set(r.issues.filter((i) => i.severity === 'error').map((i) => i.code))].sort();
+    expect(errorCodes).toEqual([...(cascades[fixture] ?? [code])].sort());
   });
 
   it('uses the zod message in the fix for schema issues', async () => {
@@ -163,6 +168,26 @@ describe('loadPackage: warnings and info still load', () => {
     const r = await load('distribution', { allowDistribution: true });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.course.flavour).toBe('distribution');
+  });
+
+  it('a distribution package with a bug and no secret fields loads with allowDistribution', async () => {
+    expect((await load('distribution-bug')).issues.map((i) => i.code)).toEqual(['CXM-PKG-034']);
+    const r = await load('distribution-bug', { allowDistribution: true });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.course.lessons['l2']!.bug?.key).toBe('bug1');
+  });
+
+  it('an unknown extensions key gives 100 and still loads', async () => {
+    const r = await load('extension-key');
+    expect(r.ok).toBe(true);
+    expect(r.issues).toHaveLength(1);
+    expect(r.issues[0]).toMatchObject({ code: 'CXM-PKG-100', severity: 'info', file: 'cxm/course.json', pointer: '/extensions/com.example~1thing' });
+  });
+
+  it('a malformed percent-escape in a src fragment gives 005 and does not throw', async () => {
+    const r = await load('bad-escape');
+    expect(r.ok).toBe(false);
+    expect(r.issues.find((i) => i.code === 'CXM-PKG-005')).toMatchObject({ file: 'cmi5.xml', xpath: `${X}/block[1]/au[1]/cxm:lesson[1]` });
   });
 
   it('resolves namespaces by URI, not prefix', async () => {

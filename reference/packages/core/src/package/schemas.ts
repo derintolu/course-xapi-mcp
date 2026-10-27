@@ -55,6 +55,9 @@ const PlantedBugSchema = z
   })
   .strict();
 
+/** The planted bug as a distribution package carries it: the secret fields are removed. */
+const DistributionPlantedBugSchema = PlantedBugSchema.extend({ explanation: text.optional(), fixChecks: z.array(CheckSchema).optional() });
+
 const ReferenceSolutionSchema = z
   .object({ files: z.record(fileName, z.string()), bugFix: z.string().optional() })
   .strict()
@@ -76,6 +79,9 @@ export const LessonJsonSchema = z
     extensions: ExtensionsSchema.optional(),
   })
   .strict();
+
+/** Lesson JSON of a distribution package: same as `LessonJsonSchema` with the secret bug fields optional. */
+export const DistributionLessonJsonSchema = LessonJsonSchema.extend({ bug: DistributionPlantedBugSchema.optional() });
 
 const BadgeAlignmentSchema = z
   .object({

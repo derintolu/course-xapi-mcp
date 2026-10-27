@@ -7,7 +7,7 @@ import type { IssueCode, ValidationIssue } from '../issues.ts';
 import type { Beat, BadgeDecl, CourseModel, LessonModel, PathModel } from '../model.ts';
 import { parseCmi5Xml } from './cmi5-xml.ts';
 import type { Cmi5Au, Cmi5Block, Cmi5Structure } from './cmi5-xml.ts';
-import { CourseJsonSchema, LessonJsonSchema } from './schemas.ts';
+import { CourseJsonSchema, DistributionLessonJsonSchema, LessonJsonSchema } from './schemas.ts';
 import type { CourseJson, LessonJson } from './schemas.ts';
 import type { PackageFiles } from './zip.ts';
 
@@ -37,6 +37,15 @@ export async function readDir(dir: string): Promise<PackageFiles> {
 }
 
 // ---- JSON Pointer ---------------------------------------------------------
+
+/** Decodes a URI fragment; undefined when the percent-encoding is malformed. */
+function decodeFragment(s: string): string | undefined {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return undefined;
+  }
+}
 
 const escapePointer = (s: string | number | symbol) => String(s).replace(/~/g, '~0').replace(/\//g, '~1');
 const toPointer = (path: readonly (string | number | symbol)[]) => path.map((p) => '/' + escapePointer(p)).join('');
@@ -162,8 +171,13 @@ export function loadPackage(files: PackageFiles, o: { allowDistribution?: boolea
   const resolveSrc = (src: string, at: { xpath: string }, what: string, badJson: 'CXM-PKG-006' | 'CXM-PKG-007' | null): Ref | undefined => {
     const hash = src.indexOf('#');
     const file = hash < 0 ? src : src.slice(0, hash);
-    const pointer = hash < 0 ? '' : decodeURIComponent(src.slice(hash + 1));
+    const decoded = hash < 0 ? '' : decodeFragment(src.slice(hash + 1));
     const fail = (message: string) => add('CXM-PKG-005', { file: CMI5_FILE, xpath: at.xpath }, `${what}: ${message}`);
+    if (decoded === undefined) {
+      fail(`pointer in src "${src}" is not valid percent-encoding.`);
+      return undefined;
+    }
+    const pointer = decoded;
     if (file === '' || file.startsWith('/') || file.includes('\\') || file.split('/').some((s) => s === '..' || s === '.' || s === '')) {
       fail(`src "${src}" is not a relative path inside the package.`);
       return undefined;
@@ -296,7 +310,7 @@ export function loadPackage(files: PackageFiles, o: { allowDistribution?: boolea
     }
     const ref = resolveSrc(a.lessonSrc, { xpath: a.lessonXpath }, 'cxm:lesson', 'CXM-PKG-007');
     if (!ref) continue;
-    const data = parseJson(ref, LessonJsonSchema, 'lesson');
+    const data = parseJson(ref, (course?.flavour === 'distribution' ? DistributionLessonJsonSchema : LessonJsonSchema) as typeof LessonJsonSchema, 'lesson');
     if (!data || a.key === undefined) continue;
     if (!lessons.has(a.key)) lessons.set(a.key, data);
     const at = (p: string) => ({ file: ref.file, pointer: ref.pointer + p });
@@ -319,7 +333,7 @@ export function loadPackage(files: PackageFiles, o: { allowDistribution?: boolea
       });
     };
     if (data.checkpoint?.checks) regexes(data.checkpoint.checks, '/checkpoint/checks');
-    if (data.bug) regexes(data.bug.fixChecks, '/bug/fixChecks');
+    if (data.bug?.fixChecks) regexes(data.bug.fixChecks, '/bug/fixChecks');
 
     const cp = data.checkpoint;
     const expected = cp ? 'CompletedAndPassed' : 'Completed';
@@ -377,7 +391,7 @@ export function loadPackage(files: PackageFiles, o: { allowDistribution?: boolea
   for (const [lk, l] of lessons) {
     const ref = lessonPath.get(lk)?.au.lessonSrc;
     const file = ref ? ref.split('#')[0]! : '';
-    const base = ref && ref.includes('#') ? decodeURIComponent(ref.slice(ref.indexOf('#') + 1)) : '';
+    const base = ref && ref.includes('#') ? (decodeFragment(ref.slice(ref.indexOf('#') + 1)) ?? '') : '';
     for (const k of Object.keys(l.extensions ?? {})) {
       if (k !== EXTENSION_ID && !k.startsWith(SITE + '/')) add('CXM-PKG-100', { file, pointer: `${base}/extensions/${escapePointer(k)}` }, `Unknown extensions key "${k}" is ignored.`);
     }
