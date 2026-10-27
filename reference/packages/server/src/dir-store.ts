@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // A RecordStore that keeps each record as a JSON file in a folder (Node only).
 // File names are a hash of the handle, so listing the folder does not reveal handles.
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';

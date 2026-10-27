@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Exercises a running course server over real HTTP with the official MCP client and prints a transcript.
 //   node --experimental-strip-types scripts/verify-client.ts http://127.0.0.1:8787/mcp [legacy|modern]
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';

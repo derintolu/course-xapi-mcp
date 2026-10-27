@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Reference remote MCP server (Streamable HTTP) that serves a course-xapi-mcp course.",
   "type": "module",
-  "license": "GPL-2.0-or-later",
+  "license": "Apache-2.0",
   "exports": {
     ".": "./src/index.ts"
   },

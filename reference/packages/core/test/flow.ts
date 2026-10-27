@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { chooseBranch, checkCode, choosePlacement, nextBeat, startPlacement, submitCheckpoint, type Course, type LearningRecord, type SessionResult } from '../src/index.ts';
 import { testCtx } from './fixtures.ts';
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // The course tools as plain functions over (course, record). No MCP here: the reference server,
 // a browser UI or any other host can call these and get identical behaviour and statements.
 import { allowedBranches, nextLessonId, validatePlacement } from './engine.ts';

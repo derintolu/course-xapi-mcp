@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Deterministic checks on submitted text files. Ported from learn-wp-reimagined/src/shared/checks.ts.
 // Checks never execute learner code. Regex patterns come only from authored content.
 import type { Check } from './schema.ts';

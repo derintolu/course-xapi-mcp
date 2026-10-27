@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // The learner-owned record: course state plus an append-only list of xAPI statements.
 // Generalised from learn-wp-reimagined/src/shared/record.ts: one record can hold several courses.
 import type { Placement } from './engine.ts';

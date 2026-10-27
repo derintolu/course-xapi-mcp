@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Writes profile/xapi-profile.jsonld from reference/packages/core/src/profile.ts.
 import { writeFileSync } from 'node:fs';
 import { buildProfile } from '../reference/packages/core/src/profile.ts';

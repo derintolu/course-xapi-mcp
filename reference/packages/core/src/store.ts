@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Where records live between tool calls. The handle is a bearer secret; it never appears in statements.
 import type { LearningRecord } from './record.ts';
 

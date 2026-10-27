@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Content schema, branch engine, deterministic checks, xAPI builders and the learner-owned record for learning over MCP.",
   "type": "module",
-  "license": "GPL-2.0-or-later",
+  "license": "Apache-2.0",
   "exports": {
     ".": "./src/index.ts"
   },

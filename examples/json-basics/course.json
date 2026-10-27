@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "language": "en",
   "activityBase": "https://example.org/learning-mcp/courses/json-basics",
-  "license": "CC-BY-SA-4.0",
+  "license": "Apache-2.0",
   "rules": [
     "When the learner writes JSON, ask them to read it back as data types (string, number, boolean, null, array, object) before you comment on it."
   ],

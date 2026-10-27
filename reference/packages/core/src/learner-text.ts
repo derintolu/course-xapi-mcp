@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Learner text is data. Ported from learn-wp-reimagined/functions/_lib/prompts.ts (wrapLearner).
 
 export const LIMITS = {

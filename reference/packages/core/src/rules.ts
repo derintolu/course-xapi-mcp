@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // The teaching rules that travel with every course. Full text: rules/AGENT_RULES.md.
 import { AGENT_RULES } from './agent-rules.generated.ts';
 import type { Course } from './schema.ts';

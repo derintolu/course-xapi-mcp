@@ -1,0 +1,9 @@
+course-xapi-mcp
+Copyright 2026 Derin Tolu
+
+Licensed under the Apache License, Version 2.0.
+
+This work references Open Badges 3.0, copyright 1EdTech Consortium, Inc.,
+used under its licence and not reproduced. The cmi5 CourseStructure.xsd
+(vendored in Task 5) is copyright ADL / AICC contributors and is licensed
+under Apache-2.0.

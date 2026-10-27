@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Placement validation, branch rules and path walking.
 // Ported and generalised from learn-wp-reimagined/src/shared/engine.ts.
 import type { Branch, Checkpoint, Course } from './schema.ts';

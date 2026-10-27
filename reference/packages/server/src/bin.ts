@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Runs a course server on 127.0.0.1 for local use and testing.
 //   COURSE=path/to/course.json PORT=8787 RECORDS_DIR=.records node --experimental-strip-types src/bin.ts
 import { createServer } from 'node:http';

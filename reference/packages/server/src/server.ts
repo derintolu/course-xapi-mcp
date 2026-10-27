@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Reference learning-mcp course server: one web-standard fetch handler over MCP Streamable HTTP.
 // Built on @modelcontextprotocol/server v2 (MCP 2026-07-28, with stateless service of 2025-era clients).
 import { createMcpHandler, fromJsonSchema, McpServer } from '@modelcontextprotocol/server';

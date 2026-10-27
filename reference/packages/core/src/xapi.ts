@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // xAPI statements for learning-mcp: profile IRIs, builder and validators.
 // Ported and extended from learn-wp-reimagined/src/shared/xapi.ts.
 // Target: IEEE 9274.1.1-2023 (xAPI 2.0), while staying valid xAPI 1.0.3 (see docs/xapi-profile.md).

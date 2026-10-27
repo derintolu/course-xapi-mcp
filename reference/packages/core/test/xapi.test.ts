@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
 import { ACTOR_HOMEPAGE, PROFILE_VERSION, VERBS, checkProfile, validateStatement } from '../src/index.ts';
 import { loadCourse } from './fixtures.ts';

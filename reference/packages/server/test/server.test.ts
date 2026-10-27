@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it } from 'vitest';
 import { MemoryStore, PROFILE_VERSION, RULES_VERSION, StoreConflictError, StoreError, checkProfile, validateStatement, type LearningRecord } from '@course-xapi-mcp/core';
 import { createCourseServer } from '../src/index.ts';

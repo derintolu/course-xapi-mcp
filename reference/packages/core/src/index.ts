@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 export * from './schema.ts';
 export * from './checks.ts';
 export * from './engine.ts';

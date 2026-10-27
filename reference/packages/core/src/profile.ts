@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Builds the learning-mcp xAPI Profile (JSON-LD) from the same constants the statement builder uses,
 // so the published profile and the emitted statements cannot drift apart.
 // Written to profile/xapi-profile.jsonld by scripts/build-profile.mjs.

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "license": "GPL-2.0-or-later",
+  "license": "Apache-2.0",
   "workspaces": [
     "reference/packages/*", "conformance"
   ],
