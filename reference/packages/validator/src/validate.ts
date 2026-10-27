@@ -2,8 +2,9 @@
 // `validatePackage`: the loader's checks plus XSD, behavioural and lint checks, all in one pass.
 import { CourseJsonSchema, DistributionLessonJsonSchema, LessonJsonSchema, loadPackage, parseCmi5Xml, resolvePointer } from '@course-xapi-mcp/core/package';
 import type { LessonJson, PackageFiles } from '@course-xapi-mcp/core/package';
+import { makeIssue } from '@course-xapi-mcp/core';
 import type { ValidationIssue } from '@course-xapi-mcp/core';
-import { behaviourIssues } from './behaviour.ts';
+import { behaviourIssues, secretPointers } from './behaviour.ts';
 import { lintIssues } from './lint.ts';
 import { xsdIssues } from './xsd.ts';
 
@@ -79,6 +80,28 @@ function readContent(files: PackageFiles, flavour: Flavour | undefined): { flavo
   return { flavour: as, ...(course ? { course } : {}), lessons };
 }
 
+/**
+ * CXM-PKG-014 for secret fields in any JSON file of a distribution package, not only in the lessons cmi5.xml
+ * references: an orphan lesson or a stray notes file ships to the LMS too. Hits already reported are skipped.
+ */
+function straySecrets(files: PackageFiles, reported: ValidationIssue[]): ValidationIssue[] {
+  const seen = new Set(reported.filter((i) => i.code === 'CXM-PKG-014').map((i) => `${i.file}#${i.pointer}`));
+  const out: ValidationIssue[] = [];
+  for (const [file, bytes] of Object.entries(files)) {
+    if (!/\.json$/i.test(file)) continue;
+    let doc: unknown;
+    try {
+      doc = JSON.parse(decoder.decode(bytes));
+    } catch {
+      continue;
+    }
+    for (const pointer of secretPointers(doc)) {
+      if (!seen.has(`${file}#${pointer}`)) out.push(makeIssue('CXM-PKG-014', { file, pointer }, `The distribution package keeps the secret field ${pointer} in ${file}.`));
+    }
+  }
+  return out;
+}
+
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Rebuilds an issue with its keys in the fixed output order. */
@@ -113,6 +136,7 @@ export async function validatePackage(files: PackageFiles, o: { flavour?: Flavou
   if (files[CMI5_FILE] && !issues.some((i) => i.code === 'CXM-PKG-001')) issues.push(...(await xsdIssues(decoder.decode(files[CMI5_FILE]))));
   const content = readContent(files, o.flavour);
   issues.push(...behaviourIssues(content.lessons, content.flavour), ...lintIssues(content.course, content.lessons));
+  if (content.flavour === 'distribution') issues.push(...straySecrets(files, issues));
   const sorted = sortIssues(issues);
   return { valid: !sorted.some((i) => i.severity === 'error'), issues: sorted };
 }

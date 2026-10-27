@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import { buildPackages, validatePackage } from '../src/index.ts';
 const EXAMPLE = fileURLToPath(new URL('../../../../examples/json-basics/', import.meta.url));
 const BIN = fileURLToPath(new URL('../bin/cxm.mjs', import.meta.url));
 const dec = new TextDecoder();
+const enc = new TextEncoder();
 const example = () => readDir(EXAMPLE);
 
 type Built = Exclude<Awaited<ReturnType<typeof buildPackages>>, { issues: unknown }>;
@@ -125,6 +126,51 @@ describe('buildPackages', () => {
     expect(lms['cmi5.xml']).toEqual(files['cmi5.xml']);
   });
 
+  it('the LMS ZIP holds only cmi5.xml and the files it references: no orphan lesson, no stray file, no ZIP', async () => {
+    const files = await example();
+    const extra = {
+      ...files,
+      'cxm/lessons/old-draft.json': enc.encode(JSON.stringify({ minutes: 1, beats: [], referenceSolution: { files: { 'a.txt': 'old answer' } } })),
+      'notes/answers.json': enc.encode(JSON.stringify({ referenceSolution: 'secret' })),
+      'notes/todo.txt': enc.encode('the port is a string'),
+      'old-authoring.zip': new Uint8Array([1, 2, 3]),
+    };
+    const { authoring, distribution } = await build(extra);
+    const lms = readZip(distribution.bytes) as PackageFiles;
+    expect(Object.keys(lms).sort()).toEqual(['cmi5.xml', 'cxm/course.json', 'cxm/lessons/fix-the-config.json', 'cxm/lessons/what-is-json.json']);
+    const auth = readZip(authoring.bytes) as PackageFiles;
+    expect(Object.keys(auth)).toContain('notes/answers.json');
+    expect(Object.keys(auth).some((n) => n.endsWith('.zip'))).toBe(false);
+  });
+
+  it('refuses when a referenced JSON file still holds a secret outside the lessons', async () => {
+    const files = await example();
+    const course = JSON.parse(dec.decode(files['cxm/course.json']!));
+    course.extensions = { 'com.example/drafts': { bug: { explanation: 'the port is a string' } } };
+    const r = await buildPackages({ ...files, 'cxm/course.json': enc.encode(JSON.stringify(course)) }, 'x');
+    expect(r).toMatchObject({ issues: [{ code: 'CXM-PKG-014', file: 'cxm/course.json', pointer: '/extensions/com.example~1drafts/bug/explanation' }] });
+  });
+
+  it('the validator flags CXM-PKG-014 in any JSON file of a distribution package, once per field', async () => {
+    const { distribution } = await build(await example());
+    const lms = readZip(distribution.bytes) as PackageFiles;
+    const lesson = JSON.parse(dec.decode(lms['cxm/lessons/fix-the-config.json']!));
+    lesson.bug.explanation = 'back again';
+    const r = await validatePackage({
+      ...lms,
+      'cxm/lessons/fix-the-config.json': enc.encode(JSON.stringify(lesson)),
+      'cxm/lessons/old-draft.json': enc.encode(JSON.stringify({ beats: [{ checks: [], bug: { explanation: 'x', fixChecks: [] } }] })),
+      'notes/answers.json': enc.encode(JSON.stringify({ referenceSolution: 'secret' })),
+    });
+    expect(r.valid).toBe(false);
+    expect(r.issues.filter((i) => i.code === 'CXM-PKG-014').map((i) => [i.file, i.pointer])).toEqual([
+      ['cxm/lessons/fix-the-config.json', '/bug/explanation'],
+      ['cxm/lessons/old-draft.json', '/beats/0/bug/explanation'],
+      ['cxm/lessons/old-draft.json', '/beats/0/bug/fixChecks'],
+      ['notes/answers.json', '/referenceSolution'],
+    ]);
+  });
+
   it('refuses a package with errors and returns its issues', async () => {
     const fixture = await readDir(fileURLToPath(new URL('./fixtures/packages/au-no-url/', import.meta.url)));
     const r = await buildPackages(fixture, 'x');
@@ -173,6 +219,32 @@ describe('cxm build', () => {
     expect((await cxm('build', pkg, '--out', pkg)).code).toBe(0);
     expect(readFileSync(join(pkg, 'json-basics-lms.zip')).equals(first)).toBe(true);
     expect(Object.keys(readZip(new Uint8Array(first)) as PackageFiles).some((n) => n.endsWith('.zip'))).toBe(false);
+  });
+
+  it('building into --out dist inside the package twice gives the same bytes and never packs dist', async () => {
+    const pkg = join(tmp, 'pkg-dist', 'json-basics');
+    cpSync(EXAMPLE, pkg, { recursive: true });
+    const dist = join(pkg, 'dist');
+    expect((await cxm('build', pkg, '--out', dist)).code).toBe(0);
+    const first = { a: readFileSync(join(dist, 'json-basics-authoring.zip')), l: readFileSync(join(dist, 'json-basics-lms.zip')) };
+    writeFileSync(join(dist, 'notes.json'), JSON.stringify({ referenceSolution: 'x' }));
+    expect((await cxm('build', pkg, '--out', dist)).code).toBe(0);
+    expect(readFileSync(join(dist, 'json-basics-authoring.zip')).equals(first.a)).toBe(true);
+    expect(readFileSync(join(dist, 'json-basics-lms.zip')).equals(first.l)).toBe(true);
+    expect(Object.keys(readZip(new Uint8Array(first.a)) as PackageFiles).some((n) => n.startsWith('dist/'))).toBe(false);
+  });
+
+  it('a file system error is a cxm: message with exit 2, not a stack trace', async () => {
+    const file = join(tmp, 'a-file');
+    writeFileSync(file, 'x');
+    const build = await cxm('build', EXAMPLE, '--out', join(file, 'sub'));
+    expect(build.code).toBe(2);
+    expect(build.stderr).toMatch(/^cxm: .*(ENOTDIR|EEXIST)/);
+    expect(build.stderr).not.toContain('    at ');
+    const init = await cxm('init', join(file, 'course'), '--id', 'https://example.org/c', '--title', 'C');
+    expect(init.code).toBe(2);
+    expect(init.stderr).toMatch(/^cxm: /);
+    expect(init.stderr).not.toContain('    at ');
   });
 
   it('exits 1 with the issues on an invalid package and writes nothing', async () => {

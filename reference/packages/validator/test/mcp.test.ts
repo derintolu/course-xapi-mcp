@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { zipSync } from 'fflate';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -8,6 +8,8 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import { URIS } from '@course-xapi-mcp/core';
 import { readDir } from '@course-xapi-mcp/core/package';
 import { createValidatorMcp, explainCode, validatePackage } from '../src/index.ts';
+import { AUTHOR_SKILL } from '../src/author-skill.generated.ts';
+import { MAX_ZIP_BASE64 } from '../src/mcp.ts';
 
 const SKILL = fileURLToPath(new URL('../../../../docs/authoring/SKILL.md', import.meta.url));
 const BIN = fileURLToPath(new URL('../bin/cxm.mjs', import.meta.url));
@@ -81,12 +83,24 @@ describe('validator MCP server', () => {
     expect((await call('scaffold', { kind: 'course', title: 'no id' })).isError).toBe(true);
   });
 
-  it('serves the author skill, equal to docs/authoring/SKILL.md', async () => {
+  it('serves the author skill from the generated module', async () => {
     const { client } = await connect();
     expect((await client.listResources()).resources.map((r) => r.uri)).toContain(URIS.authorSkill);
     const r = await client.readResource({ uri: URIS.authorSkill });
     expect(r.contents).toHaveLength(1);
-    expect(r.contents[0]).toMatchObject({ uri: URIS.authorSkill, mimeType: 'text/markdown', text: readFileSync(SKILL, 'utf8') });
+    expect(r.contents[0]).toMatchObject({ uri: URIS.authorSkill, mimeType: 'text/markdown', text: AUTHOR_SKILL });
+    expect(AUTHOR_SKILL).toMatch(/^---\nname: course-xapi-mcp-author\n/);
+  });
+
+  // docs/authoring/SKILL.md is the source; skipped in a checkout that does not have it yet.
+  it.skipIf(!existsSync(SKILL))('the generated author skill equals docs/authoring/SKILL.md (run npm run author-skill)', () => {
+    expect(AUTHOR_SKILL).toBe(readFileSync(SKILL, 'utf8'));
+  });
+
+  it('refuses a zipBase64 over the size cap', async () => {
+    const { client } = await connect();
+    const r: any = await client.callTool({ name: 'validate_package', arguments: { zipBase64: 'A'.repeat(MAX_ZIP_BASE64 + 4) } });
+    expect(r.isError).toBe(true);
   });
 });
 

@@ -19,6 +19,8 @@ const ok = (body: Record<string, unknown>): ToolResult => ({ content: [{ type: '
 const fail = (error: string): ToolResult => ({ content: [{ type: 'text', text: error }], isError: true });
 
 const encoder = new TextEncoder();
+/** The largest zipBase64 accepted: 16 MiB of base64, a ZIP of about 12 MiB. */
+export const MAX_ZIP_BASE64 = 16 * 1024 * 1024;
 
 function fromBase64(s: string): Uint8Array {
   const bin = atob(s);
@@ -47,7 +49,7 @@ export function createValidatorMcp(): McpServer {
       description: 'Validate a course package given as text files or as a base64 ZIP. Returns {valid, issues}; each issue has code, file, xpath or pointer, message, fix and help.',
       inputSchema: z.object({
         files: filesArg.optional(),
-        zipBase64: z.string().optional().describe('The package ZIP, base64-encoded, with cmi5.xml at its root.'),
+        zipBase64: z.string().max(MAX_ZIP_BASE64).optional().describe('The package ZIP, base64-encoded, with cmi5.xml at its root; at most 16 MiB of base64.'),
       }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },

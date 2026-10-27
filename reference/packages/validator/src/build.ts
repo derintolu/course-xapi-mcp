@@ -6,6 +6,7 @@ import { parseCmi5Xml, resolvePointer } from '@course-xapi-mcp/core/package';
 import type { PackageFiles } from '@course-xapi-mcp/core/package';
 import { makeIssue } from '@course-xapi-mcp/core';
 import type { ValidationIssue } from '@course-xapi-mcp/core';
+import { secretPointers } from './behaviour.ts';
 import { validatePackage } from './validate.ts';
 
 export interface BuiltZip {
@@ -23,6 +24,7 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 // fflate writes DOS times from the local-time fields of the Date, so build it from local fields:
 // every entry then reads 1980-01-01 00:00:00 whatever the build machine's time zone.
 const DOS_EPOCH = new Date(1980, 0, 1, 0, 0, 0);
+const ZIP_RE = /\.zip$/i;
 const json = (v: unknown) => JSON.stringify(v, null, 2) + '\n';
 
 /** A ZIP of `files`: entries sorted by name, fixed mtime, fixed compression, no extra fields. */
@@ -66,14 +68,14 @@ function splitSrc(src: string): { file: string; pointer: string } {
 }
 
 /**
- * The distribution package: the same files, with `flavour: 'distribution'` in course.json and
- * `bug.explanation`, `bug.fixChecks` and `referenceSolution` removed from every lesson.
- * Only the JSON files that change are rewritten. Runs on a package that already validated.
+ * The distribution package, built from an allow-list: cmi5.xml and the files it references (course, path and
+ * lesson `src`), nothing else. `flavour` becomes `'distribution'`, and `bug.explanation`, `bug.fixChecks` and
+ * `referenceSolution` are removed from every lesson. Runs on a package that already validated.
  */
 function distributionFiles(files: PackageFiles): PackageFiles {
   const parsed = parseCmi5Xml(decoder.decode(files['cmi5.xml']!));
   if (!('structure' in parsed)) throw new Error('cmi5.xml did not parse after validation');
-  const { course, aus } = parsed.structure;
+  const { course, aus, blocks } = parsed.structure;
   const docs = new Map<string, unknown>();
   const doc = (file: string) => {
     if (!docs.has(file)) docs.set(file, JSON.parse(decoder.decode(files[file]!)));
@@ -87,6 +89,7 @@ function distributionFiles(files: PackageFiles): PackageFiles {
   };
 
   at(course.cxm!.src).flavour = 'distribution';
+  for (const b of blocks) if (b.pathSrc !== undefined) at(b.pathSrc);
   for (const a of aus) {
     if (a.lessonSrc === undefined) continue;
     const lesson = at(a.lessonSrc);
@@ -97,9 +100,23 @@ function distributionFiles(files: PackageFiles): PackageFiles {
       delete bug.fixChecks;
     }
   }
-  const out: PackageFiles = { ...files };
+  const out: PackageFiles = { 'cmi5.xml': files['cmi5.xml']! };
   for (const [file, value] of docs) out[file] = encoder.encode(json(value));
   return out;
+}
+
+/** Why a built distribution package must not ship: a nested ZIP, or a secret field in any JSON entry. */
+function distributionLeaks(files: PackageFiles): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (const [file, bytes] of Object.entries(files)) {
+    if (ZIP_RE.test(file)) issues.push(makeIssue('CXM-PKG-014', { file }, `The distribution package would contain the ZIP ${file}.`));
+    else if (/\.json$/i.test(file)) {
+      for (const pointer of secretPointers(JSON.parse(decoder.decode(bytes)))) {
+        issues.push(makeIssue('CXM-PKG-014', { file, pointer }, `The distribution package would keep the secret field ${pointer} in ${file}.`));
+      }
+    }
+  }
+  return issues;
 }
 
 /** The JSON value a `src` points at in a package that already validated. */
@@ -115,10 +132,12 @@ async function built(file: string, files: PackageFiles): Promise<BuiltZip> {
 }
 
 /**
- * Builds `<name>-authoring.zip` and `<name>-lms.zip` from an authoring package.
- * Refuses, returning the issues, when the package has errors or is already a distribution package.
+ * Builds `<name>-authoring.zip` and `<name>-lms.zip` from an authoring package. ZIP files in the input
+ * (an earlier build, say) are never packed. Refuses, returning the issues, when the package has errors,
+ * is already a distribution package, or the distribution package would still hold a secret.
  */
-export async function buildPackages(files: PackageFiles, name: string): Promise<BuildResult> {
+export async function buildPackages(input: PackageFiles, name: string): Promise<BuildResult> {
+  const files: PackageFiles = Object.fromEntries(Object.entries(input).filter(([f]) => !ZIP_RE.test(f)));
   const result = await validatePackage(files);
   if (!result.valid) return { issues: result.issues };
   const parsed = parseCmi5Xml(decoder.decode(files['cmi5.xml']!));
@@ -135,5 +154,8 @@ export async function buildPackages(files: PackageFiles, name: string): Promise<
       ],
     };
   }
-  return { authoring: await built(`${name}-authoring.zip`, files), distribution: await built(`${name}-lms.zip`, distributionFiles(files)) };
+  const distribution = distributionFiles(files);
+  const leaks = distributionLeaks(distribution);
+  if (leaks.length > 0) return { issues: leaks };
+  return { authoring: await built(`${name}-authoring.zip`, files), distribution: await built(`${name}-lms.zip`, distribution) };
 }

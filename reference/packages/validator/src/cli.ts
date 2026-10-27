@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The `cxm` command line: validate, explain, init, add-lesson, build, convert and mcp.
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { CUSTODY_OPTIONS } from '@course-xapi-mcp/core';
 import type { CustodyOption, ValidationIssue } from '@course-xapi-mcp/core';
 import { readDir, readZip } from '@course-xapi-mcp/core/package';
@@ -32,7 +32,7 @@ const USAGE = `Usage:
                                     convert a legacy single-file course into a package folder
   cxm mcp                           serve the validator as an MCP server over stdio
 
-Exit 2 on a usage error: a missing or unreadable path, an unknown command, flag or code.
+Exit 2 on a usage error: a missing or unreadable path, an unknown command, flag or code, or a file that cannot be written.
 `;
 
 const EXIT_VALID = 0;
@@ -186,16 +186,17 @@ async function buildCommand(args: string[], io: CliIo): Promise<number> {
     return EXIT_INVALID;
   }
   const name = basename(resolve(target)).replace(/\.zip$/i, '').replace(/-authoring$/, '');
-  // A build into the package folder itself must not pack its earlier output (the authoring ZIP holds every secret).
-  const input = { ...(files as PackageFiles) };
-  delete input[`${name}-authoring.zip`];
-  delete input[`${name}-lms.zip`];
+  const out = p.flags.out ?? '.';
+  // An --out folder inside the package folder is not part of the package: never pack an earlier build.
+  const inside = relative(resolve(target), resolve(out)).split(sep).join('/');
+  const input = Object.fromEntries(
+    Object.entries(files as PackageFiles).filter(([f]) => inside === '' || inside === '..' || inside.startsWith('../') || isAbsolute(inside) || !(f === inside || f.startsWith(inside + '/'))),
+  );
   const r = await buildPackages(input, name);
   if ('issues' in r) {
     for (const i of r.issues) io.out(formatIssue(i, target) + '\n');
     return EXIT_INVALID;
   }
-  const out = p.flags.out ?? '.';
   await mkdir(out, { recursive: true });
   for (const z of [r.authoring, r.distribution]) {
     await writeFile(join(out, z.file), z.bytes);
@@ -246,6 +247,19 @@ async function mcpCommand(args: string[], io: CliIo): Promise<number> {
 
 /** Runs the command line and returns the exit code. */
 export async function runCli(argv: string[], io: CliIo = stdio): Promise<number> {
+  try {
+    return await dispatch(argv, io);
+  } catch (e) {
+    // A file system failure (EACCES, ENOTDIR, ...) is the user's to fix, not a crash.
+    if (e instanceof Error && typeof (e as NodeJS.ErrnoException).code === 'string') {
+      io.err(`cxm: ${e.message}\n`);
+      return EXIT_USAGE;
+    }
+    throw e;
+  }
+}
+
+async function dispatch(argv: string[], io: CliIo): Promise<number> {
   const [command, ...args] = argv;
   if (command === 'validate') return validateCommand(args, io);
   if (command === 'explain') return explainCommand(args, io);

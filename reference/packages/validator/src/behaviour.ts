@@ -23,6 +23,23 @@ function runnable(c: Check): boolean {
 /** Runs one check alone on a set of files. */
 const passes = (c: Check, files: Record<string, string>) => runChecks([c] as Parameters<typeof runChecks>[0], files).passed;
 
+const escapePointer = (k: string) => k.replace(/~/g, '~0').replace(/\//g, '~1');
+
+/**
+ * JSON Pointers of every secret field anywhere in a JSON document: any `referenceSolution` or `fixChecks` key,
+ * and `explanation` inside a `bug` object. A distribution package may hold none of them, in any file.
+ */
+export function secretPointers(doc: unknown, at = '', parentKey?: string): string[] {
+  if (doc === null || typeof doc !== 'object') return [];
+  const out: string[] = [];
+  for (const [k, v] of Array.isArray(doc) ? doc.map((v, i) => [String(i), v] as const) : Object.entries(doc)) {
+    const here = `${at}/${escapePointer(k)}`;
+    if (!Array.isArray(doc) && (k === 'referenceSolution' || k === 'fixChecks' || (k === 'explanation' && parentKey === 'bug'))) out.push(here);
+    else out.push(...secretPointers(v, here, Array.isArray(doc) ? undefined : k));
+  }
+  return out;
+}
+
 export function behaviourIssues(lessons: LessonDoc[], flavour: 'authoring' | 'distribution'): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   for (const { key, file, base, lesson } of lessons) {

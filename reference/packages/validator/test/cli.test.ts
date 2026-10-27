@@ -89,7 +89,7 @@ describe('cxm explain', () => {
 });
 
 describe('cxm convert', () => {
-  const LEGACY = fileURLToPath(new URL('../../../../examples/legacy/json-basics.course.json', import.meta.url));
+  const LEGACY = fileURLToPath(new URL('./fixtures/json-basics.course.json', import.meta.url));
   const opts = ['--iri', 'https://course-xapi-mcp.sqwrlz.com/examples/json-basics', '--mcp', 'http://127.0.0.1:8787/mcp', '--launch', 'http://127.0.0.1:8787/cmi5/launch', '--custody', 'server-kept'];
 
   it('writes a package folder that loads with no errors', async () => {
