@@ -1,0 +1,50 @@
+{
+  "specVersion": "0.2",
+  "flavour": "authoring",
+  "version": "0.1.0",
+  "language": "en",
+  "license": "Apache-2.0",
+  "rules": [
+    "When the learner writes JSON, ask them to read it back as data types (string, number, boolean, null, array, object) before you comment on it."
+  ],
+  "placement": {
+    "intro": "Find out whether the learner has written JSON by hand before. Ask at most two short questions.",
+    "maxQuestions": 2
+  },
+  "custody": "server-kept",
+  "allowPractice": true,
+  "paths": {
+    "json": {
+      "tagline": "From the six value types to fixing a real config file.",
+      "placementHints": "Start at what-is-json for anyone new to JSON. Start at fix-the-config, skipping what-is-json, only if the learner already edits JSON files by hand and can name its value types."
+    }
+  },
+  "badges": [
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/examples/json-basics/badges/fix-the-config",
+      "name": "Fix the config",
+      "description": "Fixed a type bug in an AI-written JSON config file and added a correctly typed setting.",
+      "criteria": {
+        "narrative": "Awarded when the learner completes the Fix the config lesson: the planted port type bug is fixed and the added timeout setting passes the automatic file checks."
+      },
+      "achievementType": "Achievement",
+      "awardOn": "au-moveon",
+      "for": "fix-the-config"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/examples/json-basics/badges/json",
+      "name": "Read and write JSON",
+      "description": "Completed the Read and write JSON path.",
+      "criteria": {
+        "narrative": "Awarded when every lesson in the Read and write JSON path is satisfied: the automatic file checks pass and the learner's explanations meet the agent rubric of each checkpoint."
+      },
+      "achievementType": "Achievement",
+      "awardOn": "block-satisfied",
+      "for": "json"
+    }
+  ],
+  "badgeIssuer": {
+    "signer": "course-server",
+    "claimPage": "http://127.0.0.1:8787/badges/claim"
+  }
+}

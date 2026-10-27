@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseCourse, type Course } from '../src/index.ts';
 
-const path = fileURLToPath(new URL('../../../../examples/json-basics/course.json', import.meta.url));
+const path = fileURLToPath(new URL('../../../../examples/legacy/json-basics.course.json', import.meta.url));
 
 export const rawCourse = (): unknown => JSON.parse(readFileSync(path, 'utf8'));
 

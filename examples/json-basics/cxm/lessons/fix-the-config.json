@@ -1,0 +1,96 @@
+{
+  "minutes": 8,
+  "sources": [
+    {
+      "title": "RFC 8259, section 6: Numbers",
+      "url": "https://www.rfc-editor.org/rfc/rfc8259#section-6"
+    }
+  ],
+  "beats": [
+    {
+      "key": "read-as-types",
+      "goal": "The learner reads a JSON file by value types, not by eye.",
+      "content": "When you review JSON, read each value and name its type. Quoted means string, even if it looks like a number or a boolean. \"true\" is a string; true is a boolean.",
+      "question": "In {\"debug\": \"false\"}, what type is the value of debug, and what might a program do with it?"
+    }
+  ],
+  "starterFiles": {
+    "config.json": "{\n  \"name\": \"demo\",\n  \"port\": \"8080\",\n  \"debug\": false\n}\n"
+  },
+  "bug": {
+    "key": "port-type",
+    "file": "config.json",
+    "code": "{\n  \"name\": \"demo\",\n  \"port\": \"8080\",\n  \"debug\": false\n}",
+    "explanation": "port was the string \"8080\" instead of the number 8080. A server that expects a number can reject it, or treat it as text.",
+    "hint": "Read every value aloud with its type. One of them is not the type the server expects for a network port.",
+    "fixChecks": [
+      {
+        "type": "json",
+        "file": "config.json",
+        "pointer": "/port",
+        "equals": 8080,
+        "message": "Not fixed yet."
+      },
+      {
+        "type": "json",
+        "file": "config.json",
+        "pointer": "/name",
+        "equals": "demo",
+        "message": "Not fixed yet."
+      }
+    ],
+    "revealAfter": 3
+  },
+  "checkpoint": {
+    "key": "add-timeout",
+    "kind": "code",
+    "question": "Add a timeout setting of 30 seconds as a number, in config.json, then send the file and explain the type you chose.",
+    "rubric": "The checks decide whether the file is right. For the explanation, a good answer says timeout is a number because the program does arithmetic or comparisons with it.",
+    "file": "config.json",
+    "checks": [
+      {
+        "type": "json",
+        "file": "config.json",
+        "pointer": "/timeout",
+        "equals": 30,
+        "message": "config.json needs a top-level \"timeout\" whose value is the number 30 (not a string)."
+      },
+      {
+        "type": "json",
+        "file": "config.json",
+        "pointer": "/port",
+        "equals": 8080,
+        "message": "Keep port as the number 8080."
+      }
+    ],
+    "branches": [
+      {
+        "key": "done",
+        "when": "The checks passed and the learner explains why timeout is a number.",
+        "success": true,
+        "to": null,
+        "message": "That's the path done. Your record has every step, and it's yours to keep."
+      },
+      {
+        "key": "explain-again",
+        "when": "The checks passed but the explanation of the type is missing or wrong.",
+        "success": false,
+        "to": "fix-the-config",
+        "message": "The file is right; let's make sure the reason is clear too."
+      },
+      {
+        "key": "retry",
+        "when": "The checks failed.",
+        "success": false,
+        "to": "fix-the-config",
+        "message": "Not quite yet. Look at the check messages and try again."
+      }
+    ]
+  },
+  "referenceSolution": {
+    "files": {
+      "config.json": "{\n  \"name\": \"demo\",\n  \"port\": 8080,\n  \"debug\": false,\n  \"timeout\": 30\n}\n"
+    },
+    "bugFix": "{\n  \"name\": \"demo\",\n  \"port\": 8080,\n  \"debug\": false\n}\n"
+  }
+}

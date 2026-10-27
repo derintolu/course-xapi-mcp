@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<courseStructure xmlns="https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd" xmlns:cxm="https://course-xapi-mcp.sqwrlz.com/course/v1">
+  <course id="https://course-xapi-mcp.sqwrlz.com/examples/json-basics">
+    <title><langstring lang="en">JSON basics</langstring></title>
+    <description><langstring lang="en">A two-lesson example course: what JSON is, and how to catch a type bug in an AI-written config file.</langstring></description>
+    <cxm:course src="cxm/course.json" specVersion="0.2" mcp="http://127.0.0.1:8787/mcp"/>
+  </course>
+  <au id="https://course-xapi-mcp.sqwrlz.com/examples/json-basics/placement" cxm:key="placement" cxm:role="placement" moveOn="NotApplicable" launchMethod="OwnWindow">
+    <title><langstring lang="en">Placement</langstring></title>
+    <description><langstring lang="en">Find out where to start.</langstring></description>
+    <url>http://127.0.0.1:8787/cmi5/launch?au=placement</url>
+  </au>
+  <block id="https://course-xapi-mcp.sqwrlz.com/examples/json-basics/paths/json" cxm:key="json">
+    <title><langstring lang="en">Read and write JSON</langstring></title>
+    <description><langstring lang="en">From the six value types to fixing a real config file.</langstring></description>
+    <au id="https://course-xapi-mcp.sqwrlz.com/examples/json-basics/lessons/what-is-json" cxm:key="what-is-json" moveOn="CompletedAndPassed" launchMethod="OwnWindow">
+      <title><langstring lang="en">What JSON is</langstring></title>
+      <description><langstring lang="en">What JSON is</langstring></description>
+      <url>http://127.0.0.1:8787/cmi5/launch?au=what-is-json</url>
+      <cxm:lesson src="cxm/lessons/what-is-json.json"/>
+    </au>
+    <au id="https://course-xapi-mcp.sqwrlz.com/examples/json-basics/lessons/fix-the-config" cxm:key="fix-the-config" moveOn="CompletedAndPassed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Fix the config</langstring></title>
+      <description><langstring lang="en">Fix the config</langstring></description>
+      <url>http://127.0.0.1:8787/cmi5/launch?au=fix-the-config</url>
+      <cxm:lesson src="cxm/lessons/fix-the-config.json"/>
+    </au>
+    <cxm:path src="cxm/course.json#/paths/json"/>
+  </block>
+</courseStructure>

@@ -1,0 +1,49 @@
+{
+  "minutes": 5,
+  "sources": [
+    {
+      "title": "RFC 8259: The JavaScript Object Notation (JSON) Data Interchange Format",
+      "url": "https://www.rfc-editor.org/rfc/rfc8259"
+    },
+    {
+      "title": "JSON.org",
+      "url": "https://www.json.org/json-en.html"
+    }
+  ],
+  "beats": [
+    {
+      "key": "text-format",
+      "goal": "The learner knows JSON is plain text that describes data.",
+      "content": "JSON is a text format for data. A JSON document is one value. A value is one of six types: an object (name/value pairs in curly braces), an array (an ordered list in square brackets), a string (in double quotes), a number, true or false, or null.",
+      "question": "Before we go on: which of these do you think is a string in JSON, 42 or \"42\"? Why?"
+    },
+    {
+      "key": "strict-rules",
+      "goal": "The learner knows the rules that trip people up.",
+      "content": "JSON is stricter than JavaScript. Names in objects must be strings in double quotes. Single quotes are not allowed. A trailing comma after the last item is an error. There are no comments.",
+      "question": "Predict: is {\"port\": 8080,} valid JSON? What would a parser say?"
+    }
+  ],
+  "checkpoint": {
+    "key": "types",
+    "kind": "free-text",
+    "question": "In your own words: what is the difference between {\"port\": 8080} and {\"port\": \"8080\"}, and why might a program care?",
+    "rubric": "A good answer says the first value is a number and the second is a string, and that a program reading the value may compare, add or validate it differently (for example, a server expecting a number may reject or mishandle a string). Exact wording does not matter.",
+    "branches": [
+      {
+        "key": "ready",
+        "when": "The answer identifies number versus string and gives any sensible reason a program might care.",
+        "success": true,
+        "to": "fix-the-config",
+        "message": "You can tell the types apart. Next, a config file an AI wrote, with one planted bug."
+      },
+      {
+        "key": "review",
+        "when": "The answer misses the number/string difference or gives no reason it matters.",
+        "success": false,
+        "to": "what-is-json",
+        "message": "Let's go over the six value types once more before moving on."
+      }
+    ]
+  }
+}

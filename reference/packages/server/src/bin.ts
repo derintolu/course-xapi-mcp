@@ -8,7 +8,7 @@ import { parseCourse } from '@course-xapi-mcp/core';
 import { createCourseServer } from './server.ts';
 import { DirectoryStore } from './dir-store.ts';
 
-const coursePath = process.env.COURSE ?? new URL('../../../../examples/json-basics/course.json', import.meta.url).pathname;
+const coursePath = process.env.COURSE ?? new URL('../../../../examples/legacy/json-basics.course.json', import.meta.url).pathname;
 const port = Number(process.env.PORT ?? 8787);
 const parsed = parseCourse(JSON.parse(readFileSync(coursePath, 'utf8')));
 if (!parsed.ok) {
