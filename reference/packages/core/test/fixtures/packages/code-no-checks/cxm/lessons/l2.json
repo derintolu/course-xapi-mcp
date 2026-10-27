@@ -1,0 +1,42 @@
+{
+  "minutes": 10,
+  "starterFiles": {
+    "a.json": "{}"
+  },
+  "beats": [
+    {
+      "key": "b1",
+      "goal": "g",
+      "content": "c",
+      "question": "q?"
+    }
+  ],
+  "checkpoint": {
+    "key": "cp",
+    "kind": "code",
+    "question": "Fix it",
+    "rubric": "r",
+    "file": "a.json",
+    "branches": [
+      {
+        "key": "ok",
+        "when": "it works",
+        "success": true,
+        "to": null,
+        "message": "Good"
+      },
+      {
+        "key": "retry",
+        "when": "it does not",
+        "success": false,
+        "to": "l2",
+        "message": "Again"
+      }
+    ]
+  },
+  "referenceSolution": {
+    "files": {
+      "a.json": "{\"x\":1}"
+    }
+  }
+}

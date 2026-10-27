@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<courseStructure xmlns="https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd" xmlns:cxm="https://course-xapi-mcp.sqwrlz.com/course/v1">
+  <course id="https://example.org/c">
+    <title><langstring lang="fr">Cours</langstring><langstring lang="en">Course</langstring></title>
+    <description><langstring lang="en">A course.</langstring></description>
+    <cxm:course src="cxm/course.json" specVersion="0.2" mcp="http://127.0.0.1:8787/mcp"/>
+  </course>
+  <au id="https://example.org/c/placement" cxm:key="placement" cxm:role="placement" moveOn="NotApplicable" launchMethod="OwnWindow">
+    <title><langstring lang="en">Placement</langstring></title>
+    <description><langstring lang="en">Where to start.</langstring></description>
+    <url>http://127.0.0.1:8787/launch?au=placement</url>
+  </au>
+  <block id="https://example.org/c/paths/p" cxm:key="p">
+    <title><langstring lang="en">Path P</langstring></title>
+    <description><langstring lang="en">The path.</langstring></description>
+    <au id="https://example.org/c/lessons/l1" cxm:key="l1" moveOn="Completed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Lesson one</langstring></title>
+      <description><langstring lang="en">First.</langstring></description>
+      <url>http://127.0.0.1:8787/launch?au=l1</url>
+      <cxm:lesson src="cxm/lessons/l1.json"/>
+    </au>
+    <au id="https://example.org/c/lessons/l2" cxm:key="l2" moveOn="CompletedAndPassed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Lesson two</langstring></title>
+      <description><langstring lang="en">Second.</langstring></description>
+      <url>http://127.0.0.1:8787/launch?au=l2</url>
+      <cxm:lesson src="cxm/lessons/l2.json"/>
+    </au>
+    
+  </block>
+  
+</courseStructure>
