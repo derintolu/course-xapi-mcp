@@ -39,7 +39,7 @@ export interface AuthServerOptions {
   federation?: FederationHooks;
   store?: AuthStore;
   now?: () => number;
-  /** Fetches client id metadata documents. */
+  /** Replaces the built-in https GET for client id metadata documents (tests); the default checks addresses again at connect time. */
   fetch?: typeof fetch;
   /** Resolves a metadata document host to its addresses before the fetch (default: DNS). Non-public addresses are refused. */
   resolveHost?: ResolveHost;
@@ -52,6 +52,7 @@ const PAIRING_ATTEMPTS_PER_REQUEST = 5;
 /** Wrong pairing codes the whole server accepts per pairing-code lifetime, across all requests and clients. */
 export const PAIRING_GUESS_BUDGET = 100;
 const BROWSER_COOKIE = 'cxm_areq';
+const pairingRequestKey = (requestId: string) => 'pairing-request:' + requestId;
 const PAIRING_CODE = new RegExp(`^[${DEFAULTS.pairingAlphabet}]{${DEFAULTS.pairingCodeLength}}$`);
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
 const ENDED = 'This sign-in request has ended or expired.';
@@ -102,7 +103,7 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
   const secureCookies = !isLoopbackHost(base.hostname);
   const store = o.store ?? new MemoryAuthStore();
   const now = o.now ?? Date.now;
-  const resolveClient = createClientResolver({ store, fetch: o.fetch ?? fetch, resolveHost: o.resolveHost ?? resolveWithDns, now });
+  const resolveClient = createClientResolver({ store, fetch: o.fetch, resolveHost: o.resolveHost ?? resolveWithDns, now });
   if (o.mode === 'launch-paired' && !o.launches) throw new TypeError('launch-paired mode needs a LaunchStore');
   if (o.mode === 'federated' && !o.federation) throw new TypeError('federated mode needs FederationHooks');
   let tokens: Promise<AccessTokens> | undefined;
@@ -130,8 +131,11 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
   }
 
   /** Ends the request, mints a code and a browser session, and sends the browser back to the client (always after a form POST). */
-  async function issueCode(r: AuthRequest, grant: Grant): Promise<Response> {
-    await store.deleteRequest(r.id);
+  async function issueCode(r: AuthRequest, grant: Grant, onTaken?: () => Promise<void>): Promise<Response> {
+    // Concurrent submissions of one request (two Allow clicks, two Continue posts) mint at most one code.
+    if (!(await store.takeRequest(r.id))) return errorPage(ENDED);
+    await store.clearAttempts(pairingRequestKey(r.id));
+    await onTaken?.();
     const code = newSecret();
     await store.putCode(secretHash(code), {
       ...grant,
@@ -225,12 +229,13 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
   async function pair(p: Params, req: Request): Promise<Response> {
     const r = await liveRequest(p.get('request_id'), req);
     if (!r) return errorPage(ENDED);
-    const bind = async (c: LaunchContext) => {
-      // Binding by cookie spends the code too, so it cannot pair a second browser later.
-      await store.spendPairingCode(c.launchId);
+    const bind = (c: LaunchContext) => {
       const subject = launchSubject(c);
-      await o.launches!.update(c.launchId, { pairedSubject: subject });
-      return issueCode(r, { subject, launchId: c.launchId });
+      return issueCode(r, { subject, launchId: c.launchId }, async () => {
+        // Binding by cookie spends the code too, so it cannot pair a second browser later.
+        await store.spendPairingCode(c.launchId);
+        await o.launches!.update(c.launchId, { pairedSubject: subject });
+      });
     };
 
     if (p.get('action') === 'continue') {
@@ -239,14 +244,17 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       return launchPage({ ...shown(r), withLaunch: false, status: 400, error: 'Your lesson launch was not found in this browser. Type the pairing code instead.' });
     }
 
-    // Attempts are recorded before the lookup, so concurrent guesses cannot exceed either limit.
+    // Attempts are recorded before the lookup, so concurrent guesses cannot exceed either limit. The
+    // server-wide budget is checked first, so a request it turns away keeps its own attempts.
     const at = now();
-    if (!(await store.reserveAttempt('pairing-request:' + r.id, at, 0, PAIRING_ATTEMPTS_PER_REQUEST))) {
-      await store.deleteRequest(r.id);
-      return errorPage('Too many wrong pairing codes. ' + ENDED);
-    }
     if (!(await store.reserveAttempt('pairing-all', at, at - DEFAULTS.pairingTtlMs, PAIRING_GUESS_BUDGET))) {
       return launchPage({ ...shown(r), withLaunch: false, status: 429, error: 'Too many pairing attempts on this server right now. Wait a few minutes, or launch the lesson again from your LMS in this browser.' });
+    }
+    if (!(await store.reserveAttempt(pairingRequestKey(r.id), at, at - REQUEST_TTL_MS, PAIRING_ATTEMPTS_PER_REQUEST))) {
+      await store.releaseAttempt('pairing-all', at);
+      await store.deleteRequest(r.id);
+      await store.clearAttempts(pairingRequestKey(r.id));
+      return errorPage('Too many wrong pairing codes. ' + ENDED);
     }
     const code = (p.get('pairing_code') ?? '').trim().toUpperCase();
     const c = PAIRING_CODE.test(code) ? await o.launches!.byPairingCode(code) : undefined;

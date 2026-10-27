@@ -5,6 +5,7 @@ import { SignJWT, importJWK, type JWK } from 'jose';
 import { DEFAULTS, MemoryLaunchStore, actorKey, type AuthServer, type CourseModel, type LaunchContext, type LearnerRef } from '@course-xapi-mcp/core';
 import { PAIRING_GUESS_BUDGET, createAuthServer } from '../src/auth/auth-server.ts';
 import { MemoryAuthStore } from '../src/auth/stores.ts';
+import { guardedLookup, isPublicAddress } from '../src/auth/clients.ts';
 
 const PUBLIC = 'https://course.example';
 const RESOURCE = PUBLIC + '/mcp';
@@ -251,13 +252,43 @@ describe('client registration', () => {
     };
     const resolveHost = async (h: string) => resolved[h] ?? ['93.184.216.34'];
     const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub, resolveHost });
-    for (const host of ['10.0.0.5', '127.0.0.1', '[::1]', '192.168.1.2', '[fe80::1]', 'localhost', 'metadata.internal.example', 'mixed.example', 'mapped.example', 'ula.example']) {
+    for (const host of ['10.0.0.5', '127.0.0.1', '[::1]', '[::127.0.0.1]', '[::ffff:10.0.0.1]', '[64:ff9b:1::a00:1]', '[2002:a00:1::]', '[fec0::1]', '192.168.1.2', '[fe80::1]', 'localhost', 'metadata.internal.example', 'mixed.example', 'mapped.example', 'ula.example']) {
       const res = await route(s, get(authorizeQuery(`https://${host}/client.json`, pkce().challenge)));
       expect(res.status, host).toBe(400);
     }
     expect(calls).toBe(0);
     expect((await route(s, get(authorizeQuery('https://public.example/client.json', pkce().challenge)))).status).toBe(200);
     expect(calls).toBe(1);
+  });
+});
+
+describe('metadata document addresses', () => {
+  it('classifies public and non-public addresses, including IPv4 embedded in IPv6', () => {
+    for (const a of ['93.184.216.34', '2606:2800:220:1::1', '::ffff:93.184.216.34']) expect(isPublicAddress(a), a).toBe(true);
+    for (const a of ['::', '::1', '::127.0.0.1', '::ffff:127.0.0.1', '::ffff:0:a00:1', '64:ff9b::a00:1', '64:ff9b:1::1', '2002:7f00:1::', 'fec0::1', 'fd00::1', '100.64.0.1', 'not-an-ip']) {
+      expect(isPublicAddress(a), a).toBe(false);
+    }
+  });
+
+  it('checks the address again when the socket connects, so a rebinding name is refused', async () => {
+    const answers = [['93.184.216.34'], ['127.0.0.1']];
+    let calls = 0;
+    const resolveHost = async () => answers[Math.min(calls++, 1)];
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, resolveHost });
+    const res = await route(s, get(authorizeQuery('https://rebind.example/client.json', pkce().challenge)));
+    expect(res.status).toBe(400);
+    expect(calls).toBe(2);
+  });
+
+  it('the guarded lookup answers single and all-address forms and refuses any non-public answer', async () => {
+    const lookupWith = (addresses: string[], all: boolean) =>
+      new Promise<unknown>((resolve) =>
+        guardedLookup(async () => addresses)('h.example', { all }, ((err: Error | null, a: unknown, f?: number) => resolve(err ? err : { a, f })) as never),
+      );
+    expect(await lookupWith(['93.184.216.34'], false)).toEqual({ a: '93.184.216.34', f: 4 });
+    expect(await lookupWith(['93.184.216.34', '2606:2800:220:1::1'], true)).toEqual({ a: [{ address: '93.184.216.34', family: 4 }, { address: '2606:2800:220:1::1', family: 6 }], f: undefined });
+    expect(await lookupWith(['93.184.216.34', '10.0.0.1'], true)).toBeInstanceOf(Error);
+    expect(await lookupWith([], false)).toBeInstanceOf(Error);
   });
 });
 
@@ -566,6 +597,13 @@ describe('launch-paired mode', () => {
     expect((await other.post({ pairing_code: 'ABC234' })).status).toBe(400);
   });
 
+  it('mints one code when the same request is continued twice at once', async () => {
+    const { s, client } = await setup();
+    const p = await page(s, client.client_id, 'cxm_launch=launch-1');
+    const results = await Promise.all([p.post({ action: 'continue' }), p.post({ action: 'continue' })]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
+  });
+
   it('asks for the pairing code when the cookie names no live launch', async () => {
     const { s, launches, client } = await setup();
     await launches.update('launch-1', { terminatedAt: new Date(T0).toISOString() });
@@ -679,6 +717,15 @@ describe('federated mode', () => {
     const { body } = await exchange(s, client.client_id, await codeFrom(allow), verifier);
     expect(((await s.authenticate(bearer(body.access_token))) as LearnerRef).subject).toBe('idp-sub-1');
     expect((await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun().state), { cookie: browser }))).status).toBe(400);
+  });
+
+  it('mints one code when Allow is posted twice at once', async () => {
+    const { s, begun } = federatedServer();
+    const { browser, back } = await toCallback(s, begun);
+    const id = requestId(await back.text());
+    const allow = () => route(s, form('/oauth/authorize', { request_id: id, action: 'allow' }, { cookie: browser }));
+    const results = await Promise.all([allow(), allow()]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
   });
 
   it('sends access_denied when the learner refuses, and refuses a callback or consent from another browser', async () => {

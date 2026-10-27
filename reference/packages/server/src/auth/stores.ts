@@ -65,6 +65,8 @@ export interface AuthStore {
   putRequest(r: AuthRequest): Promise<void>;
   getRequest(id: string): Promise<AuthRequest | undefined>;
   deleteRequest(id: string): Promise<void>;
+  /** Atomically removes and returns the request: of concurrent callers, exactly one gets it. */
+  takeRequest(id: string): Promise<AuthRequest | undefined>;
 
   putCode(hash: string, c: CodeRecord): Promise<void>;
   /** Marks the code used and returns it; `used` is true when it had already been redeemed. Undefined when unknown. */
@@ -89,6 +91,8 @@ export interface AuthStore {
   reserveAttempt(key: string, at: number, since: number, max: number): Promise<boolean>;
   /** Removes one attempt recorded for `key` at `at` (an attempt that turned out to succeed). */
   releaseAttempt(key: string, at: number): Promise<void>;
+  /** Forgets every attempt recorded for `key`. */
+  clearAttempts(key: string): Promise<void>;
 
   /** True the first time it is called for a launch, false after. */
   spendPairingCode(launchId: string): Promise<boolean>;
@@ -123,6 +127,11 @@ export class MemoryAuthStore implements AuthStore {
   }
   async deleteRequest(id: string) {
     this.#requests.delete(id);
+  }
+  async takeRequest(id: string) {
+    const r = this.#requests.get(id);
+    this.#requests.delete(id);
+    return r;
   }
 
   async putCode(hash: string, c: CodeRecord) {
@@ -186,6 +195,10 @@ export class MemoryAuthStore implements AuthStore {
     const list = this.#attempts.get(key);
     const i = list?.indexOf(at) ?? -1;
     if (list && i >= 0) list.splice(i, 1);
+  }
+
+  async clearAttempts(key: string) {
+    this.#attempts.delete(key);
   }
 
   async spendPairingCode(launchId: string) {

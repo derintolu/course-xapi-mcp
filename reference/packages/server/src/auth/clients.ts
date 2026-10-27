@@ -3,7 +3,9 @@
 // (an https `client_id` naming a JSON document that lists the client's redirect URIs).
 import { randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { BlockList, isIP } from 'node:net';
+import { request } from 'node:https';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
+import { Readable } from 'node:stream';
 import type { AuthStore, ClientRecord } from './stores.ts';
 
 /** Metadata documents and request bodies are read up to 64 KB. */
@@ -125,7 +127,10 @@ for (const [net, bits] of [
   ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3],
 ] as const) NON_PUBLIC.addSubnet(net, bits, 'ipv4');
 for (const [net, bits] of [
-  ['::', 127], ['64:ff9b::', 96], ['100::', 64], ['2001:db8::', 32], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
+  // ::/96 covers ::, ::1 and IPv4-compatible forms such as ::127.0.0.1; ::ffff:0:0:0/96 is IPv4-translated;
+  // 64:ff9b::/96 and 64:ff9b:1::/48 are NAT64; 2002::/16 is 6to4; fec0::/10 is deprecated site-local.
+  ['::', 96], ['::ffff:0:0:0', 96], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['100::', 64], ['2001:db8::', 32], ['2002::', 16],
+  ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
 ] as const) NON_PUBLIC.addSubnet(net, bits, 'ipv6');
 
 export function isPublicAddress(address: string): boolean {
@@ -151,15 +156,51 @@ async function isPublicHost(hostname: string, resolveHost: ResolveHost): Promise
   }
 }
 
-/** Fetches a client id metadata document: public hosts only, 5 s timeout, 64 KB cap, no redirects. */
-async function fetchMetadataDocument(clientId: string, fetchFn: typeof fetch, resolveHost: ResolveHost): Promise<ClientRecord | undefined> {
+/**
+ * A socket `lookup` that resolves through `resolveHost` and refuses the connection unless every address is
+ * public. Because it runs when the socket connects, a name that resolves differently the second time
+ * (DNS rebinding) still cannot reach a private address.
+ */
+export function guardedLookup(resolveHost: ResolveHost): LookupFunction {
+  return (hostname, options, callback) => {
+    resolveHost(hostname).then(
+      (addresses) => {
+        if (addresses.length === 0 || !addresses.every(isPublicAddress)) {
+          callback(Object.assign(new Error('refusing a non-public address for ' + hostname), { code: 'ENOTFOUND' }), '', 0);
+        } else if (options.all) {
+          (callback as unknown as (e: null, a: { address: string; family: number }[]) => void)(null, addresses.map((a) => ({ address: a, family: isIP(a) })));
+        } else {
+          callback(null, addresses[0], isIP(addresses[0]));
+        }
+      },
+      (err: NodeJS.ErrnoException) => callback(err, '', 0),
+    );
+  };
+}
+
+/** GET over node:https with the guarded lookup. Redirects are never followed; the signal bounds the whole exchange. */
+function guardedGet(resolveHost: ResolveHost) {
+  return (url: string, signal: AbortSignal): Promise<Response> =>
+    new Promise((resolve, reject) => {
+      const req = request(url, { method: 'GET', headers: { accept: 'application/json' }, lookup: guardedLookup(resolveHost), signal }, (res) => {
+        const body = Readable.toWeb(res) as unknown as ReadableStream<Uint8Array>;
+        try {
+          resolve(new Response(body, { status: res.statusCode ?? 500 }));
+        } catch (e) {
+          res.destroy();
+          reject(e);
+        }
+      });
+      req.on('error', reject);
+      req.end();
+    });
+}
+
+/** Fetches a client id metadata document: public hosts only, 5 s timeout, 64 KB cap, no redirects, status 200 only. */
+async function fetchMetadataDocument(clientId: string, get: (url: string, signal: AbortSignal) => Promise<Response>, resolveHost: ResolveHost): Promise<ClientRecord | undefined> {
   try {
     if (!(await isPublicHost(new URL(clientId).hostname, resolveHost))) return undefined;
-    const res = await fetchFn(clientId, {
-      redirect: 'manual',
-      signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
-      headers: { accept: 'application/json' },
-    });
+    const res = await get(clientId, AbortSignal.timeout(METADATA_TIMEOUT_MS));
     if (res.status !== 200) {
       await res.body?.cancel();
       return undefined;
@@ -176,7 +217,12 @@ async function fetchMetadataDocument(clientId: string, fetchFn: typeof fetch, re
 }
 
 /** Looks up a registered client, or the client a metadata document URL describes (cached briefly). */
-export function createClientResolver(o: { store: AuthStore; fetch: typeof fetch; resolveHost: ResolveHost; now: () => number }) {
+export function createClientResolver(o: { store: AuthStore; fetch?: typeof fetch; resolveHost: ResolveHost; now: () => number }) {
+  const fetchFn = o.fetch;
+  // An injected fetch (tests) replaces the guarded https GET; the pre-connect host check still applies.
+  const get = fetchFn
+    ? (url: string, signal: AbortSignal) => fetchFn(url, { redirect: 'manual', signal, headers: { accept: 'application/json' } })
+    : guardedGet(o.resolveHost);
   const cache = new Map<string, { client: ClientRecord; until: number }>();
   return async (clientId: string): Promise<ClientRecord | undefined> => {
     if (!clientId) return undefined;
@@ -184,7 +230,7 @@ export function createClientResolver(o: { store: AuthStore; fetch: typeof fetch;
     const hit = cache.get(clientId);
     if (hit && hit.until > o.now()) return structuredClone(hit.client);
     cache.delete(clientId);
-    const client = await fetchMetadataDocument(clientId, o.fetch, o.resolveHost);
+    const client = await fetchMetadataDocument(clientId, get, o.resolveHost);
     if (client) {
       if (cache.size >= METADATA_CACHE_MAX) cache.delete(cache.keys().next().value!);
       cache.set(clientId, { client, until: o.now() + METADATA_CACHE_MS });
