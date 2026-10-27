@@ -45,16 +45,19 @@ type Env = Record<string, string | undefined>;
 
 const set = (v: string | undefined) => (v !== undefined && v.trim() !== '' ? v.trim() : undefined);
 
+/** A URL as it may be echoed in an error: without user name or password. */
+const redact = (raw: string) => raw.replace(/^([^:/?#]*:\/\/)[^/?#]*@/, '$1***@');
+
 function originOf(raw: string, name: string, errors: string[]): string | undefined {
   let u: URL;
   try {
     u = new URL(raw);
   } catch {
-    errors.push(`${name} is not a URL: ${raw}`);
+    errors.push(`${name} is not a URL: ${redact(raw)}`);
     return undefined;
   }
   if ((u.protocol !== 'https:' && u.protocol !== 'http:') || (u.pathname !== '/' && u.pathname !== '') || u.search || u.hash || u.username || u.password) {
-    errors.push(`${name} must be an http(s) origin with no path, query or credentials: ${raw}`);
+    errors.push(`${name} must be an http(s) origin with no path, query or credentials: ${redact(raw)}`);
     return undefined;
   }
   return u.origin;
@@ -110,15 +113,15 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
   if (endpoint !== undefined) {
     try {
       const u = new URL(endpoint);
-      if (u.protocol !== 'https:' && u.protocol !== 'http:') errors.push(`CXM_LRS_ENDPOINT must be an http(s) URL: ${endpoint}`);
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') errors.push(`CXM_LRS_ENDPOINT must be an http(s) URL: ${redact(endpoint)}`);
     } catch {
-      errors.push(`CXM_LRS_ENDPOINT is not a URL: ${endpoint}`);
+      errors.push(`CXM_LRS_ENDPOINT is not a URL: ${redact(endpoint)}`);
     }
   }
   const lrs = endpoint && key && secret ? { endpoint, key, secret, ...(versionRaw ? { version: versionRaw as XapiVersion } : {}) } : undefined;
 
   const [issuer, clientId, clientSecret] = [set(env.CXM_OIDC_ISSUER), set(env.CXM_OIDC_CLIENT_ID), set(env.CXM_OIDC_CLIENT_SECRET)];
-  if (issuer !== undefined && !URL.canParse(issuer)) errors.push(`CXM_OIDC_ISSUER is not a URL: ${issuer}`);
+  if (issuer !== undefined && !URL.canParse(issuer)) errors.push(`CXM_OIDC_ISSUER is not a URL: ${redact(issuer)}`);
   const oidc = issuer && clientId ? { issuer, clientId, ...(clientSecret ? { clientSecret } : {}) } : undefined;
 
   const keyRaw = set(env.CXM_SIGNING_KEY);

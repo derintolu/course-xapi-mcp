@@ -16,26 +16,32 @@ function fail(errors: string[]): never {
 const loaded = loadConfig(process.env);
 if ('errors' in loaded) fail(loaded.errors);
 const config: AppConfig = loaded;
-for (const w of config.warnings) console.warn(`course-xapi-mcp: ${w}`);
 
-let app: App & { course: { title: string; custody: string } };
+let app: App & { course: { title: string; custody: string }; warnings: string[] };
 try {
   app = await createAppFromConfig(config);
 } catch (e) {
   if (e instanceof ConfigError) fail(e.errors);
   throw e;
 }
+for (const w of [...config.warnings, ...app.warnings]) console.warn(`course-xapi-mcp: ${w}`);
 
 /** The request as the app sees it: the URL is always on the public origin, so the Host header cannot change it. */
-function toRequest(req: IncomingMessage): Request {
+function toRequest(req: IncomingMessage, target: string): Request {
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
     if (Array.isArray(v)) for (const one of v) headers.append(k, one);
     else if (v !== undefined) headers.set(k, v);
   }
   const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : (Readable.toWeb(req) as ReadableStream);
-  return new Request(new URL(req.url ?? '/', config.publicUrl), { method: req.method, headers, body, duplex: 'half' } as RequestInit);
+  return new Request(config.publicUrl + target, { method: req.method, headers, body, duplex: 'half' } as RequestInit);
 }
+
+/**
+ * Only origin-form request targets (`/path?query`). An absolute-form (`http://127.0.0.1:9/...`) or `//host/...` target
+ * would otherwise replace the public origin, and the bridge would take a public server for a loopback one.
+ */
+const originForm = (target: string | undefined): target is string => target !== undefined && target.startsWith('/') && !target.startsWith('//');
 
 async function send(response: Response, res: ServerResponse) {
   const cookies = response.headers.getSetCookie();
@@ -48,7 +54,12 @@ async function send(response: Response, res: ServerResponse) {
 
 const server = createServer(async (req, res) => {
   try {
-    await send(await app.fetch(toRequest(req)), res);
+    if (!originForm(req.url)) {
+      res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('Bad request target');
+      return;
+    }
+    await send(await app.fetch(toRequest(req, req.url)), res);
   } catch (e) {
     console.error(e);
     if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
@@ -57,7 +68,8 @@ const server = createServer(async (req, res) => {
 });
 
 // On a loopback public URL, listen on loopback only; otherwise on every interface (behind a proxy or in a container).
-const host = isLoopbackHost(new URL(config.publicUrl).hostname) ? '127.0.0.1' : undefined;
+const publicHost = new URL(config.publicUrl).hostname;
+const host = publicHost === '[::1]' ? '::1' : isLoopbackHost(publicHost) ? '127.0.0.1' : undefined;
 server.listen(config.port, host, () => {
   console.log(`course-xapi-mcp: "${app.course.title}" (${app.course.custody}) on ${config.publicUrl} (pid ${process.pid})`);
 });

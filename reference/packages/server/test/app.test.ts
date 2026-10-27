@@ -1,13 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 import { spawn } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
-import { createServer } from 'node:net';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { connect, createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import type { CustodyOption, XapiStatement } from '@course-xapi-mcp/core';
 import { checkCmi5Order } from '@course-xapi-mcp/core/xapi';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
-import { ConfigError, createAppFromConfig, loadConfig, type App, type AppBadges, type AppConfig } from '../src/index.ts';
+import type { JWK } from 'jose';
+import {
+  ConfigError,
+  MemoryServerStore,
+  createApp,
+  createAppFromConfig,
+  createAuthServer,
+  createPracticeCustody,
+  createServerKeptCustody,
+  loadConfig,
+  type App,
+  type AppBadges,
+  type AppConfig,
+  type ServerStore,
+} from '../src/index.ts';
 import { startFakeIdp, type FakeIdp } from './fake-idp.ts';
 import { loadExample, teachExample } from './helpers.ts';
 
@@ -159,6 +176,12 @@ describe('configuration', () => {
     expect(err.errors).toEqual(['CXM_LRS_ENDPOINT', 'CXM_LRS_KEY', 'CXM_LRS_SECRET'].map((n) => `${n} is required for custody author-lrs`));
   });
 
+  it('does not echo credentials from a malformed URL', () => {
+    const r = loadConfig({ CXM_PUBLIC_URL: 'https://admin:hunter2@course.example/x', CXM_LRS_ENDPOINT: 'ftp://key:s3cret@lrs.example/xapi' });
+    expect('errors' in r && r.errors).toHaveLength(2);
+    expect(JSON.stringify(r)).not.toMatch(/hunter2|s3cret|admin|key:/);
+  });
+
   it('refuses bad values', () => {
     const r = loadConfig({ PORT: 'eighty', CXM_PUBLIC_URL: 'https://course.example/sub', CXM_SIGNING_KEY: '{"kty":"RSA"}', CXM_LRS_VERSION: '1.0', CXM_ALLOWED_ORIGINS: 'nope' });
     expect('errors' in r && r.errors.map((e) => e.split(' ')[0])).toEqual(['PORT', 'CXM_PUBLIC_URL', 'CXM_LRS_VERSION', 'CXM_SIGNING_KEY', 'CXM_ALLOWED_ORIGINS']);
@@ -188,7 +211,7 @@ describe('composition', () => {
     const evil = { origin: 'https://evil.example' };
     expect((await app.fetch(req('/', { headers: evil }))).status).toBe(403);
     expect((await app.fetch(req('/mcp/practice', { method: 'POST', headers: evil, body: '{}' }))).status).toBe(403);
-    expect((await app.fetch(req('/mcp/practice', { method: 'POST', headers: { origin: 'null' }, body: '{}' }))).status).toBe(403);
+    for (const path of ['/mcp', '/mcp/practice']) expect((await app.fetch(req(path, { method: 'POST', headers: { origin: 'null' }, body: '{}' }))).status).toBe(403);
     expect((await app.fetch(req('/', { headers: { origin: PUBLIC } }))).status).toBe(200);
     const rebound = new Request(PUBLIC + '/', { headers: { host: 'attacker.example:8787' } });
     expect((await app.fetch(rebound)).status).toBe(403);
@@ -198,36 +221,84 @@ describe('composition', () => {
   });
 
   it("the bin's GET / reports the course and both MCP URLs", async () => {
-    const port = await new Promise<number>((resolve) => {
-      const s = createServer().listen(0, '127.0.0.1', () => {
-        const p = (s.address() as { port: number }).port;
-        s.close(() => resolve(p));
-      });
-    });
-    const bin = new URL('../src/bin.ts', import.meta.url).pathname;
-    const child = spawn(process.execPath, ['--experimental-strip-types', '--no-warnings', bin], { env: { ...process.env, PORT: String(port), CXM_PACKAGE: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const bin = await startBin();
     try {
-      let err = '';
-      child.stderr.on('data', (d) => (err += d));
-      await new Promise<void>((resolve, reject) => {
-        child.stdout.on('data', (d) => String(d).includes(`(pid ${child.pid})`) && resolve());
-        child.on('exit', (code) => reject(new Error(`bin exited ${code}: ${err}`)));
-      });
-      expect(err).toMatch(/CXM_SIGNING_KEY is not set/);
-      const base = `http://127.0.0.1:${port}`;
-      const about = await (await fetch(base + '/')).json();
+      await vi.waitFor(() => expect(bin.stderr()).toMatch(/CXM_SIGNING_KEY is not set/));
+      expect(bin.stderr()).not.toMatch(/held in memory/);
+      const about = await (await fetch(bin.base + '/')).json();
       expect(about).toMatchObject({
         course: { id: 'https://course-xapi-mcp.sqwrlz.com/examples/json-basics', title: expect.any(String) },
         custody: 'server-kept',
         official: true,
-        mcp: base + '/mcp',
-        practice: base + '/mcp/practice',
+        mcp: bin.base + '/mcp',
+        practice: bin.base + '/mcp/practice',
       });
     } finally {
-      child.kill('SIGTERM');
+      bin.stop();
+    }
+  });
+
+  it('the bin refuses absolute-form and //host request targets, so the bridge never takes them for loopback', async () => {
+    const bin = await startBin();
+    try {
+      const host = `127.0.0.1:${bin.port}`;
+      for (const target of [`http://127.0.0.1:9/cmi5/launch?au=placement`, `//127.0.0.1:9/cmi5/launch?au=placement`]) {
+        expect(await rawGet(bin.port, target, host)).toMatch(/^HTTP\/1\.1 400 [\s\S]*Bad request target/);
+      }
+      // An origin-form target is served as usual.
+      expect(await rawGet(bin.port, '/', host)).toMatch(/^HTTP\/1\.1 200 /);
+    } finally {
+      bin.stop();
+    }
+  });
+
+  it('the bin warns that accounts are held in memory when CXM_DATA_DIR is set with custody server-kept', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cxm-data-'));
+    const bin = await startBin({ CXM_DATA_DIR: dir });
+    try {
+      await vi.waitFor(() => expect(bin.stderr()).toMatch(/CXM_DATA_DIR .*accounts, clients and refresh tokens are held in memory.*cannot be reached/));
+    } finally {
+      bin.stop();
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });
+
+/** Starts the reference binary on a free loopback port, with no CXM_* variables but `env`. */
+async function startBin(env: Record<string, string> = {}) {
+  const port = await new Promise<number>((resolve) => {
+    const s = createServer().listen(0, '127.0.0.1', () => {
+      const p = (s.address() as { port: number }).port;
+      s.close(() => resolve(p));
+    });
+  });
+  const clean = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('CXM_')));
+  const bin = new URL('../src/bin.ts', import.meta.url).pathname;
+  const child = spawn(process.execPath, ['--experimental-strip-types', '--no-warnings', bin], { env: { ...clean, PORT: String(port), ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let err = '';
+  child.stderr.on('data', (d) => (err += d));
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.stdout.on('data', (d) => String(d).includes(`(pid ${child.pid})`) && resolve());
+      child.on('exit', (code) => reject(new Error(`bin exited ${code}: ${err}`)));
+    });
+  } catch (e) {
+    child.kill('SIGTERM');
+    throw e;
+  }
+  return { port, base: `http://127.0.0.1:${port}`, stderr: () => err, stop: () => child.kill('SIGTERM') };
+}
+
+/** Sends one raw HTTP/1.1 GET with exactly this request target, and returns the response text. */
+function rawGet(port: number, target: string, host: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let out = '';
+    const sock = connect(port, '127.0.0.1', () => sock.write(`GET ${target} HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`));
+    sock.on('data', (d) => (out += d));
+    sock.on('end', () => resolve(out));
+    sock.on('error', reject);
+  });
+}
 
 describe('record pages', () => {
   it('/record/export.json without a browser session is 401', async () => {
@@ -263,6 +334,57 @@ describe('record pages', () => {
     }
     const exported = (await (await app.fetch(req('/record/export.json', { cookies: browser }))).json()) as { record: { statements: unknown[] } };
     expect(exported.record.statements.length).toBeGreaterThan(0);
+  });
+});
+
+describe('record erase and tool calls', () => {
+  it('an erase waits for a tool call in flight, so neither state nor statements are left behind', async () => {
+    const course = await loadExample();
+    const inner = new MemoryServerStore();
+    let slow = false;
+    let entered!: () => void;
+    const inAppend = new Promise<void>((r) => (entered = r));
+    // The tool call's deliver stalls after the call has saved its state; an erase must not slip in there.
+    const store: ServerStore = {
+      getState: (s) => inner.getState(s),
+      putState: (s, st, e) => inner.putState(s, st, e),
+      append: async (s, st) => {
+        if (slow) {
+          entered();
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        return inner.append(s, st);
+      },
+      statements: (s) => inner.statements(s),
+      deleteLearner: (s) => inner.deleteLearner(s),
+    };
+    const signingKey = generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' }) as JWK;
+    const revoked: string[] = [];
+    const app = createApp({
+      course,
+      publicUrl: PUBLIC,
+      custody: createServerKeptCustody({ store, publicUrl: PUBLIC, courseTitle: course.title }),
+      practice: createPracticeCustody({ courseId: course.id }),
+      auth: createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts' }),
+      serverStore: store,
+      badges: { claimPage: PUBLIC + '/badges/claim', summaries: async () => [], onAwards: async () => {}, routes: async () => undefined, revokeLearner: async (s) => (revoked.push(s), 0) },
+    });
+    apps.push(app);
+    const browser = jar();
+    const call = await mcp(app, '/mcp', await signUp(app, browser));
+    await call('start_placement');
+    await call('choose_placement', { pathKey: 'json', startLessonKey: 'what-is-json', skip: [], reason: 'New to JSON.' });
+    const csrf = csrfOf(await (await app.fetch(req('/record', { cookies: browser }))).text())!;
+
+    slow = true;
+    const inFlight = call('next_beat');
+    await inAppend;
+    const erased = await app.fetch(formPost('/record', { action: 'delete', csrf }, browser));
+    expect(erased.status).toBe(200);
+    await inFlight;
+    expect(revoked).toHaveLength(1);
+    expect(await inner.getState(revoked[0]!)).toBeUndefined();
+    expect(await inner.statements(revoked[0]!)).toEqual([]);
   });
 });
 

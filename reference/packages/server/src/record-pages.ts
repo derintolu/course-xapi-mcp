@@ -6,6 +6,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { StoreError, type AuthServer, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
 import { readCapped } from './auth/clients.ts';
 import { html, page } from './auth/pages.ts';
+import { withLearnerLock } from './custody/mutex.ts';
 import type { ServerStore } from './custody/stores.ts';
 
 export interface RecordPagesOptions {
@@ -103,9 +104,12 @@ export function createRecordPages(o: RecordPagesOptions): (req: Request) => Prom
     if (!csrfOk(sid, form.get('csrf')) || form.get('action') !== 'delete') {
       return page(title, html`<p class="error">This form has expired. Open <a href="/record">your record</a> and try again.</p>`, 403);
     }
-    // Credentials first: if revoking fails, nothing is erased and the learner can try again.
-    await o.revokeLearner?.(l.subject);
-    await o.serverStore!.deleteLearner(l.subject);
+    // Under the learner's lock, so no tool call is between reading and writing the record meanwhile. Credentials
+    // first: if revoking fails, nothing is erased and the learner can try again.
+    await withLearnerLock(l.subject, async () => {
+      await o.revokeLearner?.(l.subject);
+      await o.serverStore!.deleteLearner(l.subject);
+    });
     return page(title, html`<p>Your record was deleted. If you use this course again, it starts from the beginning.</p>`);
   }
 

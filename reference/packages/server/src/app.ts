@@ -165,7 +165,7 @@ export interface FromConfigOptions {
 }
 
 /** Builds the server for one course package from the configuration: stores, custody, sign-in, bridge and pages. */
-export async function createAppFromConfig(config: AppConfig, o: FromConfigOptions = {}): Promise<App & { course: CourseModel }> {
+export async function createAppFromConfig(config: AppConfig, o: FromConfigOptions = {}): Promise<App & { course: CourseModel; warnings: string[] }> {
   const course = o.course ?? (await loadCourse(config.packagePath));
   const missing = custodyErrors(config, course.custody);
   if (missing.length) throw new ConfigError(missing);
@@ -192,6 +192,7 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
       custody = practice!;
       break;
     case 'server-kept':
+      // A directory AuthStore is deferred, so accounts do not survive a restart (see the warning below).
       serverStore = dir ? new DirectoryServerStore(join(dir, 'server')) : new MemoryServerStore();
       custody = createServerKeptCustody({ store: serverStore, publicUrl, courseTitle: course.title });
       auth = authFor('accounts');
@@ -229,5 +230,11 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
     now: iso,
     onClose: stopSweeper,
   });
-  return { ...app, course };
+  const warnings =
+    dir && course.custody === 'server-kept'
+      ? [
+          'CXM_DATA_DIR keeps practice copies and server-kept records on disk, but accounts, clients and refresh tokens are held in memory: after a restart, learners cannot sign in to their accounts again, so records written before it cannot be reached.',
+        ]
+      : [];
+  return { ...app, course, warnings };
 }

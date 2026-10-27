@@ -57,3 +57,9 @@ const verbs = rec.record.statements.map((s: any) => s.verb.display?.['en-US'] ??
 console.log(`\nrecord: ${rec.record.statements.length} statements; verbs: ${verbs.join(', ')}`);
 await call('delete_practice_record');
 await client.close();
+const ids = rec.record.statements.map((s: any) => s.verb.id.split('/').pop());
+const missing = ['passed', 'satisfied'].filter((v) => !ids.includes(v));
+if (missing.length) {
+  console.error(`\nFAIL: the record has no ${missing.join(' or ')} statement`);
+  process.exit(1);
+}
