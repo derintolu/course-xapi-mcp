@@ -7,6 +7,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "cxm": "bin/cxm.mjs"
+  },
   "dependencies": {
     "@course-xapi-mcp/core": "0.2.0",
     "@modelcontextprotocol/server": "2.4.0",
