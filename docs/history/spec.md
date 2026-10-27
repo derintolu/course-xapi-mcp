@@ -6,7 +6,7 @@ Date: 2026-10-19
 Status: draft, written by Claude while Derin was away. Every call I made is marked **Decision (Claude, pending Derin's review)**.
 Owner: Derin (derintolu)
 
-Normative rules live in [`RULES.md`](../RULES.md). This document explains the design behind them.
+Normative rules live in [`RULES.md`](RULES.md). This document explains the design behind them.
 
 ## 1. Problem
 
@@ -203,7 +203,7 @@ One record can hold several courses, because the actor is the same. Statements a
 
 ## 10. xAPI profile summary
 
-Full detail in [`docs/xapi-profile.md`](xapi-profile.md) and `profile/xapi-profile.jsonld`.
+Full detail in [`docs/xapi-profile.md`](../xapi-profile.md) and `profile/xapi-profile.jsonld`.
 
 - Profile IRI `https://w3id.org/learning-mcp/xapi`, version `https://w3id.org/learning-mcp/xapi/v0.1`.
 - Verbs: ADL `experienced`, `answered`, `passed`, `failed`, `completed`; profile `placed`, `branched`, `caught`.

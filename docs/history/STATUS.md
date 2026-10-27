@@ -8,17 +8,17 @@ Repo: https://github.com/derintolu/learning-mcp (private). Branch `main`.
 
 ## Done
 
-- **Research** ([research.md](research.md)): MCP 2026-07-28 (stateless, no sessions, server-minted handles), the v2 TypeScript SDK (2.3.1), Claude custom connectors and ChatGPT developer mode, xAPI 2.0 versus 1.0.3 (read from the standard's text), xAPI Profiles, cmi5, and prior art, with sources.
+- **Research** ([research.md](../research.md)): MCP 2026-07-28 (stateless, no sessions, server-minted handles), the v2 TypeScript SDK (2.3.1), Claude custom connectors and ChatGPT developer mode, xAPI 2.0 versus 1.0.3 (read from the standard's text), xAPI Profiles, cmi5, and prior art, with sources.
 - **Design spec** ([spec.md](spec.md)): problem, goals, non-goals, architecture, content format, lesson flow, tools, trust model, privacy model, record format, open questions.
-- **Rules**: [`RULES.md`](../RULES.md) (normative protocol), [`rules/AGENT_RULES.md`](../rules/AGENT_RULES.md) (sent to agents), [`profile/xapi-profile.jsonld`](../profile/xapi-profile.jsonld) and [xapi-profile.md](xapi-profile.md).
+- **Rules**: [`RULES.md`](RULES.md) (normative protocol), [`rules/AGENT_RULES.md`](../../rules/AGENT_RULES.md) (sent to agents), [`profile/xapi-profile.jsonld`](../../profile/xapi-profile.jsonld) and [xapi-profile.md](../xapi-profile.md).
 - **`packages/core`**: schema, engine, checks, xAPI builder and validators, record reducer and parser, session tools, rules text, profile builder, memory store. Ported from learn-wp-reimagined with credit in each file.
 - **`packages/server`**: `createCourseServer()`, 11 tools, rules as instructions, resource and prompt, Origin/Host guards, directory store, Node bin.
 - **`examples/json-basics`**: two lessons, with a free-text checkpoint, a planted bug and a code checkpoint.
-- **README**, this file, and [verification.md](verification.md).
+- **README**, this file, and [verification.md](../verification.md).
 
 ## Verified, with evidence
 
-All details and transcripts are in [verification.md](verification.md).
+All details and transcripts are in [verification.md](../verification.md).
 
 | Claim | Evidence |
 | --- | --- |
