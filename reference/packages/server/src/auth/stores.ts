@@ -19,8 +19,10 @@ export interface AuthRequest {
   codeChallenge: string;
   state?: string;
   expiresAt: number;
-  /** Wrong pairing codes typed for this request (launch-paired mode). */
-  wrongCodes: number;
+  /** SHA-256 of the `cxm_areq` browser cookie the request was opened with; later steps must carry it. */
+  browser: string;
+  /** Federated mode: the identity provider's subject, waiting for the learner's consent. */
+  federatedSubject?: string;
 }
 
 /** Who a code, refresh token or session belongs to. */
@@ -80,8 +82,13 @@ export interface AuthStore {
   /** False when the username is taken. */
   createAccount(a: AccountRecord): Promise<boolean>;
   getAccount(username: string): Promise<AccountRecord | undefined>;
-  addSignInFailure(username: string, at: number): Promise<void>;
-  signInFailuresSince(username: string, since: number): Promise<number>;
+  /**
+   * Atomically: if fewer than `max` attempts for `key` are recorded at or after `since`, records one at `at`
+   * and returns true; otherwise records nothing and returns false.
+   */
+  reserveAttempt(key: string, at: number, since: number, max: number): Promise<boolean>;
+  /** Removes one attempt recorded for `key` at `at` (an attempt that turned out to succeed). */
+  releaseAttempt(key: string, at: number): Promise<void>;
 
   /** True the first time it is called for a launch, false after. */
   spendPairingCode(launchId: string): Promise<boolean>;
@@ -96,7 +103,7 @@ export class MemoryAuthStore implements AuthStore {
   readonly #revokedFamilies = new Set<string>();
   readonly #sessions = new Map<string, SessionRecord>();
   readonly #accounts = new Map<string, AccountRecord>();
-  readonly #failures = new Map<string, number[]>();
+  readonly #attempts = new Map<string, number[]>();
   readonly #spentPairing = new Set<string>();
 
   async putClient(c: ClientRecord) {
@@ -167,15 +174,18 @@ export class MemoryAuthStore implements AuthStore {
     const a = this.#accounts.get(username);
     return a && structuredClone(a);
   }
-  async addSignInFailure(username: string, at: number) {
-    const list = this.#failures.get(username) ?? [];
-    list.push(at);
-    this.#failures.set(username, list);
+  async reserveAttempt(key: string, at: number, since: number, max: number) {
+    const list = (this.#attempts.get(key) ?? []).filter((t) => t >= since);
+    const ok = list.length < max;
+    if (ok) list.push(at);
+    if (list.length) this.#attempts.set(key, list);
+    else this.#attempts.delete(key);
+    return ok;
   }
-  async signInFailuresSince(username: string, since: number) {
-    const list = (this.#failures.get(username) ?? []).filter((at) => at >= since);
-    this.#failures.set(username, list);
-    return list.length;
+  async releaseAttempt(key: string, at: number) {
+    const list = this.#attempts.get(key);
+    const i = list?.indexOf(at) ?? -1;
+    if (list && i >= 0) list.splice(i, 1);
   }
 
   async spendPairingCode(launchId: string) {

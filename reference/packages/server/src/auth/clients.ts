@@ -2,11 +2,16 @@
 // OAuth clients: dynamic registration (RFC 7591, public clients only) and client id metadata documents
 // (an https `client_id` naming a JSON document that lists the client's redirect URIs).
 import { randomBytes } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { BlockList, isIP } from 'node:net';
 import type { AuthStore, ClientRecord } from './stores.ts';
 
 /** Metadata documents and request bodies are read up to 64 KB. */
 export const BODY_LIMIT = 65_536;
 const METADATA_TIMEOUT_MS = 5000;
+/** Fetched metadata documents are reused for 5 min. */
+const METADATA_CACHE_MS = 300_000;
+const METADATA_CACHE_MAX = 1000;
 const MAX_REDIRECT_URIS = 10;
 const MAX_URI_LENGTH = 2000;
 const MAX_NAME_LENGTH = 200;
@@ -113,9 +118,43 @@ function isMetadataDocumentUrl(clientId: string): boolean {
   }
 }
 
-/** Fetches a client id metadata document: 5 s timeout, 64 KB cap, no redirects. */
-async function fetchMetadataDocument(clientId: string, fetchFn: typeof fetch): Promise<ClientRecord | undefined> {
+/** Addresses a metadata document fetch must never reach: private, loopback, link-local, shared, reserved, multicast. */
+const NON_PUBLIC = new BlockList();
+for (const [net, bits] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
+  ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3],
+] as const) NON_PUBLIC.addSubnet(net, bits, 'ipv4');
+for (const [net, bits] of [
+  ['::', 127], ['64:ff9b::', 96], ['100::', 64], ['2001:db8::', 32], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
+] as const) NON_PUBLIC.addSubnet(net, bits, 'ipv6');
+
+export function isPublicAddress(address: string): boolean {
+  const family = isIP(address);
+  if (family === 0) return false;
+  return !NON_PUBLIC.check(address, family === 4 ? 'ipv4' : 'ipv6');
+}
+
+export type ResolveHost = (hostname: string) => Promise<string[]>;
+
+export const resolveWithDns: ResolveHost = async (hostname) => (await lookup(hostname, { all: true, verbatim: true })).map((a) => a.address);
+
+/** True when the host is an IP literal on the public internet, or a name whose every address is. */
+async function isPublicHost(hostname: string, resolveHost: ResolveHost): Promise<boolean> {
+  const bare = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname;
+  if (isIP(bare)) return isPublicAddress(bare);
+  if (bare === 'localhost' || bare.endsWith('.localhost')) return false;
   try {
+    const addresses = await resolveHost(bare);
+    return addresses.length > 0 && addresses.every(isPublicAddress);
+  } catch {
+    return false;
+  }
+}
+
+/** Fetches a client id metadata document: public hosts only, 5 s timeout, 64 KB cap, no redirects. */
+async function fetchMetadataDocument(clientId: string, fetchFn: typeof fetch, resolveHost: ResolveHost): Promise<ClientRecord | undefined> {
+  try {
+    if (!(await isPublicHost(new URL(clientId).hostname, resolveHost))) return undefined;
     const res = await fetchFn(clientId, {
       redirect: 'manual',
       signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
@@ -136,9 +175,20 @@ async function fetchMetadataDocument(clientId: string, fetchFn: typeof fetch): P
   }
 }
 
-/** A registered client, or the client a metadata document URL describes. */
-export async function resolveClient(store: AuthStore, clientId: string, fetchFn: typeof fetch): Promise<ClientRecord | undefined> {
-  if (!clientId) return undefined;
-  if (isMetadataDocumentUrl(clientId)) return fetchMetadataDocument(clientId, fetchFn);
-  return store.getClient(clientId);
+/** Looks up a registered client, or the client a metadata document URL describes (cached briefly). */
+export function createClientResolver(o: { store: AuthStore; fetch: typeof fetch; resolveHost: ResolveHost; now: () => number }) {
+  const cache = new Map<string, { client: ClientRecord; until: number }>();
+  return async (clientId: string): Promise<ClientRecord | undefined> => {
+    if (!clientId) return undefined;
+    if (!isMetadataDocumentUrl(clientId)) return o.store.getClient(clientId);
+    const hit = cache.get(clientId);
+    if (hit && hit.until > o.now()) return structuredClone(hit.client);
+    cache.delete(clientId);
+    const client = await fetchMetadataDocument(clientId, o.fetch, o.resolveHost);
+    if (client) {
+      if (cache.size >= METADATA_CACHE_MAX) cache.delete(cache.keys().next().value!);
+      cache.set(clientId, { client, until: o.now() + METADATA_CACHE_MS });
+    }
+    return client;
+  };
 }

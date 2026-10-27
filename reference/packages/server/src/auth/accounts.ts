@@ -38,13 +38,17 @@ export async function signUp(store: AuthStore, username: string, password: strin
 }
 
 export async function signIn(store: AuthStore, username: string, password: string, now: number): Promise<SignInResult> {
-  if (await store.signInFailuresSince(username, now - FAILURE_WINDOW_MS) >= MAX_FAILURES) {
+  // The attempt is recorded before hashing, so concurrent guesses cannot all pass the check first.
+  const key = 'signin:' + username;
+  if (!(await store.reserveAttempt(key, now, now - FAILURE_WINDOW_MS, MAX_FAILURES))) {
     return { error: 'Too many failed sign-ins for this username. Wait 15 minutes and try again.', status: 429 };
   }
   const account = USERNAME.test(username) ? await store.getAccount(username) : undefined;
   const salt = account ? Buffer.from(account.salt, 'base64') : DUMMY_SALT;
   const computed = await derive(password.slice(0, MAX_PASSWORD), salt);
-  if (account && timingSafeEqual(computed, Buffer.from(account.hash, 'base64'))) return { subject: account.id };
-  await store.addSignInFailure(username, now);
+  if (account && timingSafeEqual(computed, Buffer.from(account.hash, 'base64'))) {
+    await store.releaseAttempt(key, now);
+    return { subject: account.id };
+  }
   return { error: 'The username or password is wrong.', status: 400 };
 }

@@ -3,7 +3,7 @@ import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT, importJWK, type JWK } from 'jose';
 import { DEFAULTS, MemoryLaunchStore, actorKey, type AuthServer, type CourseModel, type LaunchContext, type LearnerRef } from '@course-xapi-mcp/core';
-import { createAuthServer } from '../src/auth/auth-server.ts';
+import { PAIRING_GUESS_BUDGET, createAuthServer } from '../src/auth/auth-server.ts';
 import { MemoryAuthStore } from '../src/auth/stores.ts';
 
 const PUBLIC = 'https://course.example';
@@ -13,6 +13,8 @@ const WWW_AUTH = `Bearer resource_metadata="${PUBLIC}/.well-known/oauth-protecte
 const course = { id: 'https://example.org/courses/demo', title: 'Demo course' } as CourseModel;
 const signingKey = generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' }) as JWK;
 const T0 = Date.parse('2026-10-27T10:00:00Z');
+/** Metadata document hosts resolve to a public address in tests. */
+const publicHost = async () => ['93.184.216.34'];
 
 let t = T0;
 const now = () => t;
@@ -74,6 +76,13 @@ function cookie(res: Response, name: string): string | undefined {
   return undefined;
 }
 
+/** The `cxm_areq=...` pair the authorize page set, which every later step of that request must send. */
+function browserOf(res: Response): string {
+  const c = cookie(res, 'cxm_areq');
+  if (!c) throw new Error('no cxm_areq cookie');
+  return c.split(';')[0];
+}
+
 /** The redirect back to the client: a 302 after a GET, or (after a form POST, which the CSP's form-action would block) a page that navigates there. */
 async function redirectFrom(res: Response): Promise<URL> {
   if (res.status === 302) return new URL(res.headers.get('location')!);
@@ -111,7 +120,7 @@ async function accountsLogin(s: AuthServer, clientId: string, challenge: string,
   const page = await route(s, get(authorizeQuery(clientId, challenge)));
   expect(page.status).toBe(200);
   const id = requestId(await page.text());
-  return route(s, form('/oauth/login', { request_id: id, action, username, password }));
+  return route(s, form('/oauth/login', { request_id: id, action, username, password }, { cookie: browserOf(page) }));
 }
 
 async function fullAccountsFlow(s: AuthServer, username = 'ada.l', password = 'correct horse battery') {
@@ -184,7 +193,7 @@ describe('client registration', () => {
         headers: { 'content-type': 'application/json' },
       });
     }) as typeof fetch;
-    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub });
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub, resolveHost: publicHost });
     const { challenge } = pkce();
 
     const ok = await route(s, get(authorizeQuery(docUrl, challenge)));
@@ -207,9 +216,48 @@ describe('client registration', () => {
       new Response(JSON.stringify({ client_id: 'https://other.example/c.json', redirect_uris: [REDIRECT] })),
     ];
     const fetchStub = (async () => responses.shift()!) as unknown as typeof fetch;
-    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub });
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub, resolveHost: publicHost });
     const { challenge } = pkce();
     for (let i = 0; i < 3; i++) expect((await route(s, get(authorizeQuery(docUrl, challenge)))).status).toBe(400);
+    expect(responses).toHaveLength(0);
+  });
+
+  it('caches a metadata document for 5 minutes', async () => {
+    const docUrl = 'https://agent.example/client.json';
+    let calls = 0;
+    const fetchStub = (async () => {
+      calls++;
+      return new Response(JSON.stringify({ client_id: docUrl, redirect_uris: [REDIRECT] }));
+    }) as unknown as typeof fetch;
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub, resolveHost: publicHost });
+    for (let i = 0; i < 3; i++) expect((await route(s, get(authorizeQuery(docUrl, pkce().challenge)))).status).toBe(200);
+    expect(calls).toBe(1);
+    t += 300_001;
+    expect((await route(s, get(authorizeQuery(docUrl, pkce().challenge)))).status).toBe(200);
+    expect(calls).toBe(2);
+  });
+
+  it('never fetches a metadata document from a private, loopback or link-local address', async () => {
+    let calls = 0;
+    const fetchStub = (async (url: string) => {
+      calls++;
+      return new Response(JSON.stringify({ client_id: url, redirect_uris: [REDIRECT] }));
+    }) as unknown as typeof fetch;
+    const resolved: Record<string, string[]> = {
+      'metadata.internal.example': ['169.254.169.254'],
+      'mixed.example': ['93.184.216.34', '10.0.0.7'],
+      'mapped.example': ['::ffff:127.0.0.1'],
+      'ula.example': ['fd12:3456::1'],
+    };
+    const resolveHost = async (h: string) => resolved[h] ?? ['93.184.216.34'];
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub, resolveHost });
+    for (const host of ['10.0.0.5', '127.0.0.1', '[::1]', '192.168.1.2', '[fe80::1]', 'localhost', 'metadata.internal.example', 'mixed.example', 'mapped.example', 'ula.example']) {
+      const res = await route(s, get(authorizeQuery(`https://${host}/client.json`, pkce().challenge)));
+      expect(res.status, host).toBe(400);
+    }
+    expect(calls).toBe(0);
+    expect((await route(s, get(authorizeQuery('https://public.example/client.json', pkce().challenge)))).status).toBe(200);
+    expect(calls).toBe(1);
   });
 });
 
@@ -420,12 +468,49 @@ describe('accounts mode', () => {
     const { challenge } = pkce();
     const q = authorizeQuery(client.client_id, challenge, { resource: local + '/mcp' });
     const page = await route(s, new Request(local + q));
+    expect(cookie(page, 'cxm_areq')).not.toMatch(/Secure/);
     const res = await route(s, new Request(local + '/oauth/login', {
-      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: browserOf(page) },
       body: new URLSearchParams({ request_id: requestId(await page.text()), action: 'signup', username: 'ada.l', password: 'correct horse battery' }),
     }));
     expect(res.status).toBe(200);
     expect(cookie(res, 'cxm_sid')).not.toMatch(/Secure/);
+  });
+
+  it('refuses a login posted from a browser that did not open the request', async () => {
+    const s = accountsServer();
+    const { body: client } = await register(s);
+    const page = await route(s, get(authorizeQuery(client.client_id, pkce().challenge)));
+    expect(cookie(page, 'cxm_areq')).toMatch(/HttpOnly.*Secure.*SameSite=Lax/);
+    const id = requestId(await page.text());
+    const body = { request_id: id, action: 'signup', username: 'ada.l', password: 'correct horse battery' };
+    for (const headers of [{}, { cookie: 'cxm_areq=' + 'A'.repeat(43) }] as Record<string, string>[]) {
+      const res = await route(s, form('/oauth/login', body, headers));
+      expect(res.status).toBe(400);
+      expect(await res.text()).not.toContain('http-equiv="refresh"');
+    }
+    expect((await route(s, form('/oauth/login', body, { cookie: browserOf(page) }))).status).toBe(200);
+  });
+
+  it('counts concurrent bad passwords before hashing, so parallel guesses cannot pass the limit', async () => {
+    const s = accountsServer();
+    const { client } = await fullAccountsFlow(s, 'ada.l', 'correct horse battery');
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) => accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'wrong password ' + i)),
+    );
+    expect(results.filter((r) => r.status === 400)).toHaveLength(5);
+    expect(results.filter((r) => r.status === 429)).toHaveLength(5);
+  });
+
+  it('does not count a successful sign-in against the limit', async () => {
+    const s = accountsServer();
+    const { client } = await fullAccountsFlow(s, 'ada.l', 'correct horse battery');
+    for (let i = 0; i < 4; i++) await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'wrong password ' + i);
+    for (let i = 0; i < 3; i++) {
+      expect((await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'correct horse battery')).status).toBe(200);
+    }
+    expect((await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'wrong again')).status).toBe(400);
+    expect((await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'wrong again 2')).status).toBe(429);
   });
 });
 
@@ -451,18 +536,23 @@ describe('launch-paired mode', () => {
     return { s, launches, c, client };
   }
 
-  async function page(s: AuthServer, clientId: string, headers: Record<string, string> = {}) {
+  /** Opens the authorize page; `post` sends a form for that request from the same browser. */
+  async function page(s: AuthServer, clientId: string, launchCookie?: string) {
     const p = pkce();
-    const res = await route(s, get(authorizeQuery(clientId, p.challenge), headers));
+    const res = await route(s, get(authorizeQuery(clientId, p.challenge), launchCookie ? { cookie: launchCookie } : {}));
     expect(res.status).toBe(200);
     const html = await res.text();
-    return { ...p, html, id: requestId(html) };
+    const id = requestId(html);
+    const jar = [browserOf(res), launchCookie].filter(Boolean).join('; ');
+    const post = (body: Record<string, string>) => route(s, form('/oauth/authorize', { request_id: id, ...body }, { cookie: jar }));
+    return { ...p, html, id, post };
   }
 
-  it('binds the launch named by the cxm_launch cookie', async () => {
+  it('binds the launch named by the cxm_launch cookie, and that spends the pairing code', async () => {
     const { s, launches, c, client } = await setup();
-    const p = await page(s, client.client_id, { cookie: 'cxm_launch=launch-1' });
-    const res = await route(s, form('/oauth/authorize', { request_id: p.id, action: 'continue' }, { cookie: 'cxm_launch=launch-1' }));
+    const p = await page(s, client.client_id, 'cxm_launch=launch-1');
+    expect(p.html).toContain('127.0.0.1:33418');
+    const res = await p.post({ action: 'continue' });
     const { body } = await exchange(s, client.client_id, await codeFrom(res), p.verifier);
     const payload = JSON.parse(Buffer.from(body.access_token.split('.')[1], 'base64url').toString());
     expect(payload.cxm_launch).toBe('launch-1');
@@ -471,27 +561,29 @@ describe('launch-paired mode', () => {
     expect((await launches.get('launch-1'))?.pairedSubject).toBe(expectedSubject(c));
     expect(JSON.stringify(body)).not.toContain('secret-token');
     expect(cookie(res, 'cxm_sid')).toBeTruthy();
+
+    const other = await page(s, client.client_id);
+    expect((await other.post({ pairing_code: 'ABC234' })).status).toBe(400);
   });
 
   it('asks for the pairing code when the cookie names no live launch', async () => {
     const { s, launches, client } = await setup();
     await launches.update('launch-1', { terminatedAt: new Date(T0).toISOString() });
-    const p = await page(s, client.client_id, { cookie: 'cxm_launch=launch-1' });
+    const p = await page(s, client.client_id, 'cxm_launch=launch-1');
     expect(p.html).toContain('name="pairing_code"');
-    const forged = await route(s, form('/oauth/authorize', { request_id: p.id, action: 'continue' }, { cookie: 'cxm_launch=launch-1' }));
-    expect(forged.status).toBe(400);
+    expect((await p.post({ action: 'continue' })).status).toBe(400);
   });
 
   it('accepts a correct pairing code once, case-insensitively', async () => {
     const { s, c, client } = await setup();
     const p = await page(s, client.client_id);
     expect(p.html).toContain('name="pairing_code"');
-    const res = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: ' abc234 ' }));
+    const res = await p.post({ pairing_code: ' abc234 ' });
     const { body } = await exchange(s, client.client_id, await codeFrom(res), p.verifier);
     expect(((await s.authenticate(bearer(body.access_token))) as LearnerRef).subject).toBe(expectedSubject(c));
 
     const p2 = await page(s, client.client_id);
-    const again = await route(s, form('/oauth/authorize', { request_id: p2.id, pairing_code: 'ABC234' }));
+    const again = await p2.post({ pairing_code: 'ABC234' });
     expect(again.status).toBe(400);
     expect(again.headers.get('location')).toBeNull();
   });
@@ -500,29 +592,53 @@ describe('launch-paired mode', () => {
     const { s, client } = await setup();
     t += DEFAULTS.pairingTtlMs + 1;
     const p = await page(s, client.client_id);
-    const res = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ABC234' }));
-    expect(res.status).toBe(400);
+    expect((await p.post({ pairing_code: 'ABC234' })).status).toBe(400);
   });
 
   it('ends the request at the sixth wrong code', async () => {
     const { s, client } = await setup();
     const p = await page(s, client.client_id);
     for (let i = 0; i < 5; i++) {
-      const res = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ZZZZZ' + i }));
+      const res = await p.post({ pairing_code: 'ZZZZZ' + i });
       expect(res.status).toBe(400);
       expect(await res.text()).toContain('name="pairing_code"');
     }
-    const sixth = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ZZZZZZ' }));
+    const sixth = await p.post({ pairing_code: 'ZZZZZZ' });
     expect(sixth.status).toBe(400);
     expect(await sixth.text()).not.toContain('name="pairing_code"');
-    const right = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ABC234' }));
+    const right = await p.post({ pairing_code: 'ABC234' });
     expect(right.status).toBe(400);
     expect(right.headers.get('location')).toBeNull();
+  });
+
+  it('counts concurrent wrong codes on one request before the lookup', async () => {
+    const { s, client } = await setup();
+    const p = await page(s, client.client_id);
+    const results = await Promise.all(Array.from({ length: 10 }, (_, i) => p.post({ pairing_code: 'ZZZZZ' + i })));
+    const texts = await Promise.all(results.map((r) => r.text()));
+    expect(texts.filter((h) => h.includes('name="pairing_code"'))).toHaveLength(5);
+    expect(texts.filter((h) => h.includes('Too many wrong pairing codes'))).toHaveLength(5);
+  });
+
+  it('limits wrong codes across all requests and clients', async () => {
+    const { s, client } = await setup();
+    for (let n = 0; n < PAIRING_GUESS_BUDGET / 5; n++) {
+      const p = await page(s, client.client_id);
+      for (let i = 0; i < 5; i++) expect((await p.post({ pairing_code: 'ZZZZZ' + i })).status).toBe(400);
+    }
+    const { body: other } = await register(s);
+    const p = await page(s, other.client_id);
+    expect((await p.post({ pairing_code: 'ABC234' })).status).toBe(429);
+    t += DEFAULTS.pairingTtlMs + 1;
+    const p2 = await page(s, other.client_id);
+    const after = await p2.post({ pairing_code: 'ZZZZZZ' });
+    expect(after.status).toBe(400);
+    expect(await after.text()).toContain('name="pairing_code"');
   });
 });
 
 describe('federated mode', () => {
-  it('delegates sign-in to the federation hooks', async () => {
+  function federatedServer() {
     let begun: { state: string; redirectUri: string } | undefined;
     const federation = {
       async begin(state: string, redirectUri: string) {
@@ -534,16 +650,58 @@ describe('federated mode', () => {
       },
     };
     const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'federated', federation, now });
+    return { s, begun: () => begun! };
+  }
+
+  async function toCallback(s: AuthServer, begun: () => { state: string; redirectUri: string }) {
     const { body: client } = await register(s);
     const { verifier, challenge } = pkce();
     const res = await route(s, get(authorizeQuery(client.client_id, challenge)));
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe('https://idp.example/authorize?x=1');
-    expect(begun!.redirectUri).toBe(PUBLIC + '/oauth/callback');
-    const back = await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun!.state)));
-    const { body } = await exchange(s, client.client_id, await codeFrom(back), verifier);
+    expect(begun().redirectUri).toBe(PUBLIC + '/oauth/callback');
+    const browser = browserOf(res);
+    const back = await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun().state), { cookie: browser }));
+    return { client, verifier, browser, back };
+  }
+
+  it('signs in at the identity provider, then asks for consent before any code is issued', async () => {
+    const { s, begun } = federatedServer();
+    const { client, verifier, browser, back } = await toCallback(s, begun);
+    expect(back.status).toBe(200);
+    expect(back.headers.get('location')).toBeNull();
+    const html = await back.text();
+    expect(html).not.toContain('code=');
+    expect(html).toContain('Test agent');
+    expect(html).toContain('127.0.0.1:33418');
+
+    const allow = await route(s, form('/oauth/authorize', { request_id: requestId(html), action: 'allow' }, { cookie: browser }));
+    const { body } = await exchange(s, client.client_id, await codeFrom(allow), verifier);
     expect(((await s.authenticate(bearer(body.access_token))) as LearnerRef).subject).toBe('idp-sub-1');
-    expect((await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun!.state)))).status).toBe(400);
+    expect((await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun().state), { cookie: browser }))).status).toBe(400);
+  });
+
+  it('sends access_denied when the learner refuses, and refuses a callback or consent from another browser', async () => {
+    const { s, begun } = federatedServer();
+    const { body: client } = await register(s);
+    await route(s, get(authorizeQuery(client.client_id, pkce().challenge)));
+    expect((await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun().state)))).status).toBe(400);
+
+    const { browser, back } = await toCallback(s, begun);
+    const id = requestId(await back.text());
+    expect((await route(s, form('/oauth/authorize', { request_id: id, action: 'allow' }))).status).toBe(400);
+    const deny = await route(s, form('/oauth/authorize', { request_id: id, action: 'deny' }, { cookie: browser }));
+    const loc = await redirectFrom(deny);
+    expect(loc.searchParams.get('error')).toBe('access_denied');
+    expect(loc.searchParams.get('code')).toBeNull();
+    expect((await route(s, form('/oauth/authorize', { request_id: id, action: 'allow' }, { cookie: browser }))).status).toBe(400);
+  });
+});
+
+describe('configuration', () => {
+  it('refuses a publicUrl with a path', () => {
+    expect(() => createAuthServer({ publicUrl: 'https://course.example/course', course, signingKey, mode: 'accounts' })).toThrow(/publicUrl/);
+    expect(() => createAuthServer({ publicUrl: 'https://course.example/', course, signingKey, mode: 'accounts' })).not.toThrow();
   });
 });
 

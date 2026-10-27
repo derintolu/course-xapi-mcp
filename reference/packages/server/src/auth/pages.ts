@@ -52,27 +52,53 @@ export function errorPage(message: string, status = 400): Response {
 }
 
 const errorLine = (error?: string) => (error ? html`<p class="error" role="alert">${error}</p>` : undefined);
-const intro = (clientName: string | undefined, courseTitle: string) =>
-  html`<p><strong>${clientName ?? 'An agent'}</strong> wants to connect to the course <strong>${courseTitle}</strong> on your behalf.</p>`;
+/** Where the browser goes after this step: the host of an http(s) redirect URI, or an app's scheme. */
+export function returnTarget(redirectUri: string): string {
+  const u = new URL(redirectUri);
+  return u.protocol === 'https:' || u.protocol === 'http:' ? u.host : u.protocol.slice(0, -1) + ' (an app on this device)';
+}
 
-export function accountsPage(o: { requestId: string; clientName?: string; courseTitle: string; error?: string; status?: number }): Response {
+interface Shown {
+  requestId: string;
+  clientName?: string;
+  courseTitle: string;
+  redirectUri: string;
+  error?: string;
+  status?: number;
+}
+
+const intro = (o: Shown) =>
+  html`<p><strong>${o.clientName ?? 'An agent'}</strong> wants to connect to the course <strong>${o.courseTitle}</strong> on your behalf. Afterwards you return to <strong>${returnTarget(o.redirectUri)}</strong>.</p>`;
+
+export function accountsPage(o: Shown): Response {
   const fields = (action: string, autocomplete: string) => html`<input type="hidden" name="request_id" value="${o.requestId}"><input type="hidden" name="action" value="${action}">
 <label>Username <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="64" pattern="[a-z0-9._\\-]+"></label>
 <label>Password <input type="password" name="password" autocomplete="${autocomplete}" required minlength="${action === 'signup' ? 12 : 1}"></label>`;
   return page(
     'Sign in to continue',
-    html`${intro(o.clientName, o.courseTitle)}${errorLine(o.error)}
+    html`${intro(o)}${errorLine(o.error)}
 <form method="post" action="${PATHS.login}"><h2>Sign in</h2>${fields('signin', 'current-password')}<button type="submit">Sign in</button></form>
 <form method="post" action="${PATHS.login}"><h2>Create an account</h2>${fields('signup', 'new-password')}<p>Usernames use lowercase letters, digits, dot, dash or underscore. Passwords are at least 12 characters.</p><button type="submit">Create account</button></form>`,
     o.status,
   );
 }
 
-export function launchPage(o: { requestId: string; clientName?: string; courseTitle: string; withLaunch: boolean; error?: string; status?: number }): Response {
+export function launchPage(o: Shown & { withLaunch: boolean }): Response {
   const body = o.withLaunch
     ? html`<form method="post" action="${PATHS.authorize}"><input type="hidden" name="request_id" value="${o.requestId}"><input type="hidden" name="action" value="continue"><p>This connects your agent to the lesson you just launched from your LMS.</p><button type="submit">Continue</button></form>`
     : html`<form method="post" action="${PATHS.authorize}"><input type="hidden" name="request_id" value="${o.requestId}"><label>Pairing code from the lesson page <input type="text" name="pairing_code" autocomplete="one-time-code" required maxlength="16" autocapitalize="characters"></label><p>Type the code here only, never in the chat with your agent.</p><button type="submit">Connect</button></form>`;
-  return page('Connect your lesson', html`${intro(o.clientName, o.courseTitle)}${errorLine(o.error)}${body}`, o.status);
+  return page('Connect your lesson', html`${intro(o)}${errorLine(o.error)}${body}`, o.status);
+}
+
+/** Federated mode, after the identity provider signed the learner in: allow or refuse this agent. */
+export function consentPage(o: Shown): Response {
+  const hidden = (action: string) => html`<input type="hidden" name="request_id" value="${o.requestId}"><input type="hidden" name="action" value="${action}">`;
+  return page(
+    'Allow this agent?',
+    html`${intro(o)}<p>Only allow it if you just asked your agent to connect to this course.</p>
+<form method="post" action="${PATHS.authorize}">${hidden('allow')}<button type="submit">Allow</button></form>
+<form method="post" action="${PATHS.authorize}">${hidden('deny')}<button type="submit">Refuse</button></form>`,
+  );
 }
 
 /**

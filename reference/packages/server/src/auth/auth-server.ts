@@ -15,9 +15,9 @@ import {
   type LearnerRef,
 } from '@course-xapi-mcp/core';
 import { signIn, signUp } from './accounts.ts';
-import { ClientError, isLoopbackHost, readCapped, registerClient, resolveClient } from './clients.ts';
+import { ClientError, createClientResolver, isLoopbackHost, readCapped, registerClient, resolveWithDns, type ResolveHost } from './clients.ts';
 import { PATHS, bearerChallenge, resourceMetadata, serverMetadata } from './metadata.ts';
-import { accountsPage, errorPage, launchPage, redirectPage } from './pages.ts';
+import { accountsPage, consentPage, errorPage, launchPage, redirectPage } from './pages.ts';
 import { isS256Challenge, verifyS256 } from './pkce.ts';
 import { MemoryAuthStore, type AuthRequest, type AuthStore, type Grant } from './stores.ts';
 import { SCOPE, createAccessTokens, newSecret, secretHash, type AccessTokens } from './tokens.ts';
@@ -41,12 +41,17 @@ export interface AuthServerOptions {
   now?: () => number;
   /** Fetches client id metadata documents. */
   fetch?: typeof fetch;
+  /** Resolves a metadata document host to its addresses before the fetch (default: DNS). Non-public addresses are refused. */
+  resolveHost?: ResolveHost;
 }
 
 /** A pending authorization request lives this long. */
 const REQUEST_TTL_MS = 600_000;
 const SESSION_TTL_S = 12 * 3600;
-const MAX_WRONG_PAIRING_CODES = 5;
+const PAIRING_ATTEMPTS_PER_REQUEST = 5;
+/** Wrong pairing codes the whole server accepts per pairing-code lifetime, across all requests and clients. */
+export const PAIRING_GUESS_BUDGET = 100;
+const BROWSER_COOKIE = 'cxm_areq';
 const PAIRING_CODE = new RegExp(`^[${DEFAULTS.pairingAlphabet}]{${DEFAULTS.pairingCodeLength}}$`);
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
 const ENDED = 'This sign-in request has ended or expired.';
@@ -90,26 +95,30 @@ export function launchSubject(c: LaunchContext): string {
 }
 
 export function createAuthServer(o: AuthServerOptions): AuthServer {
-  const publicUrl = o.publicUrl.replace(/\/+$/, '');
-  const base = new URL(publicUrl);
-  const basePath = base.pathname.replace(/\/+$/, '');
+  const base = new URL(o.publicUrl);
+  if (base.pathname !== '/' || base.search || base.hash) throw new TypeError('publicUrl must be an origin with no path, query or fragment');
+  const publicUrl = base.origin;
   const resource = publicUrl + '/mcp';
   const secureCookies = !isLoopbackHost(base.hostname);
   const store = o.store ?? new MemoryAuthStore();
   const now = o.now ?? Date.now;
-  const fetchFn = o.fetch ?? fetch;
+  const resolveClient = createClientResolver({ store, fetch: o.fetch ?? fetch, resolveHost: o.resolveHost ?? resolveWithDns, now });
   if (o.mode === 'launch-paired' && !o.launches) throw new TypeError('launch-paired mode needs a LaunchStore');
   if (o.mode === 'federated' && !o.federation) throw new TypeError('federated mode needs FederationHooks');
   let tokens: Promise<AccessTokens> | undefined;
   const accessTokens = () => (tokens ??= createAccessTokens({ signingKey: o.signingKey, issuer: publicUrl, audience: resource, now }));
 
   const sessionCookie = (sid: string) =>
-    `cxm_sid=${sid}; Path=${basePath || '/'}; Max-Age=${SESSION_TTL_S}; HttpOnly;${secureCookies ? ' Secure;' : ''} SameSite=Lax`;
+    `cxm_sid=${sid}; Path=/; Max-Age=${SESSION_TTL_S}; HttpOnly;${secureCookies ? ' Secure;' : ''} SameSite=Lax`;
+  const browserCookie = (id: string) =>
+    `${BROWSER_COOKIE}=${id}; Path=/oauth; Max-Age=${REQUEST_TTL_MS / 1000}; HttpOnly;${secureCookies ? ' Secure;' : ''} SameSite=Lax`;
 
-  async function liveRequest(id: string | undefined): Promise<AuthRequest | undefined> {
-    if (!id) return undefined;
+  /** A pending request that has not expired and belongs to the browser that opened it. */
+  async function liveRequest(id: string | undefined, req: Request): Promise<AuthRequest | undefined> {
+    const browser = cookies(req).get(BROWSER_COOKIE);
+    if (!id || !browser) return undefined;
     const r = await store.getRequest(id);
-    if (!r || r.expiresAt <= now()) return undefined;
+    if (!r || r.expiresAt <= now() || r.browser !== secretHash(browser)) return undefined;
     return r;
   }
 
@@ -120,8 +129,8 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
     return c && isLive(c) ? c : undefined;
   }
 
-  /** Ends the request, mints a code and a browser session, and sends the browser back to the client. */
-  async function issueCode(r: AuthRequest, grant: Grant, viaForm: boolean): Promise<Response> {
+  /** Ends the request, mints a code and a browser session, and sends the browser back to the client (always after a form POST). */
+  async function issueCode(r: AuthRequest, grant: Grant): Promise<Response> {
     await store.deleteRequest(r.id);
     const code = newSecret();
     await store.putCode(secretHash(code), {
@@ -137,14 +146,12 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
     loc.searchParams.set('code', code);
     if (r.state !== undefined) loc.searchParams.set('state', r.state);
     loc.searchParams.set('iss', publicUrl);
-    const headers = { 'set-cookie': sessionCookie(sid) };
-    if (viaForm) return redirectPage(loc.href, headers);
-    return new Response(null, { status: 302, headers: { location: loc.href, 'cache-control': 'no-store', ...headers } });
+    return redirectPage(loc.href, { 'set-cookie': sessionCookie(sid) });
   }
 
   /** Validates an authorization request; errors before the redirect URI is trusted render a page. */
   async function authorize(p: Params, req: Request): Promise<Response> {
-    const client = await resolveClient(store, p.get('client_id') ?? '', fetchFn);
+    const client = await resolveClient(p.get('client_id') ?? '');
     if (!client) return errorPage('The agent asking to connect is not registered with this course.');
     const redirectUri = p.get('redirect_uri');
     if (!redirectUri || !client.redirectUris.includes(redirectUri)) {
@@ -169,6 +176,8 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
     const scope = p.get('scope');
     if (scope !== undefined && scope.split(' ').some((s) => s !== '' && s !== SCOPE)) return fail('invalid_scope', 'the only scope is ' + SCOPE);
 
+    const known = cookies(req).get(BROWSER_COOKIE);
+    const browser = known && /^[A-Za-z0-9_-]{43}$/.test(known) ? known : newSecret();
     const r: AuthRequest = {
       id: newSecret(),
       clientId: client.clientId,
@@ -177,57 +186,89 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       codeChallenge: challenge,
       state,
       expiresAt: now() + REQUEST_TTL_MS,
-      wrongCodes: 0,
+      browser: secretHash(browser),
     };
     await store.putRequest(r);
-    const shown = { requestId: r.id, clientName: r.clientName, courseTitle: o.course.title };
-    if (o.mode === 'accounts') return accountsPage(shown);
-    if (o.mode === 'launch-paired') return launchPage({ ...shown, withLaunch: !!(await cookieLaunch(req)) });
-    const idp = await o.federation!.begin(r.id, publicUrl + PATHS.callback);
-    return new Response(null, { status: 302, headers: { location: idp, 'cache-control': 'no-store' } });
+    const res = await (async () => {
+      if (o.mode === 'accounts') return accountsPage(shown(r));
+      if (o.mode === 'launch-paired') return launchPage({ ...shown(r), withLaunch: !!(await cookieLaunch(req)) });
+      const idp = await o.federation!.begin(r.id, publicUrl + PATHS.callback);
+      return new Response(null, { status: 302, headers: { location: idp, 'cache-control': 'no-store' } });
+    })();
+    if (browser !== known) res.headers.append('set-cookie', browserCookie(browser));
+    return res;
+  }
+
+  const shown = (r: AuthRequest) => ({ requestId: r.id, clientName: r.clientName, courseTitle: o.course.title, redirectUri: r.redirectUri });
+
+  /** POST /oauth/authorize for a pending request: the pairing step (option 1) or the consent step (option 2). */
+  async function continueRequest(p: Params, req: Request): Promise<Response> {
+    if (o.mode === 'launch-paired') return pair(p, req);
+    if (o.mode === 'federated') return consent(p, req);
+    return errorPage(ENDED);
+  }
+
+  /** Federated mode: the learner signed in at the identity provider; now they allow or refuse this agent. */
+  async function consent(p: Params, req: Request): Promise<Response> {
+    const r = await liveRequest(p.get('request_id'), req);
+    if (!r || !r.federatedSubject) return errorPage(ENDED);
+    if (p.get('action') === 'allow') return issueCode(r, { subject: r.federatedSubject });
+    await store.deleteRequest(r.id);
+    const loc = new URL(r.redirectUri);
+    loc.searchParams.set('error', 'access_denied');
+    if (r.state !== undefined) loc.searchParams.set('state', r.state);
+    loc.searchParams.set('iss', publicUrl);
+    return redirectPage(loc.href);
   }
 
   /** Launch-paired mode: binds the request to the cookie's launch or to the launch a pairing code names. */
   async function pair(p: Params, req: Request): Promise<Response> {
-    if (o.mode !== 'launch-paired') return errorPage(ENDED);
-    const r = await liveRequest(p.get('request_id'));
+    const r = await liveRequest(p.get('request_id'), req);
     if (!r) return errorPage(ENDED);
-    const shown = { requestId: r.id, clientName: r.clientName, courseTitle: o.course.title };
     const bind = async (c: LaunchContext) => {
+      // Binding by cookie spends the code too, so it cannot pair a second browser later.
+      await store.spendPairingCode(c.launchId);
       const subject = launchSubject(c);
       await o.launches!.update(c.launchId, { pairedSubject: subject });
-      return issueCode(r, { subject, launchId: c.launchId }, true);
+      return issueCode(r, { subject, launchId: c.launchId });
     };
 
     if (p.get('action') === 'continue') {
       const c = await cookieLaunch(req);
       if (c) return bind(c);
-      return launchPage({ ...shown, withLaunch: false, status: 400, error: 'Your lesson launch was not found in this browser. Type the pairing code instead.' });
+      return launchPage({ ...shown(r), withLaunch: false, status: 400, error: 'Your lesson launch was not found in this browser. Type the pairing code instead.' });
     }
 
-    if (r.wrongCodes >= MAX_WRONG_PAIRING_CODES) {
+    // Attempts are recorded before the lookup, so concurrent guesses cannot exceed either limit.
+    const at = now();
+    if (!(await store.reserveAttempt('pairing-request:' + r.id, at, 0, PAIRING_ATTEMPTS_PER_REQUEST))) {
       await store.deleteRequest(r.id);
       return errorPage('Too many wrong pairing codes. ' + ENDED);
     }
+    if (!(await store.reserveAttempt('pairing-all', at, at - DEFAULTS.pairingTtlMs, PAIRING_GUESS_BUDGET))) {
+      return launchPage({ ...shown(r), withLaunch: false, status: 429, error: 'Too many pairing attempts on this server right now. Wait a few minutes, or launch the lesson again from your LMS in this browser.' });
+    }
     const code = (p.get('pairing_code') ?? '').trim().toUpperCase();
     const c = PAIRING_CODE.test(code) ? await o.launches!.byPairingCode(code) : undefined;
-    if (c && isLive(c) && Date.parse(c.pairingExpiresAt) > now() && (await store.spendPairingCode(c.launchId))) return bind(c);
-    await store.putRequest({ ...r, wrongCodes: r.wrongCodes + 1 });
-    return launchPage({ ...shown, withLaunch: false, status: 400, error: 'That code is wrong, used or expired. Check the lesson page and try again.' });
+    if (c && isLive(c) && Date.parse(c.pairingExpiresAt) > now() && (await store.spendPairingCode(c.launchId))) {
+      await store.releaseAttempt('pairing-all', at);
+      return bind(c);
+    }
+    return launchPage({ ...shown(r), withLaunch: false, status: 400, error: 'That code is wrong, used or expired. Check the lesson page and try again.' });
   }
 
   async function login(req: Request): Promise<Response> {
     if (o.mode !== 'accounts') return errorPage(ENDED);
     const p = await readForm(req);
-    const r = await liveRequest(p?.get('request_id'));
+    const r = p && (await liveRequest(p.get('request_id'), req));
     if (!p || !r) return errorPage(ENDED);
     const username = p.get('username') ?? '';
     const password = p.get('password') ?? '';
     const result = p.get('action') === 'signup' ? await signUp(store, username, password) : await signIn(store, username, password, now());
     if ('error' in result) {
-      return accountsPage({ requestId: r.id, clientName: r.clientName, courseTitle: o.course.title, error: result.error, status: result.status });
+      return accountsPage({ ...shown(r), error: result.error, status: result.status });
     }
-    return issueCode(r, { subject: result.subject }, true);
+    return issueCode(r, { subject: result.subject });
   }
 
   async function callback(req: Request): Promise<Response> {
@@ -238,9 +279,10 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
     } catch {
       return errorPage('Your identity provider did not complete the sign-in.');
     }
-    const r = await liveRequest(done.state);
-    if (!r || !done.subject) return errorPage(ENDED);
-    return issueCode(r, { subject: done.subject }, false);
+    const r = await liveRequest(done.state, req);
+    if (!r || r.federatedSubject || !done.subject) return errorPage(ENDED);
+    await store.putRequest({ ...r, federatedSubject: done.subject });
+    return consentPage(shown(r));
   }
 
   async function issueTokens(grant: Grant, clientId: string, familyId: string): Promise<Response> {
@@ -351,7 +393,7 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       POST: async (req) => {
         const p = await readForm(req);
         if (!p) return errorPage('The form could not be read.');
-        return p.get('request_id') !== undefined ? pair(p, req) : authorize(p, req);
+        return p.get('request_id') !== undefined ? continueRequest(p, req) : authorize(p, req);
       },
     },
     [PATHS.token]: { POST: token },
@@ -361,9 +403,7 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
 
   return {
     async routes(req) {
-      const path = new URL(req.url).pathname;
-      if (!path.startsWith(basePath)) return undefined;
-      const methods = routes[path.slice(basePath.length)];
+      const methods = routes[new URL(req.url).pathname];
       if (!methods) return undefined;
       const handler = methods[req.method];
       if (!handler) return new Response(null, { status: 405, headers: { allow: Object.keys(methods).join(', ') } });
