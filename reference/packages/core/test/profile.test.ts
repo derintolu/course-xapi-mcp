@@ -8,7 +8,7 @@ const profile = buildProfile() as any;
 
 describe('xAPI profile', () => {
   it('matches profile/xapi-profile.jsonld (run scripts/build-profile.ts after changes)', () => {
-    const file = JSON.parse(readFileSync(new URL('../../../profile/xapi-profile.jsonld', import.meta.url), 'utf8'));
+    const file = JSON.parse(readFileSync(new URL('../../../../profile/xapi-profile.jsonld', import.meta.url), 'utf8'));
     expect(file).toEqual(JSON.parse(JSON.stringify(profile)));
   });
 

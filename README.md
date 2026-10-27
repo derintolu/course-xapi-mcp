@@ -31,18 +31,18 @@ What I could not find anywhere is the combination written down as a **contract**
 
 ## The rules
 
-- [`RULES.md`](RULES.md): the protocol, in MUST/SHOULD language. Tool contracts, branch validation, lesson flow, prompt-injection handling and record ownership.
+- [`docs/history/RULES.md`](docs/history/RULES.md): the protocol, in MUST/SHOULD language. Tool contracts, branch validation, lesson flow, prompt-injection handling and record ownership.
 - [`rules/AGENT_RULES.md`](rules/AGENT_RULES.md): the teaching rules a course server sends to every agent.
 - [`profile/xapi-profile.jsonld`](profile/xapi-profile.jsonld) and [`docs/xapi-profile.md`](docs/xapi-profile.md): the xAPI Profile (verbs, activity types, extensions, statement templates, patterns).
-- [`docs/spec.md`](docs/spec.md): the design, the trust and privacy models, and open questions.
+- [`docs/history/spec.md`](docs/history/spec.md): the design, the trust and privacy models, and open questions.
 
 ## Quick start
 
 Needs Node 22.6 or later (for `--experimental-strip-types`); tested on Node 26.
 
 ```bash
-git clone https://github.com/derintolu/learning-mcp.git
-cd learning-mcp
+git clone https://github.com/derintolu/course-xapi-mcp.git
+cd course-xapi-mcp
 npm install
 npm test                 # 102 tests: core library and the server over MCP
 npm start                # serves examples/json-basics on http://127.0.0.1:8787/mcp
@@ -66,8 +66,8 @@ node --experimental-strip-types scripts/verify-client.ts http://127.0.0.1:8787/m
 ## Use it as a library
 
 ```ts
-import { parseCourse, MemoryStore } from '@learning-mcp/core';
-import { createCourseServer } from '@learning-mcp/server';
+import { parseCourse, MemoryStore } from '@course-xapi-mcp/core';
+import { createCourseServer } from '@course-xapi-mcp/server';
 
 const course = parseCourse(courseJson);
 if (!course.ok) throw new Error(course.errors.join('\n'));
@@ -76,12 +76,12 @@ const app = createCourseServer({ course: course.course, store: new MemoryStore()
 export default { fetch: app.fetch }; // POST /mcp
 ```
 
-`@learning-mcp/core` has no framework and uses only web APIs plus `zod`, so it runs in Workers, browsers and Node. Its `session.ts` exposes every tool as a plain function over `(course, record)`, so a web UI can drive the same lesson flow and produce identical statements without MCP.
+`@course-xapi-mcp/core` has no framework and uses only web APIs plus `zod`, so it runs in Workers, browsers and Node. Its `session.ts` exposes every tool as a plain function over `(course, record)`, so a web UI can drive the same lesson flow and produce identical statements without MCP.
 
 | Package | Contents |
 | --- | --- |
-| `packages/core` | course schema, branch engine, deterministic checks, xAPI builder and validators, record reducer and parser, rules text, profile builder, record stores |
-| `packages/server` | `createCourseServer()` on the official MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.3.1, protocol 2026-07-28, also serving 2025-era clients), a directory record store, and a Node bin |
+| `reference/packages/core` | course schema, branch engine, deterministic checks, xAPI builder and validators, record reducer and parser, rules text, profile builder, record stores |
+| `reference/packages/server` | `createCourseServer()` on the official MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.3.1, protocol 2026-07-28, also serving 2025-era clients), a directory record store, and a Node bin |
 | `examples/json-basics` | a two-lesson course about JSON, with a free-text checkpoint, a planted bug and a code checkpoint |
 
 ## How learn-wp-reimagined will use it
@@ -90,10 +90,10 @@ export default { fetch: app.fetch }; // POST /mcp
 
 1. **Content adapter.** Map each lesson's `advance` / `review` / `skip` branches to authored branches with the same ids (`success: false` for `review`), set `activityBase` to the site, and drop the site-only `fallback` choices. The result validates with `parseCourse`.
 2. **Mount the server.** Wrap `createCourseServer(...).fetch` in a Spacefast Function at `/mcp`, with a durable `RecordStore` for the anonymous relay and the site's existing rate limits in front.
-3. **One record, two front ends.** The site's browser record can call the same `session.ts` functions, so a lesson started on the site and continued in Claude produces one statement stream. This needs a one-time migration from the `learn-wp-reimagined/record` format (open question in [docs/STATUS.md](docs/STATUS.md)).
+3. **One record, two front ends.** The site's browser record can call the same `session.ts` functions, so a lesson started on the site and continued in Claude produces one statement stream. This needs a one-time migration from the `learn-wp-reimagined/record` format (open question in [docs/STATUS.md](docs/history/STATUS.md)).
 
 ## Licence
 
 - Code: **GPL-2.0-or-later** ([LICENSE](LICENSE)), matching WordPress.
 - Documentation, the rules, the xAPI profile and the example course: **CC BY-SA 4.0** ([LICENSE-CC-BY-SA-4.0](LICENSE-CC-BY-SA-4.0)).
-- The MCP TypeScript SDK is Apache-2.0. That combines with GPL code under GPL version 3, which "or later" allows. See [docs/STATUS.md](docs/STATUS.md).
+- The MCP TypeScript SDK is Apache-2.0. That combines with GPL code under GPL version 3, which "or later" allows. See [docs/STATUS.md](docs/history/STATUS.md).

@@ -1,5 +1,5 @@
 {
-  "name": "@learning-mcp/core",
+  "name": "@course-xapi-mcp/core",
   "version": "0.1.0",
   "description": "Content schema, branch engine, deterministic checks, xAPI builders and the learner-owned record for learning over MCP.",
   "type": "module",

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { MemoryStore, PROFILE_VERSION, RULES_VERSION, StoreConflictError, StoreError, checkProfile, validateStatement, type LearningRecord } from '@learning-mcp/core';
+import { MemoryStore, PROFILE_VERSION, RULES_VERSION, StoreConflictError, StoreError, checkProfile, validateStatement, type LearningRecord } from '@course-xapi-mcp/core';
 import { createCourseServer } from '../src/index.ts';
 import { connect, loadCourse, type Era } from './helpers.ts';
 

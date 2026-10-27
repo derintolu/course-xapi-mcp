@@ -1,18 +1,18 @@
 {
-  "name": "learning-mcp",
+  "name": "course-xapi-mcp",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "license": "GPL-2.0-or-later",
   "workspaces": [
-    "packages/*"
+    "reference/packages/*", "conformance"
   ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
     "rules": "node scripts/sync-rules.mjs",
     "profile": "node --experimental-strip-types scripts/build-profile.ts",
-    "start": "npm run start -w packages/server"
+    "start": "npm run start -w reference/packages/server"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",

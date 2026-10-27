@@ -1,3 +1,5 @@
+> Superseded by the course-xapi-mcp design (docs/superpowers/specs/2026-10-27-course-xapi-mcp-design.md). Kept as history.
+
 # learning-mcp: design spec
 
 Date: 2026-10-19

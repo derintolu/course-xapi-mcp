@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { parseCourse, type Course } from '@learning-mcp/core';
+import { parseCourse, type Course } from '@course-xapi-mcp/core';
 import { createCourseServer } from '../src/index.ts';
 
 export function loadCourse(): Course {
-  const raw = JSON.parse(readFileSync(new URL('../../../examples/json-basics/course.json', import.meta.url), 'utf8'));
+  const raw = JSON.parse(readFileSync(new URL('../../../../examples/json-basics/course.json', import.meta.url), 'utf8'));
   const r = parseCourse(raw);
   if (!r.ok) throw new Error(r.errors.join('\n'));
   return r.course;

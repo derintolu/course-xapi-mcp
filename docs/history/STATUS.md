@@ -1,3 +1,5 @@
+> Superseded by the course-xapi-mcp design (docs/superpowers/specs/2026-10-27-course-xapi-mcp-design.md). Kept as history.
+
 # Status
 
 Written by Claude on 2026-10-19, while Derin was away. Nothing here has been reviewed by Derin yet.

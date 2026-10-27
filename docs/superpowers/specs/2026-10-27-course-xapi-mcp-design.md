@@ -12,11 +12,11 @@ How to read this:
 - **Builder's call (reconciliation n)** means a ruling from the cross-design reconciliation of 2026-10-27, which settles contradictions between this design, the Learning Ledger plugin design and the prototype design. These are builder's calls too, not owner decisions, and are equally provisional.
 - MUST, SHOULD and MAY (RFC 2119/8174) appear only where I'm stating what the eventual spec will require.
 - Research is cited, not repeated:
-  - [CMI5] `scratchpad/cmi5-fit.md`
-  - [PRIOR] `scratchpad/standards-prior-art.md`
-  - [OB] `scratchpad/open-badges.md`
+  - [CMI5] `docs/research/cmi5-fit.md`
+  - [PRIOR] `docs/research/standards-prior-art.md`
+  - [OB] `docs/research/open-badges.md`
 
-  All three are under `/private/tmp/claude-501/-Users-cedarstone-Projects-learn-wp-reimagined/5376001d-2862-4ef6-85e3-26e5bd4cbe50/scratchpad/`. Move them into the repo's `docs/research/` before that folder goes away (see §15).
+  All three live in the repo under `docs/research/`.
 
 ---
 

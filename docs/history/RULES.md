@@ -1,3 +1,5 @@
+> Superseded by the course-xapi-mcp design (docs/superpowers/specs/2026-10-27-course-xapi-mcp-design.md). Kept as history.
+
 # learning-mcp protocol rules, v0.1 (draft)
 
 Status: draft by Claude, pending Derin's review. Unofficial.

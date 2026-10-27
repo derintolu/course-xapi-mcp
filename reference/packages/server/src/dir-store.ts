@@ -3,7 +3,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { parseRecord, type LearningRecord, type RecordStore } from '@learning-mcp/core';
+import { parseRecord, type LearningRecord, type RecordStore } from '@course-xapi-mcp/core';
 
 export class DirectoryStore implements RecordStore {
   private dir: string;

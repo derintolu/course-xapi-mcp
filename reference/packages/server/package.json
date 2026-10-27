@@ -1,7 +1,7 @@
 {
-  "name": "@learning-mcp/server",
+  "name": "@course-xapi-mcp/server",
   "version": "0.1.0",
-  "description": "Reference remote MCP server (Streamable HTTP) that serves a learning-mcp course.",
+  "description": "Reference remote MCP server (Streamable HTTP) that serves a course-xapi-mcp course.",
   "type": "module",
   "license": "GPL-2.0-or-later",
   "exports": {
@@ -11,7 +11,7 @@
     "start": "node --experimental-strip-types src/bin.ts"
   },
   "dependencies": {
-    "@learning-mcp/core": "0.1.0",
+    "@course-xapi-mcp/core": "0.1.0",
     "@modelcontextprotocol/server": "2.3.1",
     "zod": "4.6.7"
   }

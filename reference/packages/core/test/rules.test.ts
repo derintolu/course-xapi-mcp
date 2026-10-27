@@ -5,7 +5,7 @@ import { loadCourse } from './fixtures.ts';
 
 describe('agent rules', () => {
   it('ship the exact text of rules/AGENT_RULES.md (run scripts/sync-rules.mjs after editing it)', () => {
-    expect(AGENT_RULES).toBe(readFileSync(new URL('../../../rules/AGENT_RULES.md', import.meta.url), 'utf8'));
+    expect(AGENT_RULES).toBe(readFileSync(new URL('../../../../rules/AGENT_RULES.md', import.meta.url), 'utf8'));
   });
 
   it('name their version in the heading', () => {

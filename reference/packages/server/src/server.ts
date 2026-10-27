@@ -26,7 +26,7 @@ import {
   type LearningRecord,
   type RecordStore,
   type SessionResult,
-} from '@learning-mcp/core';
+} from '@course-xapi-mcp/core';
 
 export interface CourseServerOptions {
   course: Course;
