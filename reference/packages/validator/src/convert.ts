@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Converts a legacy single-file course.json into the files of a cmi5 package.
-import { CMI5_XML_NS, CXM_XML_NS, SPEC_VERSION, parseCourse } from '@course-xapi-mcp/core';
-import type { Course, CustodyOption } from '@course-xapi-mcp/core';
+import { CMI5_XML_NS, CXM_XML_NS, SPEC_VERSION } from '@course-xapi-mcp/core';
+import type { CustodyOption } from '@course-xapi-mcp/core';
+import { parseCourse, type Course } from './legacy-course.ts';
 
 export interface ConvertOptions {
   courseIri: string;

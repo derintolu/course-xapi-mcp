@@ -2,7 +2,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { AGENT_RULES, RULES_URI, RULES_VERSION, agentInstructions, rulesBlock, tutorSkill } from '../src/index.ts';
-import { loadCourse } from './fixtures.ts';
+import { course as engineCourse } from './fixtures/course-model.ts';
+
+const loadCourse = () => ({ ...engineCourse, rules: ['When the learner writes JSON, ask them to read it back as types.'] });
 
 describe('agent rules', () => {
   it('ship the exact text of spec/draft/agent-rules.md (run scripts/sync-rules.mjs after editing it)', () => {

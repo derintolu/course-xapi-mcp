@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "handle": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "The practice handle returned by start_placement or resume_practice. It is a secret: give it to the learner once and put it nowhere else."
+    }
+  },
+  "additionalProperties": false
+}

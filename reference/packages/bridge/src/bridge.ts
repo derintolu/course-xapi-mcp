@@ -30,6 +30,12 @@ export interface BridgeOptions {
   uuid?: () => string;
   /** Used for the cmi5 fetch URL and the LMS's LRS. */
   fetch?: typeof fetch;
+  /**
+   * Runs `fn` while no tool call for this launch's learner is in flight (the course server's per-learner lock).
+   * `sweep` checks and terminates a launch inside it, so it never sends `terminated` while a call is still writing
+   * to the session. Default: no lock.
+   */
+  lock?: <T>(c: LaunchContext, fn: () => Promise<T>) => Promise<T>;
 }
 
 export interface Bridge {
@@ -174,6 +180,7 @@ export function createBridge(o: BridgeOptions): Bridge {
   const uuid = o.uuid ?? randomUUID;
   const f = o.fetch ?? fetch;
   const store = o.launches;
+  const lock = o.lock ?? (<T>(_c: LaunchContext, fn: () => Promise<T>) => fn());
   /** Launches this bridge started that have not ended yet: the ones `sweep` looks at. */
   const live = new Set<string>();
   const ending = new Set<string>();
@@ -335,16 +342,22 @@ export function createBridge(o: BridgeOptions): Bridge {
           }
           continue;
         }
-        const c = await store.get(id);
-        if (!c || c.terminatedAt || c.supersededAt) {
+        const seen = await store.get(id);
+        if (!seen || seen.terminatedAt || seen.supersededAt) {
           live.delete(id);
           continue;
         }
-        const idle = t - Date.parse(c.lastActivityAt ?? c.initializedAt) >= DEFAULTS.sessionIdleMs;
-        const capped = t - Date.parse(c.tokenFetchedAt) >= DEFAULTS.lmsSessionMaxMs;
-        if (!idle && !capped) continue;
+        const due = (c: LaunchContext) =>
+          t - Date.parse(c.lastActivityAt ?? c.initializedAt) >= DEFAULTS.sessionIdleMs || t - Date.parse(c.tokenFetchedAt) >= DEFAULTS.lmsSessionMaxMs;
+        if (!due(seen)) continue;
         try {
-          if (await terminate(id)) n++;
+          // Decide again under the learner's lock: a tool call that just finished may have used or ended the session.
+          const ended = await lock(seen, async () => {
+            const c = await store.get(id);
+            if (!c || c.terminatedAt || c.supersededAt || !due(c)) return false;
+            return terminate(id);
+          });
+          if (ended) n++;
         } catch {
           // The record holder did not take it; the next sweep tries again.
         }

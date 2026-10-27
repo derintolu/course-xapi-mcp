@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "response": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "The learner's checkpoint answer, word for word."
+    },
+    "files": {
+      "description": "For a code checkpoint: file name to the whole file.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 65536
+      }
+    }
+  },
+  "required": [
+    "response"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "lessonKey": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "A lesson key from list_paths."
+    }
+  },
+  "required": [
+    "lessonKey"
+  ],
+  "additionalProperties": false
+}

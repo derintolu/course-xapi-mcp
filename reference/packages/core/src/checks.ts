@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Deterministic checks on submitted text files. Ported from learn-wp-reimagined/src/shared/checks.ts.
-// Checks never execute learner code. Regex patterns come only from authored content.
-import type { Check } from './schema.ts';
+// Checks never execute learner code. Regex patterns come only from authored content, but they run on learner text,
+// so a pattern that can backtrack catastrophically (a quantified group that itself contains a quantifier) is never run.
+import type { Check } from './model.ts';
 
 const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
 
@@ -36,6 +37,46 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/**
+ * True when a regex pattern has a group that contains an unbounded quantifier and is itself repeated without bound,
+ * such as `(a+)+` or `(\\w*,)*`: the shape that backtracks exponentially on a crafted input.
+ */
+export function hasNestedQuantifier(pattern: string): boolean {
+  /** `*`, `+`, `{n,}` or `{n,m}` at `j`; `?` and `{n}` are bounded. */
+  const unbounded = (j: number) => {
+    if (pattern[j] === '*' || pattern[j] === '+') return true;
+    const m = /^\{(\d+),(\d*)\}/.exec(pattern.slice(j));
+    return m !== null && m[2] !== m[1];
+  };
+  // Per open group: whether an unbounded quantifier appeared inside it.
+  const open: boolean[] = [];
+  let inside = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === '\\') {
+      i++;
+      if (unbounded(i + 1)) inside = true;
+    } else if (ch === '[') {
+      // A character class is one atom; quantifier characters inside it are literals.
+      i++;
+      if (pattern[i] === '^') i++;
+      if (pattern[i] === ']') i++;
+      while (i < pattern.length && pattern[i] !== ']') i += pattern[i] === '\\' ? 2 : 1;
+      if (unbounded(i + 1)) inside = true;
+    } else if (ch === '(') {
+      open.push(inside);
+      inside = false;
+    } else if (ch === ')') {
+      const repeated = unbounded(i + 1);
+      if (inside && repeated) return true;
+      inside = (open.pop() ?? false) || inside || repeated;
+    } else if (unbounded(i + 1) && ch !== '*' && ch !== '+' && ch !== '?' && ch !== '}') {
+      inside = true;
+    }
+  }
+  return false;
+}
+
 function runCheck(check: Check, files: Record<string, string>): boolean {
   if (!has(files, check.file)) return false;
   const text = files[check.file];
@@ -46,6 +87,8 @@ function runCheck(check: Check, files: Record<string, string>): boolean {
       case 'notContains':
         return !text.includes(check.value);
       case 'regex':
+        // Refused rather than run: the validator warns about such patterns (CXM-PKG-202).
+        if (hasNestedQuantifier(check.pattern)) return false;
         return new RegExp(check.pattern, check.flags).test(text);
       case 'json': {
         const r = resolvePointer(JSON.parse(text), check.pointer);

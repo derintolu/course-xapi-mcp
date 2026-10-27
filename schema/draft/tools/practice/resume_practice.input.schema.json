@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "record": {
+      "type": "string",
+      "maxLength": 4000000,
+      "description": "An exported practice copy, as JSON text."
+    }
+  },
+  "required": [
+    "record"
+  ],
+  "additionalProperties": false
+}

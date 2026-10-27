@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "pathKey": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "An authored path key from start_placement."
+    },
+    "startLessonKey": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "A lesson key in that path."
+    },
+    "skip": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64
+      },
+      "description": "Lessons before the start lesson that the learner skips."
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "One sentence on why this placement fits."
+    },
+    "handle": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "The practice handle returned by start_placement or resume_practice. It is a secret: give it to the learner once and put it nowhere else."
+    }
+  },
+  "required": [
+    "pathKey",
+    "startLessonKey",
+    "skip",
+    "reason",
+    "handle"
+  ],
+  "additionalProperties": false
+}

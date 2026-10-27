@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
-import { runChecks, type Check } from '../src/index.ts';
+import { hasNestedQuantifier, runChecks, type Check } from '../src/index.ts';
 
 const files = { 'a.json': '{"port": 8080, "list": [1, {"x/y": true}]}', 'a.txt': 'hello world' };
 
@@ -50,4 +50,16 @@ describe('runChecks', () => {
   it('does not read inherited properties as files', () => {
     expect(runChecks([{ type: 'contains', file: 'constructor', value: 'f', message: 'm' }], {}).passed).toBe(false);
   });
+
+  it('refuses to run a regex that can backtrack catastrophically on learner text', () => {
+    const evil: Check = { type: 'regex', file: 'a.txt', pattern: '^(a+)+$', message: 'm' };
+    const start = Date.now();
+    expect(runChecks([evil], { 'a.txt': 'a'.repeat(40) + '!' }).passed).toBe(false);
+    expect(Date.now() - start).toBeLessThan(500);
+  });
+});
+
+describe('hasNestedQuantifier', () => {
+  it.each(['(a+)+', '(\\w*,)*', '((ab)*c)+', '(?:x+y?)+$', '(a{2,})*', '([a-z]+\\s?)+'])('flags %s', (p) => expect(hasNestedQuantifier(p)).toBe(true));
+  it.each(['^hello\\s', '(ab)+', '(a+)?', '(a+){3}', '[(a+)]+', '\\(a+\\)+', '"port"\\s*:\\s*8080', '(a|b)*'])('allows %s', (p) => expect(hasNestedQuantifier(p)).toBe(false));
 });

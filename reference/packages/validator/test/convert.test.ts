@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { loadPackage, readDir } from '@course-xapi-mcp/core/package';
 import { convertLegacyCourse } from '../src/convert.ts';
 
-const legacyPath = new URL('../../../../examples/legacy/json-basics.course.json', import.meta.url);
+const legacyPath = new URL('./fixtures/json-basics.course.json', import.meta.url);
 const exampleDir = new URL('../../../../examples/json-basics/', import.meta.url).pathname;
 const legacy = (): any => JSON.parse(readFileSync(legacyPath, 'utf8'));
 const OPTS = {

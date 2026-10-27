@@ -10,6 +10,8 @@ export type PracticeCustody = Custody & {
   deletePractice(handle: string): Promise<boolean>;
   /** Stores a copy `parsePracticeRecord` accepted under a new handle, to continue it as practice. */
   importCopy(handle: string, rec: PracticeRecord): Promise<void>;
+  /** The practice copy under this handle, as the learner exports it; undefined when there is none. */
+  exportCopy(handle: string): Promise<PracticeRecord | undefined>;
 };
 
 function handleOf(l: LearnerRef): string {
@@ -84,6 +86,10 @@ export function createPracticeCustody(o: { store?: PracticeStore; courseId: stri
 
     async importCopy(handle, rec) {
       await store.put(handle, rec);
+    },
+
+    async exportCopy(handle) {
+      return (await store.get(handle))?.record;
     },
   };
 }

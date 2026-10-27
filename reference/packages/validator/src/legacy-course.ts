@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Content model for a learning-mcp course.
+// The legacy single-file course.json format, read only by the converter (convert.ts).
 // Generalised from learn-wp-reimagined/src/shared/schema.ts (Derin Tolu, GPL-2.0-or-later):
 // branches are authored by id instead of a fixed advance/review/skip enum, and nothing is WordPress-specific.
 import { z } from 'zod';
