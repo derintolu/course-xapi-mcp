@@ -34,9 +34,16 @@ export function unitOf(course: CourseModel, key: string): Unit | undefined {
   return undefined;
 }
 
-/** True when the cursor points at a lesson or path the course no longer has. */
+/**
+ * True when the cursor points at a lesson or path the course no longer has, or at a step its lesson no longer
+ * has (a bug or checkpoint removed by a course update, or a review of a removed lesson).
+ */
 export function cursorRemoved(course: CourseModel, c: Cursor): boolean {
-  return !has(course.lessons, c.lessonKey) || !has(course.paths, c.pathKey) || (c.review !== undefined && !has(course.lessons, c.review.lessonKey));
+  if (!has(course.lessons, c.lessonKey) || !has(course.paths, c.pathKey)) return true;
+  const l = course.lessons[c.lessonKey]!;
+  if (c.phase === 'bug' && !l.bug) return true;
+  if ((c.phase === 'checkpoint' || c.phase === 'branch') && !l.checkpoint) return true;
+  return (c.phase === 'review' || c.review !== undefined) && (c.review === undefined || !has(course.lessons, c.review.lessonKey) || !l.checkpoint);
 }
 
 /** The cursor and its lesson, or the error that tells the agent what to call. */
@@ -270,6 +277,8 @@ export function restartCourse(course: CourseModel, state: LearnerState, env: Env
   tx.close();
   const fresh = newState(course, env);
   fresh.awards = tx.state.awards;
+  // Statements not yet accepted by the record holder still belong to the old registration's record.
+  fresh.outbox = tx.state.outbox;
   fresh.updatedAt = tx.state.updatedAt;
   tx.state = fresh;
   return tx.finish({ restarted: true as const, instruction: 'The course starts again from placement. Earned badges stay valid. Call start_placement.' });

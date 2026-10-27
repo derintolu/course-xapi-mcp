@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
 import { DEFAULTS } from '../../src/constants.ts';
-import { REMOVED, checkCode, chooseBranch, endSession, expireSession, nextBeat, restartCourse, revealBug, submitCheckpoint } from '../../src/session/index.ts';
+import { REMOVED, checkCode, chooseBranch, endSession, expireSession, nextBeat, restartCourse, revealBug, status, submitCheckpoint } from '../../src/session/index.ts';
+import type { CourseModel } from '../../src/model.ts';
 import { COURSE_ID, variant } from '../fixtures/course-model.ts';
-import { Run, defined, expectClean, sessionOf, verbName, verbs } from './driver.ts';
+import { BAD_FILE, Run, defined, expectClean, sessionOf, verbName, verbs } from './driver.ts';
 
 describe('session engine: AU session lifecycle', () => {
   it('an idle session is terminated with timestamp lastActivity+1ms and the next call opens a new one', () => {
@@ -134,4 +135,50 @@ describe('session engine: AU session lifecycle', () => {
     run.beat();
     expectClean(run.statements);
   });
+  it('restart_course carries the undelivered outbox over', () => {
+    const run = new Run();
+    run.toCheckpointA();
+    const pending = run.statements.slice(-2);
+    run.state = { ...run.state!, outbox: pending };
+    run.do((s) => restartCourse(run.course, s, run.env));
+    expect(run.state!.outbox).toEqual(pending);
+  });
+
+  /** A course update that keeps the lesson key but removes the step the cursor is on. */
+  const stepRemoved: [string, (r: Run) => void, (c: CourseModel) => void, string][] = [
+    ['bug', (r) => { r.toCheckpointA(); r.submit('Ready.'); r.branch('ready'); r.beat(); r.beat(); }, (c) => { delete c.lessons.b!.bug; }, 'b'],
+    ['checkpoint', (r) => { r.toCheckpointA(); }, (c) => { delete c.lessons.a!.checkpoint; }, 'a'],
+    ['branch', (r) => { r.toCheckpointA(); r.submit('Ready.'); }, (c) => { delete c.lessons.a!.checkpoint; }, 'a'],
+    ['review', (r) => { r.toCheckpointB(); r.submit('No.', { 'config.json': BAD_FILE }); r.branch('back'); r.beat(); }, (c) => { delete c.lessons.b!.checkpoint; }, 'b'],
+  ];
+  for (const [phase, reach, mutate, lessonKey] of stepRemoved) {
+    it(`a course update that removes the ${phase} step the learner is on gives the choose_placement error and closes the session`, () => {
+      const run = new Run();
+      reach(run);
+      expect(run.state!.cursor!.phase).toBe(phase);
+      const open = run.state!.session!;
+      const updated = variant(mutate);
+      const env = run.env;
+      for (const call of [
+        () => nextBeat(updated, run.state!, { learner_reply: 'x' }, env),
+        () => checkCode(updated, run.state!, { file: 'config.json', content: '{}' }, env),
+        () => revealBug(updated, run.state!, env),
+        () => submitCheckpoint(updated, run.state!, { response: 'x' }, env),
+        () => chooseBranch(updated, run.state!, { branch: 'ready', rationale: 'x' }, env),
+        () => endSession(updated, run.state!, env),
+      ]) {
+        expect(call()).toEqual({ ok: false, error: REMOVED });
+      }
+      expect(status(updated, run.state, env)).toEqual({ position: {}, next: ['choose_placement'] });
+      run.course = updated;
+      const closed = run.expire();
+      expect(verbs(closed.statements)).toEqual(['terminated']);
+      expect(sessionOf(closed.statements[0]!)).toBe(open.id);
+      expect(closed.statements[0]!.object.id).toBe(`${COURSE_ID}/lessons/${lessonKey}/au`);
+      expect(run.state!.session).toBeUndefined();
+      run.start();
+      run.place('p', 'c', [], 'Continue after the update.');
+      expectClean(run.statements);
+    });
+  }
 });

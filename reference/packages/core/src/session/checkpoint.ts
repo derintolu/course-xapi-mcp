@@ -120,6 +120,8 @@ export function chooseBranch(course: CourseModel, state: LearnerState, input: { 
   const prog = progress(tx.state, l.key);
   if (b.success) {
     if (!prog.passed) recordOutcome(tx, l.key, 'passed');
+    // A success branch resolves the lesson visit: its session ends, even when the branch stays in or reviews it.
+    tx.close();
   } else if (cp.maxAttempts !== undefined && s.attempts >= cp.maxAttempts) {
     // A defined failed never follows a defined passed in the registration (cmi5 9.3.5).
     if (!prog.passed) recordOutcome(tx, l.key, 'failed');

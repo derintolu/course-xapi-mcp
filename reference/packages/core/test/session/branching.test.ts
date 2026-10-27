@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { CXM_EXT } from '../../src/constants.ts';
 import { chooseBranch } from '../../src/session/index.ts';
-import { COURSE_ID } from '../fixtures/course-model.ts';
+import { COURSE_ID, variant } from '../fixtures/course-model.ts';
 import { BAD_FILE, GOOD_FILE, Run, defined, expectClean, sessionOf, verbName, verbs } from './driver.ts';
 
 describe('session engine: branches', () => {
@@ -125,5 +125,40 @@ describe('session engine: branches', () => {
     run.place();
     run.beat();
     expect(run.try((s) => chooseBranch(run.course, s, { branch: 'ready', rationale: 'x' }, run.env)).ok).toBe(false);
+  });
+  it('a success branch to the same lesson sends passed, then terminated, and restarts its beats in a new session', () => {
+    const course = variant((c) => {
+      c.lessons.a!.checkpoint!.branches.push({ key: 'again', when: 'Wants another go', success: true, to: 'a', message: 'Once more.' });
+    });
+    const run = new Run(course);
+    run.toCheckpointA();
+    const session = run.state!.session!.id;
+    run.submit('Ready, but once more.');
+    const r = run.branch('again');
+    expect(verbs(r.statements)).toEqual(['passed', 'branched', 'passed', 'terminated']);
+    expect(sessionOf(r.statements[3]!)).toBe(session);
+    expect(run.state!.session).toBeUndefined();
+    expect(run.state!.cursor).toMatchObject({ lessonKey: 'a', beat: 0, phase: 'beats' });
+    const next = run.beat();
+    expect(verbs(next.statements)).toEqual(['launched', 'initialized', 'experienced']);
+    expectClean(run.statements);
+  });
+
+  it('a success branch to a passed lesson sends passed, then terminated, and the review runs in a new session', () => {
+    const course = variant((c) => {
+      c.lessons.b!.checkpoint!.branches.push({ key: 'recap', when: 'Passes but wants a recap', success: true, to: 'a', message: 'A quick recap of A.' });
+    });
+    const run = new Run(course);
+    run.toCheckpointB();
+    const session = run.state!.session!.id;
+    run.submit('timeout is compared with elapsed time.', { 'config.json': GOOD_FILE });
+    const r = run.branch('recap');
+    expect(verbs(r.statements)).toEqual(['passed', 'branched', 'passed', 'terminated']);
+    expect(sessionOf(r.statements[3]!)).toBe(session);
+    expect(run.state!.cursor).toMatchObject({ lessonKey: 'b', phase: 'review', review: { lessonKey: 'a', beat: 0 } });
+    const next = run.beat();
+    expect(verbs(next.statements)).toEqual(['launched', 'initialized', 'experienced']);
+    expect(next.statements[2]!.context.contextActivities!.parent!.map((p) => p.id)).toEqual([`${COURSE_ID}/lessons/a/au`]);
+    expectClean(run.statements);
   });
 });
