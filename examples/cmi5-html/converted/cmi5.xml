@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<courseStructure xmlns="https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd" xmlns:cxm="https://course-xapi-mcp.sqwrlz.com/course/v1">
+  <course id="https://example.org/courses/html-basics">
+    <title><langstring lang="en">HTML basics</langstring></title>
+    <description><langstring lang="en">A two-lesson plain cmi5 course: how an HTML page is put together, and how to spot a broken link.</langstring></description>
+    <cxm:course src="cxm/course.json" specVersion="0.2" mcp="http://127.0.0.1:8787/mcp"/>
+  </course>
+  <au id="https://example.org/courses/html-basics/placement" cxm:key="placement" cxm:role="placement" moveOn="NotApplicable" launchMethod="OwnWindow">
+    <title><langstring lang="en">Placement</langstring></title>
+    <description><langstring lang="en">Find out where to start.</langstring></description>
+    <url>http://127.0.0.1:8787/cmi5/launch?au=placement</url>
+  </au>
+  <block id="https://example.org/courses/html-basics/blocks/html" cxm:key="html">
+    <title><langstring lang="en">Write a web page</langstring></title>
+    <description><langstring lang="en">From the page skeleton to fixing a broken link.</langstring></description>
+    <au id="https://example.org/courses/html-basics/au/page-structure" cxm:key="page-structure" moveOn="CompletedAndPassed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Page structure</langstring></title>
+      <description><langstring lang="en">The html, head and body elements.</langstring></description>
+      <url>http://127.0.0.1:8787/cmi5/launch?au=page-structure</url>
+      <cxm:lesson src="cxm/lessons/page-structure.json"/>
+    </au>
+    <au id="https://example.org/courses/html-basics/au/fix-the-link" cxm:key="fix-the-link" moveOn="CompletedAndPassed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Fix the link</langstring></title>
+      <description><langstring lang="en">Find a missing quote in a mailto link.</langstring></description>
+      <url>http://127.0.0.1:8787/cmi5/launch?au=fix-the-link</url>
+      <cxm:lesson src="cxm/lessons/fix-the-link.json"/>
+    </au>
+    <cxm:path src="cxm/course.json#/paths/html"/>
+  </block>
+</courseStructure>

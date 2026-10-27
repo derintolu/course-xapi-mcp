@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<courseStructure xmlns="https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd">
+  <course id="https://example.org/courses/html-basics">
+    <title><langstring lang="en">HTML basics</langstring></title>
+    <description><langstring lang="en">A two-lesson plain cmi5 course: how an HTML page is put together, and how to spot a broken link.</langstring></description>
+  </course>
+  <block id="https://example.org/courses/html-basics/blocks/html">
+    <title><langstring lang="en">Write a web page</langstring></title>
+    <description><langstring lang="en">From the page skeleton to fixing a broken link.</langstring></description>
+    <au id="https://example.org/courses/html-basics/au/page-structure" moveOn="Completed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Page structure</langstring></title>
+      <description><langstring lang="en">The html, head and body elements.</langstring></description>
+      <url>au/page-structure/index.html</url>
+    </au>
+    <au id="https://example.org/courses/html-basics/au/fix-the-link" moveOn="CompletedAndPassed" launchMethod="OwnWindow" masteryScore="0.8">
+      <title><langstring lang="en">Fix the link</langstring></title>
+      <description><langstring lang="en">Find a missing quote in a mailto link.</langstring></description>
+      <url>au/fix-the-link/index.html</url>
+    </au>
+  </block>
+</courseStructure>

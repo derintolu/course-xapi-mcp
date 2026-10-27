@@ -1,0 +1,19 @@
+{
+  "specVersion": "0.2",
+  "flavour": "authoring",
+  "version": "0.1.0",
+  "language": "en",
+  "license": "Apache-2.0",
+  "placement": {
+    "intro": "Find out whether the learner has written an HTML page by hand before. Ask at most two short questions.",
+    "maxQuestions": 2
+  },
+  "custody": "server-kept",
+  "allowPractice": false,
+  "paths": {
+    "html": {
+      "tagline": "From the page skeleton to fixing a broken link.",
+      "placementHints": "Start at page-structure for anyone new to HTML. Start at fix-the-link, skipping page-structure, only if the learner already writes HTML by hand and can say what goes in the head and what goes in the body."
+    }
+  }
+}

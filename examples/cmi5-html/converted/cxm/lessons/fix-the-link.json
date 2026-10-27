@@ -1,0 +1,93 @@
+{
+  "minutes": 7,
+  "sources": [
+    {
+      "title": "MDN: Creating hyperlinks",
+      "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Structuring_content/Creating_links"
+    }
+  ],
+  "beats": [
+    {
+      "key": "quoted-values",
+      "goal": "The learner reads attribute values as quoted strings.",
+      "content": "An attribute value sits between two matching double quotes. If the closing quote is missing, the browser keeps reading until it finds another quote, and everything in between becomes part of the value.",
+      "question": "Where does the value of href end in <a href=\"a.html>Home</a>, and what will the browser do?"
+    }
+  ],
+  "starterFiles": {
+    "page.html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <title>Contact</title>\n</head>\n<body>\n  <h1>Contact us</h1>\n  <p><a href=\"mailto:hello@example.org>Email us</a></p>\n</body>\n</html>\n"
+  },
+  "bug": {
+    "key": "missing-quote",
+    "file": "page.html",
+    "code": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <title>Contact</title>\n</head>\n<body>\n  <h1>Contact us</h1>\n  <p><a href=\"mailto:hello@example.org>Email us</a></p>\n</body>\n</html>",
+    "explanation": "The href value was missing its closing double quote, so the browser read on past the angle bracket and the link text became part of the address.",
+    "hint": "Read the link out loud and count the double quotes inside the a tag. Do they pair up?",
+    "fixChecks": [
+      {
+        "type": "contains",
+        "file": "page.html",
+        "value": "href=\"mailto:hello@example.org\"",
+        "message": "Not fixed yet."
+      },
+      {
+        "type": "notContains",
+        "file": "page.html",
+        "value": "example.org>Email",
+        "message": "Not fixed yet."
+      }
+    ],
+    "revealAfter": 3
+  },
+  "checkpoint": {
+    "key": "add-image",
+    "kind": "code",
+    "question": "Add an image of the team, team.jpg, under the heading in page.html, with alt text that describes it, then send the file and explain why the alt text matters.",
+    "rubric": "The checks decide whether the file is right. For the explanation, a good answer says alt text is read out by screen readers and shown when the image does not load.",
+    "file": "page.html",
+    "checks": [
+      {
+        "type": "regex",
+        "file": "page.html",
+        "pattern": "<img\\s[^>]*alt=\"[^\"]+\"",
+        "flags": "i",
+        "message": "page.html needs an img element with a non-empty alt attribute."
+      },
+      {
+        "type": "contains",
+        "file": "page.html",
+        "value": "href=\"mailto:hello@example.org\"",
+        "message": "Keep the mailto link correct, with both quotes."
+      }
+    ],
+    "branches": [
+      {
+        "key": "done",
+        "when": "The checks passed and the learner explains that alt text serves screen readers or broken images.",
+        "success": true,
+        "to": null,
+        "message": "That's the path done. Your record has every step, and it's yours to keep."
+      },
+      {
+        "key": "explain-again",
+        "when": "The checks passed but the explanation of alt text is missing or wrong.",
+        "success": false,
+        "to": "fix-the-link",
+        "message": "The file is right; let's make sure the reason is clear too."
+      },
+      {
+        "key": "retry",
+        "when": "The checks failed.",
+        "success": false,
+        "to": "fix-the-link",
+        "message": "Not quite yet. Look at the check messages and try again."
+      }
+    ]
+  },
+  "referenceSolution": {
+    "files": {
+      "page.html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <title>Contact</title>\n</head>\n<body>\n  <h1>Contact us</h1>\n  <img src=\"team.jpg\" alt=\"The four members of the team standing outside the office\">\n  <p><a href=\"mailto:hello@example.org\">Email us</a></p>\n</body>\n</html>\n"
+    },
+    "bugFix": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <title>Contact</title>\n</head>\n<body>\n  <h1>Contact us</h1>\n  <p><a href=\"mailto:hello@example.org\">Email us</a></p>\n</body>\n</html>\n"
+  }
+}

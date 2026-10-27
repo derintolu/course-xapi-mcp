@@ -1,0 +1,45 @@
+{
+  "minutes": 5,
+  "sources": [
+    {
+      "title": "MDN: Getting started with HTML",
+      "url": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Structuring_content/Basic_HTML_syntax"
+    }
+  ],
+  "beats": [
+    {
+      "key": "skeleton",
+      "goal": "The learner knows a page is one html element with a head and a body.",
+      "content": "Every HTML page is one html element with two children. The head holds information about the page, such as its title. The body holds what the reader sees.",
+      "question": "Before we go on: the title shows on the browser tab. Do you think the title element goes in the head or in the body? Why?"
+    },
+    {
+      "key": "where-things-go",
+      "goal": "The learner can place common elements.",
+      "content": "Visible content, such as headings, paragraphs and links, goes in the body. The title and the meta elements go in the head.",
+      "question": "Predict: if you put an h1 in the head, what will the browser do?"
+    }
+  ],
+  "checkpoint": {
+    "key": "head-or-body",
+    "kind": "free-text",
+    "question": "In your own words: what is the difference between the head and the body of an HTML page, and where would you put a page title and a heading?",
+    "rubric": "A good answer says the head holds information about the page (the title goes there) and the body holds the visible content (the heading goes there). Exact wording does not matter.",
+    "branches": [
+      {
+        "key": "ready",
+        "when": "The answer puts the title in the head and the heading in the body.",
+        "success": true,
+        "to": "fix-the-link",
+        "message": "You can tell the head from the body. Next, a link with one planted bug."
+      },
+      {
+        "key": "review",
+        "when": "The answer swaps the two or does not say where either one goes.",
+        "success": false,
+        "to": "page-structure",
+        "message": "Let's go over what the head and the body hold once more."
+      }
+    ]
+  }
+}
