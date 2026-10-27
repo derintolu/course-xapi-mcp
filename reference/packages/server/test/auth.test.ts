@@ -1,0 +1,561 @@
+// SPDX-License-Identifier: Apache-2.0
+import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { SignJWT, importJWK, type JWK } from 'jose';
+import { DEFAULTS, MemoryLaunchStore, actorKey, type AuthServer, type CourseModel, type LaunchContext, type LearnerRef } from '@course-xapi-mcp/core';
+import { createAuthServer } from '../src/auth/auth-server.ts';
+import { MemoryAuthStore } from '../src/auth/stores.ts';
+
+const PUBLIC = 'https://course.example';
+const RESOURCE = PUBLIC + '/mcp';
+const REDIRECT = 'http://127.0.0.1:33418/callback';
+const WWW_AUTH = `Bearer resource_metadata="${PUBLIC}/.well-known/oauth-protected-resource/mcp", scope="cxm:learn"`;
+const course = { id: 'https://example.org/courses/demo', title: 'Demo course' } as CourseModel;
+const signingKey = generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' }) as JWK;
+const T0 = Date.parse('2026-10-27T10:00:00Z');
+
+let t = T0;
+const now = () => t;
+beforeEach(() => {
+  t = T0;
+});
+
+const b64url = (b: Buffer) => b.toString('base64url');
+function pkce() {
+  const verifier = b64url(randomBytes(32));
+  return { verifier, challenge: b64url(createHash('sha256').update(verifier).digest()) };
+}
+
+const get = (path: string, headers: Record<string, string> = {}) => new Request(PUBLIC + path, { headers });
+const form = (path: string, body: Record<string, string>, headers: Record<string, string> = {}) =>
+  new Request(PUBLIC + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers },
+    body: new URLSearchParams(body),
+  });
+
+async function route(s: AuthServer, req: Request): Promise<Response> {
+  const res = await s.routes(req);
+  if (!res) throw new Error('route not handled: ' + req.url);
+  return res;
+}
+
+async function register(s: AuthServer, meta: Record<string, unknown> = {}) {
+  const res = await route(s, new Request(PUBLIC + '/oauth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ redirect_uris: [REDIRECT], client_name: 'Test agent', ...meta }),
+  }));
+  return { res, body: (await res.json()) as Record<string, any> };
+}
+
+function authorizeQuery(clientId: string, challenge: string, over: Record<string, string> = {}) {
+  return '/oauth/authorize?' + new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: REDIRECT,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+    state: 'st-1',
+    resource: RESOURCE,
+    scope: 'cxm:learn',
+    ...over,
+  });
+}
+
+const requestId = (html: string) => {
+  const m = /name="request_id" value="([^"]+)"/.exec(html);
+  if (!m) throw new Error('no request_id in page');
+  return m[1];
+};
+
+function cookie(res: Response, name: string): string | undefined {
+  for (const c of res.headers.getSetCookie()) if (c.startsWith(name + '=')) return c;
+  return undefined;
+}
+
+/** The redirect back to the client: a 302 after a GET, or (after a form POST, which the CSP's form-action would block) a page that navigates there. */
+async function redirectFrom(res: Response): Promise<URL> {
+  if (res.status === 302) return new URL(res.headers.get('location')!);
+  expect(res.status).toBe(200);
+  const m = /<meta http-equiv="refresh" content="0;url=([^"]+)">/.exec(await res.text());
+  if (!m) throw new Error('no redirect in page');
+  return new URL(m[1].replaceAll('&amp;', '&'));
+}
+
+async function codeFrom(res: Response): Promise<string> {
+  const loc = await redirectFrom(res);
+  expect(loc.origin + loc.pathname).toBe(REDIRECT);
+  expect(loc.searchParams.get('state')).toBe('st-1');
+  expect(loc.searchParams.get('iss')).toBe(PUBLIC);
+  return loc.searchParams.get('code')!;
+}
+
+const tokenReq = (body: Record<string, string>) => form('/oauth/token', body);
+
+async function exchange(s: AuthServer, clientId: string, code: string, verifier: string, over: Record<string, string> = {}) {
+  const res = await route(s, tokenReq({
+    grant_type: 'authorization_code', code, client_id: clientId, redirect_uri: REDIRECT, code_verifier: verifier, resource: RESOURCE, ...over,
+  }));
+  return { res, body: (await res.json()) as Record<string, any> };
+}
+
+const bearer = (token: string) => new Request(RESOURCE, { method: 'POST', headers: { authorization: 'Bearer ' + token } });
+
+function accountsServer(store = new MemoryAuthStore()) {
+  return createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', store, now });
+}
+
+/** Signs up (or in) through the accounts page and returns the authorization code response. */
+async function accountsLogin(s: AuthServer, clientId: string, challenge: string, action: 'signup' | 'signin', username: string, password: string) {
+  const page = await route(s, get(authorizeQuery(clientId, challenge)));
+  expect(page.status).toBe(200);
+  const id = requestId(await page.text());
+  return route(s, form('/oauth/login', { request_id: id, action, username, password }));
+}
+
+async function fullAccountsFlow(s: AuthServer, username = 'ada.l', password = 'correct horse battery') {
+  const { body: client } = await register(s);
+  const { verifier, challenge } = pkce();
+  const res = await accountsLogin(s, client.client_id, challenge, 'signup', username, password);
+  const code = await codeFrom(res);
+  return { client, verifier, challenge, code, loginRes: res };
+}
+
+describe('metadata', () => {
+  it('serves RFC 9728 protected resource metadata', async () => {
+    const s = accountsServer();
+    const res = await route(s, get('/.well-known/oauth-protected-resource/mcp'));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ resource: RESOURCE, authorization_servers: [PUBLIC], scopes_supported: ['cxm:learn'] });
+  });
+
+  it('serves RFC 8414 authorization server metadata', async () => {
+    const s = accountsServer();
+    const res = await route(s, get('/.well-known/oauth-authorization-server'));
+    expect(await res.json()).toMatchObject({
+      issuer: PUBLIC,
+      authorization_endpoint: PUBLIC + '/oauth/authorize',
+      token_endpoint: PUBLIC + '/oauth/token',
+      registration_endpoint: PUBLIC + '/oauth/register',
+      code_challenge_methods_supported: ['S256'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
+      response_types_supported: ['code'],
+      client_id_metadata_document_supported: true,
+      token_endpoint_auth_methods_supported: ['none'],
+      scopes_supported: ['cxm:learn'],
+    });
+  });
+
+  it('leaves other paths to the caller', async () => {
+    expect(await accountsServer().routes(get('/mcp'))).toBeUndefined();
+  });
+});
+
+describe('client registration', () => {
+  it('registers a public client (RFC 7591)', async () => {
+    const { res, body } = await register(accountsServer());
+    expect(res.status).toBe(201);
+    expect(body.client_id).toMatch(/^[A-Za-z0-9_-]{20,}$/);
+    expect(body).toMatchObject({ redirect_uris: [REDIRECT], token_endpoint_auth_method: 'none', client_name: 'Test agent' });
+    expect(body.client_secret).toBeUndefined();
+  });
+
+  it('refuses confidential clients and unsafe redirect URIs', async () => {
+    const s = accountsServer();
+    for (const meta of [
+      { token_endpoint_auth_method: 'client_secret_basic' },
+      { redirect_uris: ['http://evil.example/cb'] },
+      { redirect_uris: ['javascript:alert(1)'] },
+      { redirect_uris: [] },
+    ]) {
+      const { res, body } = await register(s, meta);
+      expect(res.status).toBe(400);
+      expect(body.error).toMatch(/^invalid_(client_metadata|redirect_uri)$/);
+    }
+  });
+
+  it('accepts a client id metadata document and its redirect URI, and refuses a mismatching one', async () => {
+    const docUrl = 'https://agent.example/oauth/client.json';
+    const fetched: { url: string; init?: RequestInit }[] = [];
+    const fetchStub = (async (url: string | URL | Request, init?: RequestInit) => {
+      fetched.push({ url: String(url), init });
+      return new Response(JSON.stringify({ client_id: docUrl, client_name: 'Doc agent', redirect_uris: [REDIRECT] }), {
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub });
+    const { challenge } = pkce();
+
+    const ok = await route(s, get(authorizeQuery(docUrl, challenge)));
+    expect(ok.status).toBe(200);
+    expect(await ok.text()).toContain('Doc agent');
+    expect(fetched[0].url).toBe(docUrl);
+    expect(fetched[0].init?.redirect).toBe('manual');
+    expect(fetched[0].init?.signal).toBeInstanceOf(AbortSignal);
+
+    const bad = await route(s, get(authorizeQuery(docUrl, challenge, { redirect_uri: 'http://127.0.0.1:9/other' })));
+    expect(bad.status).toBe(400);
+    expect(bad.headers.get('location')).toBeNull();
+  });
+
+  it('refuses a metadata document that redirects, is too large, or names another client id', async () => {
+    const docUrl = 'https://agent.example/client.json';
+    const responses = [
+      new Response(null, { status: 302, headers: { location: 'https://elsewhere.example/c.json' } }),
+      new Response(JSON.stringify({ client_id: docUrl, redirect_uris: [REDIRECT], pad: 'x'.repeat(70_000) })),
+      new Response(JSON.stringify({ client_id: 'https://other.example/c.json', redirect_uris: [REDIRECT] })),
+    ];
+    const fetchStub = (async () => responses.shift()!) as unknown as typeof fetch;
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', now, fetch: fetchStub });
+    const { challenge } = pkce();
+    for (let i = 0; i < 3; i++) expect((await route(s, get(authorizeQuery(docUrl, challenge)))).status).toBe(400);
+  });
+});
+
+describe('authorization code flow', () => {
+  it('yields a token that authenticate turns into an official LearnerRef', async () => {
+    const s = accountsServer();
+    const { client, verifier, code } = await fullAccountsFlow(s);
+    const { res, body } = await exchange(s, client.client_id, code, verifier);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(body).toMatchObject({ token_type: 'Bearer', expires_in: DEFAULTS.accessTokenTtlS, scope: 'cxm:learn' });
+    expect(Buffer.from(body.refresh_token, 'base64url')).toHaveLength(32);
+
+    const [header, payload] = body.access_token.split('.').slice(0, 2).map((p: string) => JSON.parse(Buffer.from(p, 'base64url').toString()));
+    expect(header.alg).toBe('EdDSA');
+    expect(payload).toMatchObject({ iss: PUBLIC, aud: RESOURCE, scope: 'cxm:learn' });
+    expect(payload.exp - payload.iat).toBe(3600);
+
+    const l = (await s.authenticate(bearer(body.access_token))) as LearnerRef;
+    expect(l).toMatchObject({ kind: 'official', subject: payload.sub });
+    expect(l.actor).toEqual({ objectType: 'Agent', account: { homePage: course.id, name: payload.sub } });
+  });
+
+  it('refuses a wrong code_verifier', async () => {
+    const s = accountsServer();
+    const { client, code } = await fullAccountsFlow(s);
+    const { res, body } = await exchange(s, client.client_id, code, pkce().verifier);
+    expect(res.status).toBe(400);
+    expect(body.error).toBe('invalid_grant');
+  });
+
+  it('refuses a reused code', async () => {
+    const s = accountsServer();
+    const { client, verifier, code } = await fullAccountsFlow(s);
+    const first = await exchange(s, client.client_id, code, verifier);
+    expect(first.res.status).toBe(200);
+    const again = await exchange(s, client.client_id, code, verifier);
+    expect(again.res.status).toBe(400);
+    expect(again.body.error).toBe('invalid_grant');
+    // Replaying a code revokes what it issued.
+    const refreshed = await route(s, tokenReq({ grant_type: 'refresh_token', refresh_token: first.body.refresh_token, client_id: client.client_id }));
+    expect(refreshed.status).toBe(400);
+  });
+
+  it('refuses an expired code', async () => {
+    const s = accountsServer();
+    const { client, verifier, code } = await fullAccountsFlow(s);
+    t += DEFAULTS.authCodeTtlS * 1000 + 1;
+    const { res, body } = await exchange(s, client.client_id, code, verifier);
+    expect(res.status).toBe(400);
+    expect(body.error).toBe('invalid_grant');
+  });
+
+  it('refuses a wrong resource at the authorization and token endpoints', async () => {
+    const s = accountsServer();
+    const { body: client } = await register(s);
+    const { challenge } = pkce();
+    const res = await route(s, get(authorizeQuery(client.client_id, challenge, { resource: 'https://other.example/mcp' })));
+    expect(res.status).toBe(302);
+    const loc = new URL(res.headers.get('location')!);
+    expect(loc.searchParams.get('error')).toBe('invalid_target');
+    expect(loc.searchParams.get('code')).toBeNull();
+
+    const flow = await fullAccountsFlow(s, 'grace.h');
+    const tok = await exchange(s, flow.client.client_id, flow.code, flow.verifier, { resource: 'https://other.example/mcp' });
+    expect(tok.res.status).toBe(400);
+    expect(tok.body.error).toBe('invalid_target');
+  });
+
+  it('requires PKCE S256', async () => {
+    const s = accountsServer();
+    const { body: client } = await register(s);
+    for (const over of [{ code_challenge_method: 'plain' }, { code_challenge: '' }] as Record<string, string>[]) {
+      const res = await route(s, get(authorizeQuery(client.client_id, pkce().challenge, over)));
+      expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe('invalid_request');
+    }
+  });
+
+  it('refuses an unregistered redirect URI without redirecting', async () => {
+    const s = accountsServer();
+    const { body: client } = await register(s);
+    const res = await route(s, get(authorizeQuery(client.client_id, pkce().challenge, { redirect_uri: REDIRECT + '/x' })));
+    expect(res.status).toBe(400);
+    expect(res.headers.get('location')).toBeNull();
+  });
+});
+
+describe('authenticate', () => {
+  it('answers 401 with the resource metadata challenge when the token is missing, invalid or for another audience', async () => {
+    const s = accountsServer();
+    const key = await importJWK(signingKey, 'EdDSA');
+    const otherKey = await importJWK(generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' }) as JWK, 'EdDSA');
+    const sign = (aud: string, k: CryptoKey | Uint8Array) =>
+      new SignJWT({ scope: 'cxm:learn' }).setProtectedHeader({ alg: 'EdDSA', typ: 'at+jwt' }).setIssuer(PUBLIC).setAudience(aud)
+        .setSubject('someone').setIssuedAt(T0 / 1000).setExpirationTime(T0 / 1000 + 3600).sign(k);
+    const otherAudience = await sign('https://other.example/mcp', key);
+    const otherSigner = await sign(RESOURCE, otherKey);
+    expect(await s.authenticate(bearer(await sign(RESOURCE, key)))).not.toBeInstanceOf(Response);
+
+    for (const req of [new Request(RESOURCE), bearer('not-a-jwt'), bearer(otherAudience), bearer(otherSigner)]) {
+      const res = await s.authenticate(req);
+      expect(res).toBeInstanceOf(Response);
+      expect((res as Response).status).toBe(401);
+      expect((res as Response).headers.get('www-authenticate')).toBe(WWW_AUTH);
+    }
+  });
+
+  it('refuses an expired access token', async () => {
+    const s = accountsServer();
+    const { client, verifier, code } = await fullAccountsFlow(s);
+    const { body } = await exchange(s, client.client_id, code, verifier);
+    t += DEFAULTS.accessTokenTtlS * 1000 + 1000;
+    expect(((await s.authenticate(bearer(body.access_token))) as Response).status).toBe(401);
+  });
+});
+
+describe('refresh tokens', () => {
+  it('rotate on use, and reusing a rotated one revokes the family', async () => {
+    const s = accountsServer();
+    const { client, verifier, code } = await fullAccountsFlow(s);
+    const { body: first } = await exchange(s, client.client_id, code, verifier);
+    const r1 = await route(s, tokenReq({ grant_type: 'refresh_token', refresh_token: first.refresh_token, client_id: client.client_id }));
+    expect(r1.status).toBe(200);
+    const second = (await r1.json()) as Record<string, any>;
+    expect(second.refresh_token).not.toBe(first.refresh_token);
+    expect(((await s.authenticate(bearer(second.access_token))) as LearnerRef).kind).toBe('official');
+
+    const reuse = await route(s, tokenReq({ grant_type: 'refresh_token', refresh_token: first.refresh_token, client_id: client.client_id }));
+    expect(reuse.status).toBe(400);
+    expect(((await reuse.json()) as any).error).toBe('invalid_grant');
+    const after = await route(s, tokenReq({ grant_type: 'refresh_token', refresh_token: second.refresh_token, client_id: client.client_id }));
+    expect(after.status).toBe(400);
+  });
+
+  it('expire after 30 days and belong to their client', async () => {
+    const s = accountsServer();
+    const { client, verifier, code } = await fullAccountsFlow(s);
+    const { body } = await exchange(s, client.client_id, code, verifier);
+    const wrongClient = await route(s, tokenReq({ grant_type: 'refresh_token', refresh_token: body.refresh_token, client_id: 'someone-else' }));
+    expect(wrongClient.status).toBe(400);
+    const s2 = accountsServer();
+    const f2 = await fullAccountsFlow(s2);
+    const { body: b2 } = await exchange(s2, f2.client.client_id, f2.code, f2.verifier);
+    t += DEFAULTS.refreshTokenTtlS * 1000 + 1;
+    const expired = await route(s2, tokenReq({ grant_type: 'refresh_token', refresh_token: b2.refresh_token, client_id: f2.client.client_id }));
+    expect(expired.status).toBe(400);
+  });
+});
+
+describe('accounts mode', () => {
+  it('signs up, then signs in, and sets the browser session cookie', async () => {
+    const store = new MemoryAuthStore();
+    const s = accountsServer(store);
+    const { client, loginRes, code, verifier } = await fullAccountsFlow(s, 'ada.l', 'correct horse battery');
+    const sid = cookie(loginRes, 'cxm_sid')!;
+    expect(sid).toMatch(/HttpOnly/);
+    expect(sid).toMatch(/Secure/);
+    expect(sid).toMatch(/SameSite=Lax/);
+    expect(sid).toMatch(/Max-Age=43200/);
+    const { body } = await exchange(s, client.client_id, code, verifier);
+    const fromToken = (await s.authenticate(bearer(body.access_token))) as LearnerRef;
+
+    const browser = await s.browserLearner(get('/record', { cookie: sid.split(';')[0] }));
+    expect(browser?.subject).toBe(fromToken.subject);
+    t += 12 * 3600 * 1000 + 1;
+    expect(await s.browserLearner(get('/record', { cookie: sid.split(';')[0] }))).toBeUndefined();
+    t = T0;
+
+    const { verifier: v2, challenge: c2 } = pkce();
+    const signin = await accountsLogin(s, client.client_id, c2, 'signin', 'ada.l', 'correct horse battery');
+    const { body: b2 } = await exchange(s, client.client_id, await codeFrom(signin), v2);
+    expect(((await s.authenticate(bearer(b2.access_token))) as LearnerRef).subject).toBe(fromToken.subject);
+  });
+
+  it('validates usernames and passwords and refuses a taken username', async () => {
+    const s = accountsServer();
+    await fullAccountsFlow(s, 'ada.l');
+    const { body: client } = await register(s);
+    for (const [u, p] of [['ab', 'long enough password'], ['Ada!', 'long enough password'], ['ok.name', 'short'], ['ada.l', 'another long password']]) {
+      const res = await accountsLogin(s, client.client_id, pkce().challenge, 'signup', u, p);
+      expect(res.status).toBe(400);
+      expect(res.headers.get('location')).toBeNull();
+    }
+  });
+
+  it('refuses the sixth bad password within 15 minutes, even if correct', async () => {
+    const s = accountsServer();
+    const { client } = await fullAccountsFlow(s, 'ada.l', 'correct horse battery');
+    for (let i = 0; i < 5; i++) {
+      const res = await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'wrong password ' + i);
+      expect(res.status).toBe(400);
+      expect(await res.text()).toContain('username or password is wrong');
+    }
+    const sixth = await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'wrong password 6');
+    expect(sixth.status).toBe(429);
+    const correct = await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'correct horse battery');
+    expect(correct.status).toBe(429);
+    t += 15 * 60 * 1000 + 1;
+    const later = await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'correct horse battery');
+    expect((await redirectFrom(later)).searchParams.get('code')).toBeTruthy();
+  });
+
+  it('uses a non-secure cookie only on loopback', async () => {
+    const local = 'http://127.0.0.1:8787';
+    const s = createAuthServer({ publicUrl: local, course, signingKey, mode: 'accounts', now });
+    const reg = await route(s, new Request(local + '/oauth/register', { method: 'POST', body: JSON.stringify({ redirect_uris: [REDIRECT] }), headers: { 'content-type': 'application/json' } }));
+    const client = (await reg.json()) as any;
+    const { challenge } = pkce();
+    const q = authorizeQuery(client.client_id, challenge, { resource: local + '/mcp' });
+    const page = await route(s, new Request(local + q));
+    const res = await route(s, new Request(local + '/oauth/login', {
+      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ request_id: requestId(await page.text()), action: 'signup', username: 'ada.l', password: 'correct horse battery' }),
+    }));
+    expect(res.status).toBe(200);
+    expect(cookie(res, 'cxm_sid')).not.toMatch(/Secure/);
+  });
+});
+
+describe('launch-paired mode', () => {
+  const actor = { objectType: 'Agent' as const, account: { homePage: 'https://lms.example', name: 'learner-7' } };
+  function launch(over: Partial<LaunchContext> = {}): LaunchContext {
+    return {
+      launchId: 'launch-1', endpoint: 'https://lms.example/lrs/', authToken: 'secret-token', tokenFetchedAt: new Date(T0).toISOString(),
+      actor, registration: '2f0d6c3e-8c1a-4b55-9d8e-6a3f2a1b0c9d', activityId: 'https://lms.example/act/1', auId: 'https://example.org/courses/demo/au1',
+      auKey: 'lesson-1', contextTemplate: {}, launchMode: 'Normal', moveOn: 'Completed', sessionId: 'sess-1',
+      initializedAt: new Date(T0).toISOString(), pairingCode: 'ABC234', pairingExpiresAt: new Date(T0 + DEFAULTS.pairingTtlMs).toISOString(), ...over,
+    };
+  }
+  const expectedSubject = (c: LaunchContext) =>
+    createHash('sha256').update(c.endpoint + '\n' + actorKey(c.actor) + '\n' + c.registration).digest('hex');
+
+  async function setup(over: Partial<LaunchContext> = {}) {
+    const launches = new MemoryLaunchStore();
+    const c = launch(over);
+    await launches.put(c);
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'launch-paired', launches, now });
+    const { body: client } = await register(s);
+    return { s, launches, c, client };
+  }
+
+  async function page(s: AuthServer, clientId: string, headers: Record<string, string> = {}) {
+    const p = pkce();
+    const res = await route(s, get(authorizeQuery(clientId, p.challenge), headers));
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    return { ...p, html, id: requestId(html) };
+  }
+
+  it('binds the launch named by the cxm_launch cookie', async () => {
+    const { s, launches, c, client } = await setup();
+    const p = await page(s, client.client_id, { cookie: 'cxm_launch=launch-1' });
+    const res = await route(s, form('/oauth/authorize', { request_id: p.id, action: 'continue' }, { cookie: 'cxm_launch=launch-1' }));
+    const { body } = await exchange(s, client.client_id, await codeFrom(res), p.verifier);
+    const payload = JSON.parse(Buffer.from(body.access_token.split('.')[1], 'base64url').toString());
+    expect(payload.cxm_launch).toBe('launch-1');
+    const l = (await s.authenticate(bearer(body.access_token))) as LearnerRef;
+    expect(l).toEqual({ kind: 'official', subject: expectedSubject(c), actor, launchId: 'launch-1' });
+    expect((await launches.get('launch-1'))?.pairedSubject).toBe(expectedSubject(c));
+    expect(JSON.stringify(body)).not.toContain('secret-token');
+    expect(cookie(res, 'cxm_sid')).toBeTruthy();
+  });
+
+  it('asks for the pairing code when the cookie names no live launch', async () => {
+    const { s, launches, client } = await setup();
+    await launches.update('launch-1', { terminatedAt: new Date(T0).toISOString() });
+    const p = await page(s, client.client_id, { cookie: 'cxm_launch=launch-1' });
+    expect(p.html).toContain('name="pairing_code"');
+    const forged = await route(s, form('/oauth/authorize', { request_id: p.id, action: 'continue' }, { cookie: 'cxm_launch=launch-1' }));
+    expect(forged.status).toBe(400);
+  });
+
+  it('accepts a correct pairing code once, case-insensitively', async () => {
+    const { s, c, client } = await setup();
+    const p = await page(s, client.client_id);
+    expect(p.html).toContain('name="pairing_code"');
+    const res = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: ' abc234 ' }));
+    const { body } = await exchange(s, client.client_id, await codeFrom(res), p.verifier);
+    expect(((await s.authenticate(bearer(body.access_token))) as LearnerRef).subject).toBe(expectedSubject(c));
+
+    const p2 = await page(s, client.client_id);
+    const again = await route(s, form('/oauth/authorize', { request_id: p2.id, pairing_code: 'ABC234' }));
+    expect(again.status).toBe(400);
+    expect(again.headers.get('location')).toBeNull();
+  });
+
+  it('refuses an expired pairing code', async () => {
+    const { s, client } = await setup();
+    t += DEFAULTS.pairingTtlMs + 1;
+    const p = await page(s, client.client_id);
+    const res = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ABC234' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('ends the request at the sixth wrong code', async () => {
+    const { s, client } = await setup();
+    const p = await page(s, client.client_id);
+    for (let i = 0; i < 5; i++) {
+      const res = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ZZZZZ' + i }));
+      expect(res.status).toBe(400);
+      expect(await res.text()).toContain('name="pairing_code"');
+    }
+    const sixth = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ZZZZZZ' }));
+    expect(sixth.status).toBe(400);
+    expect(await sixth.text()).not.toContain('name="pairing_code"');
+    const right = await route(s, form('/oauth/authorize', { request_id: p.id, pairing_code: 'ABC234' }));
+    expect(right.status).toBe(400);
+    expect(right.headers.get('location')).toBeNull();
+  });
+});
+
+describe('federated mode', () => {
+  it('delegates sign-in to the federation hooks', async () => {
+    let begun: { state: string; redirectUri: string } | undefined;
+    const federation = {
+      async begin(state: string, redirectUri: string) {
+        begun = { state, redirectUri };
+        return 'https://idp.example/authorize?x=1';
+      },
+      async complete(req: Request) {
+        return { subject: 'idp-sub-1', state: new URL(req.url).searchParams.get('state')! };
+      },
+    };
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'federated', federation, now });
+    const { body: client } = await register(s);
+    const { verifier, challenge } = pkce();
+    const res = await route(s, get(authorizeQuery(client.client_id, challenge)));
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('https://idp.example/authorize?x=1');
+    expect(begun!.redirectUri).toBe(PUBLIC + '/oauth/callback');
+    const back = await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun!.state)));
+    const { body } = await exchange(s, client.client_id, await codeFrom(back), verifier);
+    expect(((await s.authenticate(bearer(body.access_token))) as LearnerRef).subject).toBe('idp-sub-1');
+    expect((await route(s, get('/oauth/callback?state=' + encodeURIComponent(begun!.state)))).status).toBe(400);
+  });
+});
+
+describe('pages', () => {
+  it('escape a client_name and carry the CSP and frame headers', async () => {
+    const s = accountsServer();
+    const { body: client } = await register(s, { client_name: '<script>alert(1)</script>' });
+    const res = await route(s, get(authorizeQuery(client.client_id, pkce().challenge)));
+    const html = await res.text();
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(res.headers.get('content-security-policy')).toBe("default-src 'none'; style-src 'unsafe-inline'; form-action 'self'");
+    expect(res.headers.get('x-frame-options')).toBe('DENY');
+  });
+});
