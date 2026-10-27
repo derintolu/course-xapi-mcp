@@ -13,6 +13,7 @@ import {
   type LaunchContext,
   type LaunchStore,
   type XapiAgent,
+  type XapiStatement,
 } from '@course-xapi-mcp/core';
 import { buildDefined, isoDuration, type Cmi5Context } from '@course-xapi-mcp/core/xapi';
 import { Cmi5FetchError, createLrsClient, fetchAuthToken, LrsError, type LrsClient } from '@course-xapi-mcp/lrs-client';
@@ -36,7 +37,7 @@ export interface Bridge {
   fetch(req: Request): Promise<Response | undefined>;
   /** Terminates live launches that are idle or near the token cap; returns how many it terminated. */
   sweep(): Promise<number>;
-  /** Sends `terminated` for a live launch. No-op when it already ended or was superseded. Throws when sending fails. */
+  /** Sends `terminated` for a live launch, or resends one not yet confirmed. No-op when it already ended or was superseded. Throws when sending fails; the launch stays ended. */
   terminate(launchId: string): Promise<void>;
 }
 
@@ -48,7 +49,8 @@ const COOKIE_MAX_AGE = DEFAULTS.pairingTtlMs / 1000;
 const LAUNCH_MODES = ['Normal', 'Browse', 'Review'] as const;
 const MOVE_ONS = ['Passed', 'Completed', 'CompletedAndPassed', 'CompletedOrPassed', 'NotApplicable'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]']);
+const isLoopback = (hostname: string) =>
+  hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || hostname === '0.0.0.0' || /^127\.\d+\.\d+\.\d+$/.test(hostname);
 
 class LaunchRefused extends Error {
   readonly status: number;
@@ -64,8 +66,11 @@ class LaunchRefused extends Error {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
-/** https, or http on a loopback host (local development and tests). */
-function safeUrl(raw: string | null): URL | undefined {
+/**
+ * https, or http on a loopback host (local development and tests). Loopback hosts are accepted only when the bridge itself
+ * runs on loopback, so a launch link cannot make a public bridge probe its own machine.
+ */
+function safeUrl(raw: string | null, bridgeOnLoopback: boolean): URL | undefined {
   if (!raw) return undefined;
   let u: URL;
   try {
@@ -74,9 +79,8 @@ function safeUrl(raw: string | null): URL | undefined {
     return undefined;
   }
   if (u.username || u.password) return undefined;
-  if (u.protocol === 'https:') return u;
-  if (u.protocol === 'http:' && LOOPBACK.has(u.hostname)) return u;
-  return undefined;
+  if (isLoopback(u.hostname)) return bridgeOnLoopback && (u.protocol === 'https:' || u.protocol === 'http:') ? u : undefined;
+  return u.protocol === 'https:' ? u : undefined;
 }
 
 function parseActor(raw: string | null): XapiAgent | undefined {
@@ -173,6 +177,11 @@ export function createBridge(o: BridgeOptions): Bridge {
   /** Launches this bridge started that have not ended yet: the ones `sweep` looks at. */
   const live = new Set<string>();
   const ending = new Set<string>();
+  /**
+   * `terminated` statements built but not yet confirmed by the record holder. A failed send may still have been stored,
+   * so the launch stays ended and the same statement (same id and timestamp) is retried; the LRS dedupes by id.
+   */
+  const pending = new Map<string, { endpoint: string; token: string; statement: XapiStatement }>();
 
   const iso = (ms: number) => new Date(ms).toISOString();
   const client = (endpoint: string, token: string): LrsClient => createLrsClient({ endpoint, auth: { type: 'token', value: token }, fetch: f });
@@ -210,9 +219,10 @@ export function createBridge(o: BridgeOptions): Bridge {
     const key = q.get('au') ?? '';
     const target = au(key);
     if (!target) throw bad('The lesson in this link is not part of this course.');
-    const endpoint = safeUrl(q.get('endpoint'));
+    const onLoopback = isLoopback(url.hostname);
+    const endpoint = safeUrl(q.get('endpoint'), onLoopback);
     if (!endpoint) throw bad('The record store address in this link is not allowed.');
-    const fetchUrl = safeUrl(q.get('fetch'));
+    const fetchUrl = safeUrl(q.get('fetch'), onLoopback);
     if (!fetchUrl) throw bad('The token address in this link is not allowed.');
     const actor = parseActor(q.get('actor'));
     if (!actor) throw bad('The learner in this link is not valid.');
@@ -257,7 +267,7 @@ export function createBridge(o: BridgeOptions): Bridge {
         live.delete(previous.launchId);
       }
 
-      const secure = LOOPBACK.has(url.hostname) ? '' : '; Secure';
+      const secure = onLoopback ? '' : '; Secure';
       return html(launchPage({ courseTitle: o.course.title, lessonTitle: target.title, mcpUrl: o.mcpUrl, pairingCode: ctx.pairingCode }), 200, {
         'set-cookie': `${LAUNCH_COOKIE}=${ctx.launchId}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; SameSite=Lax${secure}`,
       });
@@ -270,28 +280,29 @@ export function createBridge(o: BridgeOptions): Bridge {
     if (ending.has(launchId)) return false;
     ending.add(launchId);
     try {
-      const c = await store.get(launchId);
-      if (!c) throw new StoreError('unknown launch ' + launchId);
-      if (c.terminatedAt || c.supersededAt) {
-        live.delete(launchId);
-        return false;
+      let p = pending.get(launchId);
+      if (!p) {
+        const c = await store.get(launchId);
+        if (!c) throw new StoreError('unknown launch ' + launchId);
+        if (c.terminatedAt || c.supersededAt) {
+          live.delete(launchId);
+          return false;
+        }
+        // Never before the session's last activity, so `terminated` stays the last statement.
+        const at = Math.max(now(), c.lastActivityAt ? Date.parse(c.lastActivityAt) + 1 : 0);
+        const terminatedAt = iso(at);
+        const statement = buildDefined(statementContext(c), 'terminated', { au: { publisherId: c.auId, activityId: c.activityId } }, {
+          id: uuid(),
+          timestamp: terminatedAt,
+          duration: isoDuration(Math.max(0, at - Date.parse(c.initializedAt))),
+        });
+        p = { endpoint: c.endpoint, token: c.authToken, statement };
+        pending.set(launchId, p);
+        // Claim the end before sending, so the engine stops writing to this launch; it stays claimed if the send fails.
+        await store.update(launchId, { terminatedAt });
       }
-      const at = now();
-      const terminatedAt = iso(at);
-      // Claim the end first, so the engine stops writing to this launch while `terminated` is on its way.
-      await store.update(launchId, { terminatedAt });
-      const s = buildDefined(statementContext(c), 'terminated', { au: { publisherId: c.auId, activityId: c.activityId } }, {
-        id: uuid(),
-        timestamp: terminatedAt,
-        duration: isoDuration(Math.max(0, at - Date.parse(c.initializedAt))),
-      });
-      try {
-        await client(c.endpoint, c.authToken).putStatement(s);
-      } catch (err) {
-        // Not sent: the launch stays live so the next sweep tries again.
-        await store.update(launchId, { terminatedAt: undefined });
-        throw err;
-      }
+      await client(p.endpoint, p.token).putStatement(p.statement);
+      pending.delete(launchId);
       live.delete(launchId);
       return true;
     } finally {
@@ -316,6 +327,14 @@ export function createBridge(o: BridgeOptions): Bridge {
       let n = 0;
       const t = now();
       for (const id of [...live]) {
+        if (pending.has(id)) {
+          try {
+            if (await terminate(id)) n++;
+          } catch {
+            // Still not confirmed; the next sweep sends the same statement again.
+          }
+          continue;
+        }
         const c = await store.get(id);
         if (!c || c.terminatedAt || c.supersededAt) {
           live.delete(id);

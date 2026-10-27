@@ -233,8 +233,9 @@ describe('sweep', () => {
       await active();
       expect(await bridge.sweep()).toBe(0);
     }
-    clock.advance(2 * MIN);
+    clock.advance(MIN);
     await active();
+    clock.advance(MIN);
     expect(await bridge.sweep()).toBe(1);
     const t = lrs.statements().at(-1)!;
     expect(t.verb.id).toBe(ADL_VERBS.terminated);
@@ -242,15 +243,61 @@ describe('sweep', () => {
     expect(sim.problems()).toEqual([]);
   });
 
-  it('keeps a launch live and retries when the record holder refuses terminated', async () => {
+  it('keeps a launch ended and resends the same terminated when the record holder refuses it', async () => {
     const { lrs, sim, bridge, launches, clock, launchIdOf } = setup();
     const id = launchIdOf((await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!);
     clock.advance(31 * MIN);
     lrs.failNext(1, 503);
     expect(await bridge.sweep()).toBe(0);
-    expect((await launches.get(id))!.terminatedAt).toBeUndefined();
+    const terminatedAt = (await launches.get(id))!.terminatedAt;
+    expect(terminatedAt).toBeDefined();
+    clock.advance(MIN);
     expect(await bridge.sweep()).toBe(1);
+    const t = lrs.statements().at(-1)!;
+    expect(t.verb.id).toBe(ADL_VERBS.terminated);
+    expect(t.timestamp).toBe(terminatedAt);
+    expect(t.result?.duration).toBe('PT31M');
+    expect(sim.problems()).toEqual([]);
+  });
+
+  it('after an ambiguous failure (stored, then the connection drops) the launch stays ended and the retry reuses the id', async () => {
+    const { lrs, sim, bridge, launches, clock, calls, launchIdOf } = setup();
+    const id = launchIdOf((await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!);
+    const realFetch = lrs.fetch;
+    let drop = true;
+    lrs.fetch = async (req) => {
+      const res = await realFetch(req);
+      if (drop && req.method === 'PUT' && new URL(req.url).pathname.endsWith('/statements')) {
+        drop = false;
+        throw new TypeError('socket hang up');
+      }
+      return res;
+    };
+    clock.advance(31 * MIN);
+    expect(await bridge.sweep()).toBe(0);
+    // Ended: custody refuses engine writes on a launch with terminatedAt.
+    expect((await launches.get(id))!.terminatedAt).toBeDefined();
     expect(verbs(lrs).at(-1)).toBe(ADL_VERBS.terminated);
+    const firstId = lrs.statements().at(-1)!.id;
+
+    expect(await bridge.sweep()).toBe(1);
+    const puts = calls.filter((c) => c.method === 'PUT' && c.url.includes('/statements?'));
+    const ids = puts.map((c) => new URL(c.url).searchParams.get('statementId'));
+    expect(ids.slice(-2)).toEqual([firstId, firstId]);
+    expect(lrs.statements().filter((s) => s.verb.id === ADL_VERBS.terminated)).toHaveLength(1);
+    expect(await bridge.sweep()).toBe(0);
+    expect(sim.problems()).toEqual([]);
+  });
+
+  it('stamps terminated after the last activity', async () => {
+    const { lrs, sim, bridge, launches, clock, launchIdOf } = setup();
+    const id = launchIdOf((await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!);
+    clock.advance(51 * MIN);
+    // The engine stamps the statements of one step a few milliseconds apart, so its last activity can be just ahead.
+    const last = clock.now() + 5;
+    await launches.update(id, { lastActivityAt: new Date(last).toISOString() });
+    expect(await bridge.sweep()).toBe(1);
+    expect(Date.parse(lrs.statements().at(-1)!.timestamp)).toBe(last + 1);
   });
 
   it('skips a launch that custody already terminated', async () => {
@@ -333,7 +380,7 @@ describe('refused launches', () => {
   });
 
   it('stores nothing when initialized is refused', async () => {
-    const { lrs, sim, bridge } = setup();
+    const { lrs, sim, bridge, launches } = setup();
     const l = await sim.launch(LESSON_AU);
     const realFetch = lrs.fetch;
     lrs.fetch = async (req) => (req.method === 'PUT' && new URL(req.url).pathname.endsWith('/statements') ? new Response(null, { status: 500 }) : realFetch(req));
@@ -341,6 +388,28 @@ describe('refused launches', () => {
     expect(res.status).toBe(502);
     expect(res.headers.get('set-cookie')).toBeNull();
     expect(verbs(lrs)).toEqual([ADL_VERBS.launched]);
+    expect(await launches.latestFor(LRS_URL, 'https://lms.example|learner-1', l.registration)).toBeUndefined();
+  });
+
+  it.each(['http://127.0.0.1:9000/xapi', 'https://localhost/xapi', 'https://127.0.0.2/xapi'])('a public bridge refuses a loopback fetch URL or endpoint (%s)', async (loopback) => {
+    for (const param of ['fetch', 'endpoint']) {
+      const { sim, bridge, calls } = setup();
+      const u = new URL((await sim.launch(LESSON_AU)).launchUrl);
+      u.searchParams.set(param, param === 'fetch' ? `${loopback}/cmi5/fetch/x` : loopback);
+      const before = calls.length;
+      const res = (await bridge.fetch(new Request(u)))!;
+      expect(res.status).toBe(400);
+      expect(calls).toHaveLength(before);
+    }
+  });
+
+  it('a loopback bridge accepts a loopback fetch URL', async () => {
+    const { sim, bridge, fetchPosts } = setup({ bridgeUrl: 'http://127.0.0.1:8787/cmi5/launch' });
+    const u = new URL((await sim.launch(LESSON_AU)).launchUrl);
+    u.searchParams.set('fetch', u.searchParams.get('fetch')!.replace('https://lrs.example', 'http://127.0.0.1:9000'));
+    const res = (await bridge.fetch(new Request(u)))!;
+    expect(res.status).toBe(200);
+    expect(fetchPosts()).toBe(1);
   });
 });
 
