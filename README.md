@@ -1,5 +1,7 @@
 # learning-mcp
 
+Versions before commit `7a83a1c` were GPL-2.0-or-later (code) and CC BY-SA 4.0 (docs).
+
 Learning that runs inside the AI agent you already use, with every step recorded as standards-compliant xAPI that you own.
 
 **Status: early, unofficial, draft.** Built by Claude for Derin Tolu (derintolu) as a starting point. The protocol, the profile IRIs and the record format will change before 1.0. Not affiliated with Anthropic, OpenAI, ADL, IEEE or WordPress.
