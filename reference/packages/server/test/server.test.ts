@@ -325,6 +325,36 @@ describe.each(['legacy', 'modern'] as const)('course server over MCP (%s era)', 
     expect((await store!.getState(SUBJECT))!.state.outbox).toEqual([]);
   });
 
+  it('a redelivery that races another process answers the retry message and keeps the other advance', async () => {
+    let failures = 0;
+    let other: (() => Promise<void>) | undefined;
+    const racing = (c: Custody): Custody => ({
+      ...c,
+      deliver: async (l, statements) => {
+        if (failures > 0) {
+          failures--;
+          throw new StoreError('the record holder did not answer');
+        }
+        await c.deliver(l, statements);
+        // Another server process advances the learner while this call is redelivering.
+        if (other) await other().finally(() => (other = undefined));
+      },
+    });
+    const { call, store } = await officialRun(era, { wrap: racing });
+    failures = 1;
+    expect((await call('choose_placement', { pathKey: 'json', startLessonKey: 'what-is-json', skip: [], reason: 'New to JSON.' })).data.delivery).toBe('pending');
+    let advanced: unknown;
+    other = async () => {
+      const got = (await store!.getState(SUBJECT))!;
+      const next = { ...got.state, outbox: [], updatedAt: new Date(Date.parse(got.state.updatedAt) + 5000).toISOString(), cursor: { ...got.state.cursor!, beat: 1, awaitingReply: true } };
+      await store!.putState(SUBJECT, next, got.etag);
+      advanced = next;
+    };
+    const r = await call('next_beat');
+    expect(r).toMatchObject({ isError: true, data: { error: RETRY } });
+    expect((await store!.getState(SUBJECT))!.state).toEqual(advanced);
+  });
+
   it('practice: a deliver failure returns delivery pending; the next call redelivers once and clears the outbox', async () => {
     let failures = 0;
     const flaky = (c: PracticeCustody): PracticeCustody => ({

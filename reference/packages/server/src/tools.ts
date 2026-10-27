@@ -200,8 +200,11 @@ export function createTools(d: ToolDeps) {
         } catch {
           return err(HOLDER_DOWN, state);
         }
-        // Delivering may have changed the stored copy's version (practice keeps statements beside the state).
-        etag = (await guarded(() => custody.load(l))).etag;
+        // Delivering may have changed the stored copy's version (practice keeps statements beside the state). Take the
+        // new version only when the stored state is still the one loaded; otherwise another process advanced meanwhile.
+        const again = await guarded(() => custody.load(l));
+        if (again.state?.registration !== state.registration || again.state.updatedAt !== state.updatedAt) return err(BUSY, again.state);
+        etag = again.etag;
         state = { ...state, outbox: [] };
         redelivered = true;
       }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Deterministic checks on submitted text files. Ported from learn-wp-reimagined/src/shared/checks.ts.
 // Checks never execute learner code. Regex patterns come only from authored content, but they run on learner text,
-// so a pattern with a known catastrophic-backtracking shape is never run, and any other regex runs with a time limit.
+// so a pattern with the nested-quantifier shape is never run, and every other regex runs with a time limit and a
+// per-call budget.
 import { createContext, runInContext } from 'node:vm';
 import type { Check } from './model.ts';
 
@@ -57,25 +58,20 @@ function quantifierAt(pattern: string, j: number): Quantifier | undefined {
 }
 
 /**
- * True when a regex pattern has a shape that can backtrack catastrophically on crafted text: a group holding an
- * unbounded quantifier that is itself repeated (`(a+)+`, `(a+){3}`), alternation inside an unboundedly repeated group
- * (`(a|a)+`), or two unbounded quantifiers in a row (`.*.*`). A heuristic: `runChecks` also stops any regex at a time limit.
+ * True when a regex pattern has a group holding an unbounded quantifier that is itself repeated, without bound or at
+ * least twice (`(a+)+`, `(\\w*,)*`, `(a+){3}`): the classic shape that backtracks exponentially on crafted text.
+ * A heuristic: `runChecks` also stops every other regex at a time limit.
  */
 export function hasNestedQuantifier(pattern: string): boolean {
-  interface Level { unbounded: boolean; alternation: boolean; prevUnbounded: boolean }
-  const levels: Level[] = [{ unbounded: false, alternation: false, prevUnbounded: false }];
-  const top = () => levels[levels.length - 1]!;
+  // Per open group: whether an unbounded quantifier appeared inside it.
+  const levels: boolean[] = [false];
   let i = 0;
-  /** After an atom ends at `i`: read its quantifier and apply the rules. `group` describes the atom when it is a group. */
-  const afterAtom = (group?: Level): boolean => {
+  /** After an atom ends at `i`: read its quantifier. `group` is set when the atom is a group: whether it holds an unbounded quantifier. */
+  const afterAtom = (group?: boolean): boolean => {
     const q = quantifierAt(pattern, i);
     if (q) i += q.len;
-    const lvl = top();
-    if (group && q && group.unbounded && q.max >= 2) return true;
-    if (group && q?.unbounded && group.alternation) return true;
-    if (q?.unbounded && lvl.prevUnbounded) return true;
-    lvl.prevUnbounded = Boolean(q?.unbounded);
-    if (q?.unbounded || group?.unbounded) lvl.unbounded = true;
+    if (group && q && q.max >= 2) return true;
+    if (q?.unbounded || group) levels[levels.length - 1] = true;
     return false;
   };
   while (i < pattern.length) {
@@ -98,15 +94,11 @@ export function hasNestedQuantifier(pattern: string): boolean {
         if (pattern[i] === '<' && pattern[i + 1] !== '=' && pattern[i + 1] !== '!') i = pattern.indexOf('>', i) + 1 || pattern.length;
         else i += pattern[i] === '<' ? 2 : 1;
       }
-      levels.push({ unbounded: false, alternation: false, prevUnbounded: false });
+      levels.push(false);
     } else if (c === ')') {
       i++;
-      const group = levels.length > 1 ? levels.pop()! : { unbounded: false, alternation: false, prevUnbounded: false };
+      const group = levels.length > 1 ? levels.pop()! : false;
       if (afterAtom(group)) return true;
-    } else if (c === '|') {
-      i++;
-      top().alternation = true;
-      top().prevUnbounded = false;
     } else {
       i++;
       if (afterAtom()) return true;
@@ -117,14 +109,16 @@ export function hasNestedQuantifier(pattern: string): boolean {
 
 /** How long one regex check may run on learner text before it is stopped and counts as failed. */
 export const REGEX_TIME_LIMIT_MS = 100;
+/** How long all the regex checks of one `runChecks` call may run together. */
+export const REGEX_BUDGET_MS = 1000;
 
 const regexContext = createContext({ pattern: '', flags: '', text: '' });
 
 /** Runs one regex test in a VM context with a hard time limit; undefined when it was stopped. */
-function timedRegexTest(pattern: string, flags: string | undefined, text: string): boolean | undefined {
+function timedRegexTest(pattern: string, flags: string | undefined, text: string, timeout: number): boolean | undefined {
   Object.assign(regexContext, { pattern, flags: flags ?? '', text });
   try {
-    return runInContext('new RegExp(pattern, flags).test(text)', regexContext, { timeout: REGEX_TIME_LIMIT_MS }) as boolean;
+    return runInContext('new RegExp(pattern, flags).test(text)', regexContext, { timeout }) as boolean;
   } catch (e) {
     if ((e as { code?: string }).code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') return undefined;
     throw e;
@@ -133,10 +127,16 @@ function timedRegexTest(pattern: string, flags: string | undefined, text: string
   }
 }
 
-const TOO_SLOW = 'this check took too long on this file and was stopped, so it counts as failed';
+const WHY = {
+  stopped: 'this check took too long on this file and was stopped, so it counts as failed',
+  refused: 'this check\'s pattern can take too long on any learner text, so the server does not run it and it counts as failed',
+  budget: 'the checks on this submission ran out of time before this one, so it counts as failed',
+} as const;
 
-/** Whether the check passes; `stopped` when a regex ran out of time. */
-function runCheck(check: Check, files: Record<string, string>): { passed: boolean; stopped?: true } {
+type Outcome = { passed: boolean; why?: keyof typeof WHY };
+
+/** Whether the check passes, and why it failed when the server did not run it to the end. `budget` is the regex time left. */
+function runCheck(check: Check, files: Record<string, string>, budget: { left: number }): Outcome {
   if (!has(files, check.file)) return { passed: false };
   const text = files[check.file]!;
   try {
@@ -147,9 +147,12 @@ function runCheck(check: Check, files: Record<string, string>): { passed: boolea
         return { passed: !text.includes(check.value) };
       case 'regex': {
         // Refused rather than run: the validator warns about such patterns (CXM-PKG-202).
-        if (hasNestedQuantifier(check.pattern)) return { passed: false };
-        const r = timedRegexTest(check.pattern, check.flags, text);
-        return r === undefined ? { passed: false, stopped: true } : { passed: r };
+        if (hasNestedQuantifier(check.pattern)) return { passed: false, why: 'refused' };
+        if (budget.left <= 0) return { passed: false, why: 'budget' };
+        const start = performance.now();
+        const r = timedRegexTest(check.pattern, check.flags, text, Math.max(1, Math.min(REGEX_TIME_LIMIT_MS, Math.ceil(budget.left))));
+        budget.left -= performance.now() - start;
+        return r === undefined ? { passed: false, why: 'stopped' } : { passed: r };
       }
       case 'json': {
         const r = resolvePointer(JSON.parse(text), check.pointer);
@@ -164,9 +167,10 @@ function runCheck(check: Check, files: Record<string, string>): { passed: boolea
 export interface CheckResult { index: number; passed: boolean; message: string }
 
 export function runChecks(checks: Check[], files: Record<string, string>): { passed: boolean; results: CheckResult[] } {
+  const budget = { left: REGEX_BUDGET_MS };
   const results = checks.map((check, index) => {
-    const r = runCheck(check, files);
-    return { index, passed: r.passed, message: r.stopped ? `${check.message} (${TOO_SLOW})` : check.message };
+    const r = runCheck(check, files, budget);
+    return { index, passed: r.passed, message: r.why ? `${check.message} (${WHY[r.why]})` : check.message };
   });
   return { passed: results.every((r) => r.passed), results };
 }

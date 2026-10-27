@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
-import { REGEX_TIME_LIMIT_MS, hasNestedQuantifier, runChecks, type Check } from '../src/index.ts';
+import { REGEX_BUDGET_MS, REGEX_TIME_LIMIT_MS, hasNestedQuantifier, runChecks, type Check } from '../src/index.ts';
 
 const files = { 'a.json': '{"port": 8080, "list": [1, {"x/y": true}]}', 'a.txt': 'hello world' };
 
@@ -54,28 +54,46 @@ describe('runChecks', () => {
   it.each([
     ['^(a+)+$', 'a'.repeat(40) + '!'],
     ['^(a+){3}$', 'a'.repeat(2000) + '!'],
-    ['^(a|a)+$', 'a'.repeat(26) + '!'],
-    ['^.*.*.*=$', 'x'.repeat(4000)],
-  ])('refuses %s on learner text without running it', (pattern, text) => {
+  ])('refuses %s on learner text without running it, and says why', (pattern, text) => {
     const start = Date.now();
-    expect(runChecks([{ type: 'regex', file: 'a.txt', pattern, message: 'm' }], { 'a.txt': text }).passed).toBe(false);
+    const r = runChecks([{ type: 'regex', file: 'a.txt', pattern, message: 'm' }], { 'a.txt': text });
     expect(Date.now() - start).toBeLessThan(50);
+    expect(r.passed).toBe(false);
+    expect(r.results[0]!.message).toMatch(/^m \(this check's pattern can take too long on any learner text/);
   });
 
-  it('stops any other slow regex at the time limit; the check fails and says why', () => {
-    // Polynomial backtracking the shape heuristic does not catch.
-    const slow: Check = { type: 'regex', file: 'a.txt', pattern: '^.*x.*x.*x.*x.*y$', message: 'needs y' };
-    expect(hasNestedQuantifier(slow.pattern)).toBe(false);
+  it.each([
+    ['^(a|a)+$', 'a'.repeat(26) + '!'],
+    ['^.*.*.*=$', 'x'.repeat(4000)],
+    ['^.*x.*x.*x.*x.*y$', 'x'.repeat(3000)],
+  ])('stops %s at the time limit; the check fails and says why', (pattern, text) => {
     const start = Date.now();
-    const r = runChecks([slow], { 'a.txt': 'x'.repeat(3000) });
+    const r = runChecks([{ type: 'regex', file: 'a.txt', pattern, message: 'needs it' }], { 'a.txt': text });
     expect(Date.now() - start).toBeLessThan(REGEX_TIME_LIMIT_MS + 400);
     expect(r.passed).toBe(false);
-    expect(r.results[0]!.message).toMatch(/^needs y \(this check took too long on this file and was stopped/);
-    expect(runChecks([{ ...slow, pattern: '^x+$' }], { 'a.txt': 'x'.repeat(3000) }).passed).toBe(true);
+    expect(r.results[0]!.message).toMatch(/^needs it \(this check took too long on this file and was stopped/);
+  });
+
+  it.each([
+    ['"port"\\s*:\\s*\\d+', '{"port": 8080}'],
+    ['\\w+\\s*=', 'timeout = 30'],
+    ['(foo|bar)+', 'foobar'],
+    ['^x+$', 'x'.repeat(3000)],
+  ])('runs the common pattern %s and passes on matching text', (pattern, text) => {
+    expect(runChecks([{ type: 'regex', file: 'a.txt', pattern, message: 'm' }], { 'a.txt': text }).results[0]).toMatchObject({ passed: true, message: 'm' });
+  });
+
+  it('gives all the regex checks of one call a total time budget', () => {
+    const slow: Check = { type: 'regex', file: 'a.txt', pattern: '^.*x.*x.*x.*x.*y$', message: 'm' };
+    const start = Date.now();
+    const r = runChecks(Array.from({ length: 15 }, () => slow), { 'a.txt': 'x'.repeat(3000) });
+    expect(Date.now() - start).toBeLessThan(REGEX_BUDGET_MS + 500);
+    expect(r.results.every((x) => !x.passed)).toBe(true);
+    expect(r.results.at(-1)!.message).toMatch(/ran out of time before this one/);
   });
 });
 
 describe('hasNestedQuantifier', () => {
-  it.each(['(a+)+', '(\\w*,)*', '((ab)*c)+', '(?:x+y?)+$', '(a{2,})*', '([a-z]+\\s?)+', '^(a+){3}$', '(a*){2,5}', '^(a|a)+$', '(a|b)*', '^.*.*.*=$', '\\s*\\s+', '[a-z]+[0-9]*'])('flags %s', (p) => expect(hasNestedQuantifier(p)).toBe(true));
-  it.each(['^hello\\s', '(ab)+', '(a+)?', '(a+){1}', '(a|b)', '[(a+)]+', '\\(a\\)+', '"port"\\s*:\\s*8080', 'a+b?c*', '^.*x.*y$', '(?<name>a+)b'])('allows %s', (p) => expect(hasNestedQuantifier(p)).toBe(false));
+  it.each(['(a+)+', '(\\w*,)*', '((ab)*c)+', '(?:x+y?)+$', '(a{2,})*', '([a-z]+\\s?)+', '^(a+){3}$', '(a*){2,5}'])('flags %s', (p) => expect(hasNestedQuantifier(p)).toBe(true));
+  it.each(['^hello\\s', '(ab)+', '(a+)?', '(a+){1}', '(a|b)*', '(foo|bar)+', '[(a+)]+', '\\(a+\\)+', '"port"\\s*:\\s*\\d+', '\\w+\\s*=', '.*.*', 'a+b?c*', '(?<name>a+)b'])('allows %s', (p) => expect(hasNestedQuantifier(p)).toBe(false));
 });
