@@ -29,6 +29,7 @@ const AU1 = 'https://example.org/course/au1';
 const AU2 = 'https://example.org/course/au2';
 const RELAUNCHED = 'this lesson was relaunched elsewhere; continue in the newest window or launch it again from your LMS';
 const ENDED = 'this lesson session has ended; launch it again from your LMS';
+const NO_VERSION = "the record holder did not return a version for the learner's state";
 
 type Seen = { method: string; url: URL; headers: Headers };
 
@@ -41,6 +42,18 @@ function lrsFetch(lrs: TestLrs) {
     return lrs.fetch(req);
   }) as typeof fetch;
   return { f, seen };
+}
+
+/** The test LRS behind a fetch that drops the ETag from State GETs, as a non-conforming LRS might. */
+function noStateEtag(lrs: TestLrs) {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const req = new Request(input, init);
+    const res = await lrs.fetch(req);
+    if (req.method !== 'GET' || !new URL(req.url).pathname.endsWith('/activities/state')) return res;
+    const headers = new Headers(res.headers);
+    headers.delete('etag');
+    return new Response(res.body, { status: res.status, headers });
+  }) as typeof fetch;
 }
 
 function learnerState(registration: string, beat = 0): LearnerState {
@@ -192,8 +205,7 @@ describe('author-LRS custody', () => {
   });
 
   for (const version of ['1.0.3', '2.0.0'] as const) {
-    // The configured version: the test LRS answers /about only to a version it accepts, so auto-negotiation
-    // (which asks /about as 1.0.3) is exercised by every other test against the two-version LRS.
+    // With the version configured; negotiation against a single-version LRS is tested below.
     it(`works against a ${version}-only LRS`, async () => {
       const { lrs, make, learner, actor, seen } = authorSetup({ versions: [version], version });
       const custody = make();
@@ -207,6 +219,37 @@ describe('author-LRS custody', () => {
       expect(seen.every((s) => s.headers.get('x-experience-api-version') === version)).toBe(true);
     });
   }
+
+  it('negotiates the version with a 2.0.0-only LRS when none is configured', async () => {
+    const { lrs, make, learner, actor, seen } = authorSetup({ versions: ['2.0.0'] });
+    const custody = make();
+    const reg = randomUUID();
+    const { etag } = await custody.save(learner, learnerState(reg), undefined);
+    await custody.save(learner, learnerState(reg, 1), etag);
+    await custody.deliver(learner, defined(cmi5Context(actor, reg, randomUUID(), 'author-lrs'), AU1, ['initialized']));
+    expect(lrs.statements()).toHaveLength(1);
+    expect(seen.filter((s) => s.url.pathname.endsWith('/about'))).toHaveLength(1);
+    expect(seen.filter((s) => !s.url.pathname.endsWith('/about')).every((s) => s.headers.get('x-experience-api-version') === '2.0.0')).toBe(true);
+  });
+
+  it('load refuses a state the LRS returns without an ETag, instead of conflicting on every save', async () => {
+    const lrs = createTestLrs({ credentials: [{ key: 'author', secret: 'sekrit' }] });
+    const custody = createAuthorLrsCustody({ course: COURSE, lrs: { endpoint: LRS_URL, key: 'author', secret: 'sekrit' }, publicUrl: PUBLIC_URL, fetch: noStateEtag(lrs) });
+    const learner: LearnerRef = { kind: 'official', subject: 's', actor: await custody.actorFor('s') };
+    await custody.save(learner, learnerState(randomUUID()), undefined);
+    const err = await custody.load(learner).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(StoreError);
+    expect((err as Error).message).toBe(NO_VERSION);
+  });
+
+  it('actorFor gives the actor statements must use: minted from the subject, or assigned', async () => {
+    const { make } = authorSetup();
+    expect(await make().actorFor('sub-1')).toEqual({ objectType: 'Agent', account: { homePage: COURSE.id, name: 'sub-1' } });
+    const assigned: XapiAgent = { objectType: 'Agent', account: { homePage: 'https://lrs.example/people', name: 'p-1' } };
+    const lrs = createTestLrs();
+    const custody = createAuthorLrsCustody({ course: COURSE, lrs: { endpoint: LRS_URL, key: 'test', secret: 'test' }, publicUrl: PUBLIC_URL, fetch: lrsFetch(lrs).f, assignActor: async () => assigned });
+    expect(await custody.actorFor('sub-1')).toEqual(assigned);
+  });
 
   it('record() returns the learner\'s statements for the course across registrations, and links point at /record', async () => {
     const { lrs, make, learner, actor } = authorSetup();
@@ -455,6 +498,25 @@ describe('LMS-launched custody', () => {
     expect(view.statements).toEqual([]);
     expect(view.receipt?.map((r) => r.id)).toEqual(batch.map((s) => s.id));
     expect(view.note).toBe('Your LMS holds the official record; ask it for a full export.');
+  });
+
+  it('load refuses a state the LMS returns without an ETag', async () => {
+    const { lrs, launches, launch, learnerOf } = lmsSetup();
+    const c = await launch(AU1, 'l1');
+    const custody = createLmsLaunchedCustody({ course: COURSE, launches, fetch: noStateEtag(lrs) });
+    await custody.save(learnerOf(c), learnerState(c.registration), undefined);
+    await expect(custody.load(learnerOf(c))).rejects.toThrow(NO_VERSION);
+  });
+
+  it('keeps no client per launch: the version is learnt once per endpoint', async () => {
+    const { seen, custody, launch, learnerOf, ctxOf } = lmsSetup();
+    const a = await launch(AU1, 'l1');
+    const b = await launch(AU2, 'l2', { registration: a.registration });
+    const before = seen.filter((s) => s.url.pathname.endsWith('/about')).length;
+    await custody.deliver(learnerOf(a), defined(ctxOf(a), AU1, ['initialized']));
+    await custody.deliver(learnerOf(b), defined(ctxOf(b), AU2, ['initialized']));
+    await custody.load(learnerOf(a));
+    expect(seen.filter((s) => s.url.pathname.endsWith('/about')).length - before).toBe(1);
   });
 
   it('links() name the LMS and carry no token or registration', async () => {

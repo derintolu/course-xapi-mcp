@@ -16,13 +16,15 @@ import {
   type RecordView,
   type XapiStatement,
 } from '@course-xapi-mcp/core';
-import { createLrsClient, type LrsClient } from '@course-xapi-mcp/lrs-client';
+import { createLrsClient, type LrsClient, type XapiVersion } from '@course-xapi-mcp/lrs-client';
 
 type Receipt = NonNullable<RecordView['receipt']>;
 
 const RELAUNCHED = 'this lesson was relaunched elsewhere; continue in the newest window or launch it again from your LMS';
 const ENDED = 'this lesson session has ended; launch it again from your LMS';
 const NOT_LAUNCHED = 'this lesson was not launched from your LMS; launch it from your LMS';
+/** Without a version (ETag) the next save could never be made conditional, so it would conflict for ever. */
+const NO_VERSION = "the record holder did not return a version for the learner's state";
 const NOTE = 'Your LMS holds the official record; ask it for a full export.';
 /** State document holding a receipt of every statement this server delivered for the registration. */
 const RECEIPT_STATE_ID = 'cxm-receipt';
@@ -34,14 +36,18 @@ export function createLmsLaunchedCustody(o: {
   fetch?: typeof fetch;
 }): Custody & { launchFor(l: LearnerRef, auKey?: string): Promise<LaunchContext | { error: string }> } {
   const courseId = o.course.id;
-  const clients = new Map<string, LrsClient>();
+  /** The xAPI version each LMS endpoint speaks, learnt once; one entry per endpoint, not per launch. */
+  const versions = new Map<string, XapiVersion>();
 
+  /** A client per call: the token belongs to one launch, so nothing per launch is kept here. */
   function clientFor(c: LaunchContext): LrsClient {
-    const key = c.endpoint + ' ' + c.authToken;
-    let client = clients.get(key);
-    if (!client) {
-      client = createLrsClient({ endpoint: c.endpoint, auth: { type: 'token', value: c.authToken }, fetch: o.fetch });
-      clients.set(key, client);
+    const known = versions.get(c.endpoint);
+    const client = createLrsClient({ endpoint: c.endpoint, auth: { type: 'token', value: c.authToken }, version: known ?? 'auto', fetch: o.fetch });
+    if (!known) {
+      client.version().then(
+        (v) => void versions.set(c.endpoint, v),
+        () => undefined, // the call that needed it reports the failure; negotiation is retried next time
+      );
     }
     return client;
   }
@@ -108,8 +114,8 @@ export function createLmsLaunchedCustody(o: {
       const c = await bound(l);
       const got = await clientFor(c).getState(docKey(c, STATE_IDS.learner));
       if (!got) return {};
-      const state = got.body as LearnerState;
-      return got.etag === undefined ? { state } : { state, etag: got.etag };
+      if (got.etag === undefined) throw new StoreError(NO_VERSION);
+      return { state: got.body as LearnerState, etag: got.etag };
     },
 
     async save(l, state, etag) {
@@ -119,7 +125,7 @@ export function createLmsLaunchedCustody(o: {
       const client = clientFor(c);
       const put = await client.putState(key, state, etag !== undefined ? { ifMatch: etag } : { ifNoneMatch: '*' });
       const next = put.etag ?? (await client.getState(key))?.etag;
-      if (next === undefined) throw new StoreError('the record holder did not return a version for the saved state');
+      if (next === undefined) throw new StoreError(NO_VERSION);
       return { etag: next };
     },
 

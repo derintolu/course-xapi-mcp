@@ -256,9 +256,10 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
     if (fetchId) return serveFetch(req, decodeURIComponent(fetchId[1]));
 
     if (!authorized(req)) return new Response('credentials required', { status: 401, headers: { 'www-authenticate': 'Basic realm="test-lrs"' } });
-    if (!versionOk(req)) return text(400, `X-Experience-API-Version must be one of ${versions.join(', ')}`);
-    const headers = { 'x-experience-api-version': versions.includes('2.0.0') && req.headers.get('x-experience-api-version') === '2.0.0' ? '2.0.0' : '1.0.3' };
     const route = /\/(about|statements|activities\/state|agents\/profile)\/?$/.exec(url.pathname)?.[1];
+    // xAPI: /about is how a client learns the versions, so it does not require the version header.
+    if (route !== 'about' && !versionOk(req)) return text(400, `X-Experience-API-Version must be one of ${versions.join(', ')}`);
+    const headers = { 'x-experience-api-version': versions.includes('2.0.0') && req.headers.get('x-experience-api-version') === '2.0.0' ? '2.0.0' : '1.0.3' };
     let res: Response;
     switch (route) {
       case 'about':

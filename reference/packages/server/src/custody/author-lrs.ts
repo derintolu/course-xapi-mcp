@@ -13,6 +13,9 @@ interface Tag {
   d: string;
 }
 
+/** Without a version (ETag) the next save could never be made conditional, so it would conflict for ever. */
+const NO_VERSION = "the record holder did not return a version for the learner's state";
+
 const encode = (t: Tag) => JSON.stringify(t);
 function decode(etag: string | undefined): Tag | undefined {
   if (etag === undefined) return undefined;
@@ -34,7 +37,10 @@ export function createAuthorLrsCustody(o: {
   publicUrl: string;
   assignActor?: (subject: string) => Promise<XapiAgent>;
   fetch?: typeof fetch;
-}): Custody {
+}): Custody & {
+  /** The actor this custody keeps the learner's state and reads their record under; statements must use it too. */
+  actorFor(subject: string): Promise<XapiAgent>;
+} {
   const client: LrsClient = createLrsClient({
     endpoint: o.lrs.endpoint,
     auth: { type: 'basic', key: o.lrs.key, secret: o.lrs.secret },
@@ -44,8 +50,9 @@ export function createAuthorLrsCustody(o: {
   const courseId = o.course.id;
   const base = o.publicUrl.replace(/\/+$/, '');
 
-  const actorFor = (l: LearnerRef): Promise<XapiAgent> =>
-    o.assignActor ? o.assignActor(l.subject) : Promise.resolve({ objectType: 'Agent', account: { homePage: courseId, name: l.subject } });
+  const actorOf = (subject: string): Promise<XapiAgent> =>
+    o.assignActor ? o.assignActor(subject) : Promise.resolve({ objectType: 'Agent', account: { homePage: courseId, name: subject } });
+  const actorFor = (l: LearnerRef) => actorOf(l.subject);
   const pointerKey = (agent: XapiAgent) => ({ activityId: courseId, agent, stateId: STATE_IDS.registration });
   const stateKey = (agent: XapiAgent, registration: string) => ({ activityId: courseId, agent, registration, stateId: STATE_IDS.learner });
 
@@ -57,13 +64,14 @@ export function createAuthorLrsCustody(o: {
 
   async function etagAfterPut(put: { etag?: string }, key: ReturnType<typeof stateKey>): Promise<string> {
     const etag = put.etag ?? (await client.getState(key))?.etag;
-    if (etag === undefined) throw new StoreError('the record holder did not return a version for the saved state');
+    if (etag === undefined) throw new StoreError(NO_VERSION);
     return etag;
   }
 
   return {
     option: 'author-lrs',
     official: true,
+    actorFor: actorOf,
 
     async load(l) {
       const agent = await actorFor(l);
@@ -71,8 +79,8 @@ export function createAuthorLrsCustody(o: {
       if (!pointer) return {};
       const got = await client.getState(stateKey(agent, pointer.registration));
       if (!got) return {};
-      const state = got.body as LearnerState;
-      return got.etag === undefined ? { state } : { state, etag: encode({ r: pointer.registration, d: got.etag }) };
+      if (got.etag === undefined) throw new StoreError(NO_VERSION);
+      return { state: got.body as LearnerState, etag: encode({ r: pointer.registration, d: got.etag }) };
     },
 
     async save(l, state, etag) {

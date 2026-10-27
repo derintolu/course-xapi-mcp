@@ -99,7 +99,7 @@ describe('test LRS', () => {
 
   it('answers 400 without the version header and for an invalid statement, 401 without credentials', async () => {
     const lrs = createTestLrs();
-    expect((await send(lrs, '/about', { version: null })).status).toBe(400);
+    expect((await send(lrs, '/statements', { version: null })).status).toBe(400);
     expect((await send(lrs, '/about', { auth: null })).status).toBe(401);
     expect((await send(lrs, '/about', { auth: 'Basic ' + btoa('test:wrong') })).status).toBe(401);
     const bad = await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(statement({ timestamp: 'yesterday' })) });
@@ -126,8 +126,19 @@ describe('test LRS', () => {
     expect((await send(both, '/about', { version: '1.0.3' })).status).toBe(200);
     expect((await send(both, '/about', { version: '2.0.0' })).status).toBe(200);
     const old = createTestLrs({ versions: ['1.0.3'] });
-    expect((await send(old, '/about', { version: '1.0.3' })).status).toBe(200);
-    expect((await send(old, '/about', { version: '2.0.0' })).status).toBe(400);
+    expect((await send(old, '/statements', { version: '1.0.3' })).status).toBe(200);
+    expect((await send(old, '/statements', { version: '2.0.0' })).status).toBe(400);
+  });
+
+  it('answers /about with or without a version it accepts, so a client can negotiate', async () => {
+    const v2 = createTestLrs({ versions: ['2.0.0'] });
+    for (const version of ['1.0.3', null] as const) {
+      const res = await send(v2, '/about', { version });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ version: ['2.0.0'] });
+    }
+    expect((await send(v2, '/about', { auth: null })).status).toBe(401);
+    expect((await send(v2, '/statements', { version: '1.0.3' })).status).toBe(400);
   });
 
   it('serves a registered fetch URL once', async () => {
