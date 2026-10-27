@@ -46,10 +46,9 @@ function earning(
       return carriedOver(scope) ? undefined : { statementId: e.statementId, scope };
     }
     case 'any-path': {
-      const e = events.find((x): x is BlockEvent => x.type === 'block');
-      if (!e) return undefined;
-      const scope = pathLessons(e.pathKey);
-      return carriedOver(scope) ? undefined : { statementId: e.statementId, scope };
+      // The first block event whose path counts for a badge (no carried-over lesson).
+      const e = events.find((x): x is BlockEvent => x.type === 'block' && !carriedOver(pathLessons(x.pathKey)));
+      return e && { statementId: e.statementId, scope: pathLessons(e.pathKey) };
     }
     case 'course-satisfied': {
       const e = events.find((x) => x.type === 'course');

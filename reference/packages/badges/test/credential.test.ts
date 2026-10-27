@@ -43,9 +43,13 @@ describe('buildCredential', () => {
   it('never carries the xAPI account name, statements or a score', () => {
     for (const recipient of [{ did: 'did:example:wallet' }, { email: 'a@example.com', salt: 'c2FsdHNhbHRzYWx0c2FsdA' }]) {
       const c = build({ recipient });
-      for (const v of values(c)) expect(v).not.toBe(ACCOUNT_NAME);
+      for (const v of values(c)) {
+        expect(v).not.toBe(ACCOUNT_NAME);
+        expect(v).not.toBe(award.registration);
+      }
       const text = JSON.stringify(c);
       expect(text).not.toContain(ACCOUNT_NAME);
+      expect(text).not.toContain(award.registration);
       expect(text).not.toMatch(/"(actor|verb|statement|score|result)"/);
     }
   });

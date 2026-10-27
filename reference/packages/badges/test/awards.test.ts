@@ -74,4 +74,12 @@ describe('awardsFor', () => {
     const later = state({ a1: {}, a2: {}, a3: {}, b1: {} }, [{ badgeId: 'b-any', statementId: 'st-block-b' }]);
     expect(awardsFor(c, later, [blockEvent('a')])).toEqual([]);
   });
+
+  it('skips a block with a carried-over lesson for any-path and takes the next block in the same call', () => {
+    const c = course([badge({ id: 'b-any', awardOn: 'any-path' })]);
+    const s = state({ a1: {}, a2: {}, a3: {}, b1: { waived: 'Administrative', carriedOver: true } });
+    expect(awardsFor(c, s, [blockEvent('b'), blockEvent('a')])).toEqual([
+      { badgeId: 'b-any', registration: REG, earningStatementId: 'st-block-a', testedOut: 0 },
+    ]);
+  });
 });
