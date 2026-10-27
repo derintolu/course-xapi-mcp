@@ -20,9 +20,17 @@ import {
 import { checkCmi5Order, checkProfile, validateStatement } from '@course-xapi-mcp/core/xapi';
 import { createBridge } from '@course-xapi-mcp/bridge';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
-import { createCourseServer, createLmsLaunchedCustody, launchSubject, withLearnerLock } from '../src/index.ts';
+import {
+  createAuthorLrsCustody,
+  createCourseServer,
+  createLmsLaunchedCustody,
+  createPracticeCustody,
+  launchSubject,
+  withLearnerLock,
+  type PracticeCustody,
+} from '../src/index.ts';
 import { toolInputJsonSchema, toolOutputJsonSchema } from '../src/tool-schemas.ts';
-import { PUBLIC_URL, SUBJECT, TOKEN, connect, loadExample, makeServer, teachExample, type Era, type Session } from './helpers.ts';
+import { PUBLIC_URL, SUBJECT, TOKEN, connect, loadExample, makeServer, stubAuthenticate, teachExample, type Era, type Session } from './helpers.ts';
 
 const RETRY = 'the record was changed by another call at the same time; call this tool again';
 const HOLDER_DOWN = 'the record holder is not responding; try again shortly';
@@ -218,7 +226,10 @@ describe.each(['legacy', 'modern'] as const)('course server over MCP (%s era)', 
       seen.push(r.raw);
       return r;
     };
-    await c('get_lesson', { lessonKey: 'fix-the-config' });
+    // get_lesson takes no handle.
+    const lesson = await call('get_lesson', { lessonKey: 'fix-the-config' });
+    expect(lesson.isError).toBe(false);
+    seen.push(lesson.raw);
     await c('choose_placement', { pathKey: 'json', startLessonKey: 'fix-the-config', skip: ['what-is-json'], reason: 'Edits JSON by hand.' });
     await c('next_beat');
     expect((await c('next_beat', { learner_reply: 'A string.' })).data.step).toBe('bug');
@@ -314,6 +325,49 @@ describe.each(['legacy', 'modern'] as const)('course server over MCP (%s era)', 
     expect((await store!.getState(SUBJECT))!.state.outbox).toEqual([]);
   });
 
+  it('practice: a deliver failure returns delivery pending; the next call redelivers once and clears the outbox', async () => {
+    let failures = 0;
+    const flaky = (c: PracticeCustody): PracticeCustody => ({
+      ...c,
+      deliver: async (l, statements) => {
+        if (failures > 0) {
+          failures--;
+          throw new StoreError('the relay did not answer');
+        }
+        return c.deliver(l, statements);
+      },
+    });
+    const setup = await makeServer('practice', { wrapPractice: flaky });
+    const { call } = await session(era, setup.app);
+    const handle = (await call('start_placement')).data.handle;
+    const copy = async () => (await setup.practice.exportCopy(handle))!;
+    expect((await copy()).state.outbox).toEqual([]);
+    failures = 1;
+    const placed = await call('choose_placement', { handle, pathKey: 'json', startLessonKey: 'what-is-json', skip: [], reason: 'New to JSON.' });
+    expect(placed.data.delivery).toBe('pending');
+    const pending = (await copy()).state.outbox.map((s) => s.id);
+    expect(pending.length).toBeGreaterThan(0);
+    const beat = await call('next_beat', { handle });
+    expect(beat).toMatchObject({ isError: false, data: { delivery: 'delivered' } });
+    const after = await copy();
+    expect(after.state.outbox).toEqual([]);
+    const ids = after.statements.map((s) => s.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of pending) expect(ids).toContain(id);
+    // A failing step after a redelivery is an engine error, not a spurious conflict.
+    failures = 0;
+    expect((await call('choose_branch', { handle, branch: 'ready', rationale: 'Too early.' })).data.error).toMatch(/submit_checkpoint/);
+  });
+
+  it('an unexpected failure is a tool error with rules and cxm that never shows the inner message', async () => {
+    const broken = (c: Custody): Custody => ({ ...c, links: () => { throw new Error('secret detail'); } });
+    const { call } = await officialRun(era, { wrap: broken });
+    const r = await call('get_status');
+    expect(r.isError).toBe(true);
+    expect(r.data).toMatchObject({ ok: false, cxm: { custody: 'server-kept', official: true }, rules: { version: RULES_VERSION } });
+    expect(JSON.stringify(r.raw)).not.toContain('secret detail');
+  });
+
   it('resume_practice refuses an official export and a learning-mcp record', async () => {
     const { app, course } = await makeServer('server-kept');
     const official = await session(era, app, '/mcp', TOKEN);
@@ -364,10 +418,15 @@ describe.each(['legacy', 'modern'] as const)('course server over MCP (%s era)', 
       ['check_code', { file: 'config.json', content: 'x'.repeat(LIMITS.file + 1) }],
       ['choose_branch', { branch: 'ready', rationale: 'x'.repeat(LIMITS.rationale + 1) }],
       ['get_lesson', { lessonKey: 'x'.repeat(65) }],
+      ['submit_checkpoint', { response: 'x', files: Object.fromEntries(Array.from({ length: LIMITS.files + 1 }, (_, i) => [`f${i}.json`, '{}'])) }],
     ] as const) {
       const r = await call(name, args);
       expect(r.isError, name).toBe(true);
-      expect(r.raw.content[0].text, name).toMatch(/validation/i);
+      expect(r.data.error, name).toMatch(/validation/i);
+      // The SDK's own validation error still carries the rules and the cxm block.
+      expect(r.data.rules.version, name).toBe(RULES_VERSION);
+      expect(r.data.cxm, name).toMatchObject({ custody: 'server-kept', official: true });
+      expect(JSON.parse(r.raw.content[0].text)).toEqual(r.data);
     }
     expect((await store!.statements(SUBJECT)).length).toBe(before);
   });
@@ -417,8 +476,10 @@ describe('option 1: lessons launched from the LMS', () => {
       aus: ['placement', 'what-is-json', 'fix-the-config'].map((k) => ({ auId: auOf(k).auId, url: auOf(k).url, moveOn: k === 'placement' ? ('NotApplicable' as const) : ('CompletedAndPassed' as const) })),
     });
     const launches = new MemoryLaunchStore();
-    let t = Date.now() + 1000;
-    const clock = { ms: () => t, iso: () => new Date(t).toISOString(), advance: (ms: number) => (t += ms) };
+    // Wall-clock time a second ahead of the simulator's own stamps, so statements stay ordered however slow the run.
+    let offset = 1000;
+    const ms = () => Date.now() + offset;
+    const clock = { ms, iso: () => new Date(ms()).toISOString(), advance: (by: number) => (offset += by) };
     const bridge = createBridge({ course, mcpUrl: PUBLIC_URL + '/mcp', launches, now: clock.ms, fetch: f, lock: (c, fn) => withLearnerLock(launchSubject(c), fn) });
     const custody = createLmsLaunchedCustody({ course, launches, fetch: f });
     // The token is the launch id; a real authorization server pairs it (Task 17).
@@ -441,9 +502,11 @@ describe('option 1: lessons launched from the LMS', () => {
   }
 
   it('sends the learner back to the LMS for the next lesson; statements land in the LMS in cmi5 order', async () => {
-    const { app, launch, sim, lrs } = await setup();
+    const { app, launch, sim, lrs, launches } = await setup();
     const placement = await launch('placement');
-    const p = await session('modern', app, '/mcp', placement.launchId);
+    const seen: unknown[] = [];
+    const watch = (s: Session): Session => ({ ...s, call: async (n, a) => { const r = await s.call(n, a); seen.push(r.raw); return r; } });
+    const p = watch(await session('modern', app, '/mcp', placement.launchId));
     expect((await p.call('get_status')).data).toMatchObject({ custody: 'lms-launched', official: true, holder: 'your LMS' });
     await p.call('start_placement');
     const placed = await p.call('choose_placement', { pathKey: 'json', startLessonKey: 'what-is-json', skip: [], reason: 'New to JSON.' });
@@ -451,11 +514,16 @@ describe('option 1: lessons launched from the LMS', () => {
     expect((await p.call('restart_course')).data.error).toMatch(/LMS/);
 
     const lesson = await launch('what-is-json', { registration: placement.registration });
-    const s = await session('modern', app, '/mcp', lesson.launchId);
+    const s = watch(await session('modern', app, '/mcp', lesson.launchId));
     expect((await s.call('next_beat')).data.step).toBe('beat');
+    await s.call('get_status');
     await s.call('end_session');
     expect(sim.problems()).toEqual([]);
     expect(lrs.statements().every((st) => st.context.registration === placement.registration)).toBe(true);
+    // No registration, LMS token, LMS endpoint or LMS actor account name in any result.
+    const text = JSON.stringify(seen);
+    const c = (await launches.get(lesson.launchId))!;
+    for (const secret of [placement.registration, c.authToken, LRS_URL, (c.actor as any).account.name]) expect(text).not.toContain(secret);
   });
 
   it('a relaunch makes the older window answer "relaunched elsewhere"; an ended launch answers return-to-lms', async () => {
@@ -495,3 +563,26 @@ describe('option 1: lessons launched from the LMS', () => {
   });
 });
 
+describe('option 2: the author\'s LRS', () => {
+  it('keeps the record under the actor author-lrs assigns, and no result leaks it, the registration or the LRS credentials', async () => {
+    const course = await loadExample();
+    const credentials = { key: 'lrs-key-7Qe2', secret: 'lrs-secret-Zk91' };
+    const lrs = createTestLrs({ credentials: [credentials] });
+    const f = ((input: RequestInfo | URL, init?: RequestInit) => lrs.fetch(new Request(input, init))) as typeof fetch;
+    const assignActor = async (subject: string) => ({ objectType: 'Agent' as const, account: { homePage: course.id, name: `mapped-${subject}` } });
+    const custody = createAuthorLrsCustody({ course, lrs: { endpoint: 'http://lrs.test/xapi', ...credentials }, publicUrl: PUBLIC_URL, assignActor, fetch: f });
+    const app = createCourseServer({ course, custody, practice: createPracticeCustody({ courseId: course.id }), authenticate: stubAuthenticate(course), publicUrl: PUBLIC_URL });
+    const s = await session('modern', app, '/mcp', TOKEN);
+    const seen: unknown[] = [(await s.call('get_status')).raw, (await s.call('start_placement')).raw, ...(await teachExample(s.call)).map((x) => x.r.raw), (await s.call('get_status')).raw];
+
+    const statements = lrs.statements();
+    expect(statements.length).toBeGreaterThan(10);
+    for (const st of statements) expect(st.actor).toEqual(await assignActor(SUBJECT));
+    allStatementsAreValid(statements);
+    const record = (await s.call('get_record')).data.record;
+    expect(record.statements.map((st: XapiStatement) => st.id).sort()).toEqual(statements.map((st) => st.id).sort());
+
+    const text = JSON.stringify(seen);
+    for (const secret of [statements[0]!.context.registration!, SUBJECT, `mapped-${SUBJECT}`, credentials.key, credentials.secret, 'lrs.test']) expect(text).not.toContain(secret);
+  });
+});

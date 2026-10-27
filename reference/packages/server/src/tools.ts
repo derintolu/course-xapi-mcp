@@ -2,10 +2,10 @@
 // What each tool does, and the per-call pipeline every write follows:
 // lock the learner, load, redeliver the outbox, expire an idle session, run the engine step, hand awards to the
 // badge service, save with the new statements as the outbox, deliver them, then clear the outbox.
-import { randomUUID } from 'node:crypto';
 import {
   PRACTICE_HOMEPAGE,
   PRACTICE_LABEL,
+  StoreConflictError,
   URIS,
   type BadgeService,
   type CourseModel,
@@ -135,7 +135,7 @@ export function createTools(d: ToolDeps) {
     const handle = args.handle;
     if (handle === undefined && o.mint) {
       const h = newPracticeHandle();
-      const actor: XapiAgent = { objectType: 'Agent', account: { homePage: PRACTICE_HOMEPAGE, name: randomUUID() } };
+      const actor: XapiAgent = { objectType: 'Agent', account: { homePage: PRACTICE_HOMEPAGE, name: d.uuid() } };
       return { learner: { kind: 'practice', subject: 'practice:' + h, actor, handle: h }, minted: true };
     }
     if (!isPracticeHandle(handle)) return { error: NOT_HANDLE };
@@ -153,12 +153,28 @@ export function createTools(d: ToolDeps) {
     } catch {
       return 'pending';
     }
-    try {
-      await custody.save(l, { ...state, outbox: [] }, saved.etag);
-    } catch {
-      // Left in the outbox, the statements are sent again on the next call; the record holder keeps one copy per id.
-    }
+    await clearOutbox(l, state, saved.etag);
     return 'delivered';
+  }
+
+  /**
+   * Saves `state` with an empty outbox once its statements were delivered. A custody whose deliver rewrites the
+   * learner's copy (practice) changes its version, so on a conflict the version is read again and the save retried
+   * when the stored state is still the one this call saved. Any other failure leaves the outbox to be sent again on
+   * the next call; the record holder keeps one copy per statement id.
+   */
+  async function clearOutbox(l: LearnerRef, state: LearnerState, etag: string): Promise<void> {
+    try {
+      await custody.save(l, { ...state, outbox: [] }, etag);
+    } catch (e) {
+      if (!(e instanceof StoreConflictError)) return;
+      try {
+        const cur = await custody.load(l);
+        if (cur.state?.registration === state.registration && cur.state.updatedAt === state.updatedAt) await custody.save(l, { ...state, outbox: [] }, cur.etag);
+      } catch {
+        // Sent again on the next call.
+      }
+    }
   }
 
   /** One write: the whole pipeline, under the learner's lock. `fresh`: the step may start a learner with no state. */
@@ -176,7 +192,7 @@ export function createTools(d: ToolDeps) {
       const l = b.learner;
       const env = envOf(b, caller);
       const loaded = await guarded(() => custody.load(l));
-      let state = loaded.state;
+      let { state, etag } = loaded;
       let redelivered = false;
       if (state && state.outbox.length > 0) {
         try {
@@ -184,6 +200,8 @@ export function createTools(d: ToolDeps) {
         } catch {
           return err(HOLDER_DOWN, state);
         }
+        // Delivering may have changed the stored copy's version (practice keeps statements beside the state).
+        etag = (await guarded(() => custody.load(l))).etag;
         state = { ...state, outbox: [] };
         redelivered = true;
       }
@@ -194,7 +212,7 @@ export function createTools(d: ToolDeps) {
       const r = step(base, env);
       if (!r.ok) {
         // Keep what this call already did: the redelivery, and the idle session it closed.
-        if (base && (redelivered || before.length > 0)) await commit(l, base, before, loaded.etag);
+        if (base && (redelivered || before.length > 0)) await commit(l, base, before, etag);
         return err(r.error, base);
       }
       let next = r.state;
@@ -208,7 +226,7 @@ export function createTools(d: ToolDeps) {
           await guarded(() => badges.onAwards(l, awards));
         }
       }
-      const delivery = await commit(l, next, [...before, ...r.statements], loaded.etag);
+      const delivery = await commit(l, next, [...before, ...r.statements], etag);
       const data: Record<string, unknown> = { ...(r.data as StepData) };
       if (b.minted) {
         data.handle = l.handle;
@@ -350,6 +368,9 @@ export function createTools(d: ToolDeps) {
   };
 
   return {
+    /** An error result for a failure outside the tools (the SDK's argument validation, an unexpected exception). */
+    errorResult: (message: string) => err(message),
+
     /** Runs a tool; a store failure becomes a tool error with its public message, and nothing else is changed. */
     async run(name: ToolName, args: Args, caller: Caller): Promise<ToolResult> {
       try {

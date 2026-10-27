@@ -28,6 +28,8 @@ import { createTools, type Caller } from './tools.ts';
 
 export type McpPath = '/mcp' | '/mcp/practice';
 
+const INTERNAL = 'the course server could not handle this call; try again, and report it to the course author if it keeps happening';
+
 export interface CourseServerOptions {
   /** The course, from an authoring package; a distribution package is refused (CXM-PKG-034). */
   course: CourseModel;
@@ -124,6 +126,11 @@ export function createCourseServer(o: CourseServerOptions): CourseServer {
     const build = (ctx: McpRequestContext) => {
       const learner = kind === 'official' ? learnerOf(ctx) : undefined;
       const server = new McpServer({ name, version: course.version }, { instructions, capabilities: { extensions: { [EXTENSION_ID]: settings } } });
+      // The SDK answers a call it could not run (arguments that fail the input schema, a handler that threw) with its
+      // own error result. It has no option for that, so its private createToolError is replaced on this instance, to
+      // give those results rules and cxm too. A thrown error's own text is not shown: it may name internals.
+      (server as unknown as { createToolError: (message: string) => unknown }).createToolError = (message: string) =>
+        tools.errorResult(/^(Input validation error|Invalid arguments for tool)/.test(message) ? message : INTERNAL);
       for (const tool of TOOL_NAMES) {
         server.registerTool(
           tool,

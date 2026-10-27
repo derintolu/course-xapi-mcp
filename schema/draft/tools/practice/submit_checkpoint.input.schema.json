@@ -8,7 +8,7 @@
       "description": "The learner's checkpoint answer, word for word."
     },
     "files": {
-      "description": "For a code checkpoint: file name to the whole file.",
+      "description": "For a code checkpoint: file name to the whole file, at most 10 files.",
       "type": "object",
       "propertyNames": {
         "type": "string",
@@ -17,7 +17,8 @@
       "additionalProperties": {
         "type": "string",
         "maxLength": 65536
-      }
+      },
+      "maxProperties": 10
     },
     "handle": {
       "type": "string",

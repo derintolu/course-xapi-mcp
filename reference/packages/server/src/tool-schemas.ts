@@ -32,7 +32,12 @@ const ARGS: Record<ToolName, (kind: EndpointKind) => z.ZodRawShape> = {
   reveal_bug: () => ({}),
   submit_checkpoint: () => ({
     response: learnerText("The learner's checkpoint answer"),
-    files: z.record(fileName, z.string().max(LIMITS.file)).optional().describe('For a code checkpoint: file name to the whole file.'),
+    files: z
+      .record(fileName, z.string().max(LIMITS.file))
+      .refine((f) => Object.keys(f).length <= LIMITS.files, { message: `send at most ${LIMITS.files} files` })
+      .meta({ maxProperties: LIMITS.files })
+      .optional()
+      .describe(`For a code checkpoint: file name to the whole file, at most ${LIMITS.files} files.`),
   }),
   choose_branch: () => ({ branch: key.describe('One allowed branch key from submit_checkpoint.'), rationale: z.string().max(LIMITS.rationale).describe('One sentence: why this branch fits the rubric.') }),
   end_session: () => ({}),
