@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Lint warnings (design §12): CXM-PKG-201 to 205. Heuristics; they never make a package invalid.
-import { TOOL_NAMES, makeIssue } from '@course-xapi-mcp/core';
+import { TOOL_NAMES, hasNestedQuantifier, makeIssue } from '@course-xapi-mcp/core';
 import type { Check, IssueCode, ValidationIssue } from '@course-xapi-mcp/core';
 import type { CourseDoc, LessonDoc } from './validate.ts';
 
@@ -14,69 +14,6 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   let both = 0;
   for (const w of a) if (b.has(w)) both++;
   return both / (a.size + b.size - both);
-}
-
-/** A quantifier at `i`: its length and whether it is unbounded (`*`, `+`, `{n,}`). A lazy `?` suffix is included. */
-function quantifierAt(p: string, i: number): { len: number; unbounded: boolean } | undefined {
-  let len: number;
-  let unbounded: boolean;
-  const c = p[i];
-  if (c === '*' || c === '+') [len, unbounded] = [1, true];
-  else if (c === '?') return { len: 1, unbounded: false };
-  else if (c === '{') {
-    const m = /^\{(\d+)(,(\d*))?\}/.exec(p.slice(i));
-    if (!m) return undefined;
-    [len, unbounded] = [m[0].length, m[2] !== undefined && m[3] === ''];
-  } else return undefined;
-  if (p[i + len] === '?') len++;
-  return { len, unbounded };
-}
-
-/**
- * True when a group holding an unbounded quantifier (`+`, `*`, `{n,}`, at any depth) is itself
- * quantified with an unbounded quantifier, for example `(a+)+` or `(?:x|y*){2,}`.
- */
-export function hasNestedQuantifier(pattern: string): boolean {
-  const groups: boolean[] = [];
-  let i = 0;
-  // After an atom: read its quantifier; `inner` says whether the atom already holds an unbounded quantifier.
-  const afterAtom = (inner: boolean): boolean => {
-    const q = quantifierAt(pattern, i);
-    if (q) i += q.len;
-    if (q?.unbounded && inner) return true;
-    if ((q?.unbounded || inner) && groups.length > 0) groups[groups.length - 1] = true;
-    return false;
-  };
-  while (i < pattern.length) {
-    const c = pattern[i]!;
-    if (c === '\\') {
-      i += 2;
-      if (afterAtom(false)) return true;
-    } else if (c === '[') {
-      i++;
-      if (pattern[i] === '^') i++;
-      if (pattern[i] === ']') i++;
-      while (i < pattern.length && pattern[i] !== ']') i += pattern[i] === '\\' ? 2 : 1;
-      i++;
-      if (afterAtom(false)) return true;
-    } else if (c === '(') {
-      groups.push(false);
-      i++;
-      if (pattern[i] === '?') {
-        i++;
-        if (pattern[i] === '<' && pattern[i + 1] !== '=' && pattern[i + 1] !== '!') i = pattern.indexOf('>', i) + 1 || pattern.length;
-        else i += pattern[i] === '<' ? 2 : 1;
-      }
-    } else if (c === ')') {
-      const inner = groups.pop() ?? false;
-      i++;
-      if (afterAtom(inner)) return true;
-    } else {
-      i++;
-      if (c !== '|' && c !== '^' && c !== '$' && afterAtom(false)) return true;
-    }
-  }
-  return false;
 }
 
 const AGENT_PHRASES = ['ignore previous', 'ignore all previous', 'disregard', 'system prompt', 'do not tell the learner', "don't tell the learner"];

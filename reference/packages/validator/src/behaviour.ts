@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Behavioural checks against the starter files, the planted bug and the reference solution (design §12),
 // and the secret-field rules of the two package flavours: CXM-PKG-014, 022-025, 027.
-import { makeIssue, runChecks } from '@course-xapi-mcp/core';
+import { hasNestedQuantifier, makeIssue, runChecks } from '@course-xapi-mcp/core';
 import type { Check, IssueCode, ValidationIssue } from '@course-xapi-mcp/core';
-import { hasNestedQuantifier } from './lint.ts';
 import type { LessonDoc } from './validate.ts';
 
 /**

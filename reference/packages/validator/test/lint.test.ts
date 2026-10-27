@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { readDir } from '@course-xapi-mcp/core/package';
 import type { PackageFiles } from '@course-xapi-mcp/core/package';
-import { hasNestedQuantifier } from '../src/lint.ts';
+import { hasNestedQuantifier } from '@course-xapi-mcp/core';
 import { validatePackage } from '../src/index.ts';
 
 const fixture = (name: string) => readDir(new URL(`./fixtures/packages/${name}/`, import.meta.url).pathname);

@@ -30,13 +30,6 @@
         "pointer": "/port",
         "equals": 8080,
         "message": "Not fixed yet."
-      },
-      {
-        "type": "json",
-        "file": "config.json",
-        "pointer": "/name",
-        "equals": "demo",
-        "message": "Not fixed yet."
       }
     ],
     "revealAfter": 3

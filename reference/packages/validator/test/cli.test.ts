@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zipSync } from 'fflate';
 import { afterAll, describe, expect, it } from 'vitest';
-import { readDir } from '@course-xapi-mcp/core/package';
+import { loadPackage, readDir } from '@course-xapi-mcp/core/package';
 
 const BIN = fileURLToPath(new URL('../bin/cxm.mjs', import.meta.url));
 const fx = (name: string) => fileURLToPath(new URL(`./fixtures/packages/${name}/`, import.meta.url));
@@ -85,5 +85,29 @@ describe('cxm explain', () => {
     const r = await cxm('explain', 'CXM-PKG-999');
     expect(r.code).toBe(2);
     expect(r.stderr).toContain('CXM-PKG-999');
+  });
+});
+
+describe('cxm convert', () => {
+  const LEGACY = fileURLToPath(new URL('../../../../examples/legacy/json-basics.course.json', import.meta.url));
+  const opts = ['--iri', 'https://course-xapi-mcp.sqwrlz.com/examples/json-basics', '--mcp', 'http://127.0.0.1:8787/mcp', '--launch', 'http://127.0.0.1:8787/cmi5/launch', '--custody', 'server-kept'];
+
+  it('writes a package folder that loads with no errors', async () => {
+    const out = join(tmp, 'converted');
+    const r = await cxm('convert', LEGACY, out, ...opts);
+    expect(r.stderr).toBe('');
+    expect(r.code).toBe(0);
+    const loaded = loadPackage(await readDir(out));
+    expect(loaded.issues.filter((i) => i.severity === 'error')).toEqual([]);
+  });
+
+  it('exits 1 with the errors of a course that does not parse, and 2 on a usage error', async () => {
+    const bad = join(tmp, 'bad.course.json');
+    writeFileSync(bad, '{"title": 1}');
+    const r = await cxm('convert', bad, join(tmp, 'never'), ...opts);
+    expect(r.code).toBe(1);
+    expect(r.stdout).not.toBe('');
+    expect((await cxm('convert', LEGACY, join(tmp, 'x'), '--iri', 'https://e.org/c')).code).toBe(2);
+    expect((await cxm('convert', LEGACY, join(tmp, 'x'), ...opts.slice(0, -1), 'nope')).code).toBe(2);
   });
 });
