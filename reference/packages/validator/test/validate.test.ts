@@ -79,6 +79,14 @@ describe('validatePackage', () => {
     expect(r.issues[0]!.pointer).toBe('/bug/fixChecks/0');
   });
 
+  it('skips the behavioural run of a nested-quantifier regex (202), so an adversarial starter cannot hang it', async () => {
+    const files = editJson(await fixture('regex-nested'), 'cxm/lessons/l2.json', (l) => (l.starterFiles['a.json'] = 'a'.repeat(40) + '!'));
+    const started = performance.now();
+    const r = await validatePackage(files);
+    expect(performance.now() - started).toBeLessThan(2000);
+    expect(codes(r)).toEqual(['CXM-PKG-202']);
+  });
+
   it('each check is judged alone: one failing check does not hide another passing on the starter', async () => {
     const files = editJson(await fixture('minimal'), 'cxm/lessons/l2.json', (l) => {
       l.checkpoint.checks.push({ type: 'contains', file: 'a.json', value: '{', message: 'is an object' });

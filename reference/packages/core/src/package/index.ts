@@ -14,5 +14,5 @@ export { readZip } from './zip.ts';
 export type { PackageFiles } from './zip.ts';
 export { parseCmi5Xml } from './cmi5-xml.ts';
 export type { Cmi5Structure, Cmi5Au, Cmi5Block } from './cmi5-xml.ts';
-export { loadPackage, readDir, SUPPORTED_SPEC_MAJOR, SUPPORTED_SPEC_MINOR } from './load.ts';
+export { loadPackage, readDir, resolvePointer, SUPPORTED_SPEC_MAJOR, SUPPORTED_SPEC_MINOR } from './load.ts';
 export type { LoadResult } from './load.ts';

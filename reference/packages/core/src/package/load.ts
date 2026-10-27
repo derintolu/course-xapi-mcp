@@ -50,7 +50,8 @@ function decodeFragment(s: string): string | undefined {
 const escapePointer = (s: string | number | symbol) => String(s).replace(/~/g, '~0').replace(/\//g, '~1');
 const toPointer = (path: readonly (string | number | symbol)[]) => path.map((p) => '/' + escapePointer(p)).join('');
 
-function resolvePointer(doc: unknown, pointer: string): { found: true; value: unknown } | { found: false } {
+/** Resolves a JSON Pointer (RFC 6901) in a parsed document. */
+export function resolvePointer(doc: unknown, pointer: string): { found: true; value: unknown } | { found: false } {
   if (pointer === '') return { found: true, value: doc };
   if (!pointer.startsWith('/')) return { found: false };
   let cur = doc;

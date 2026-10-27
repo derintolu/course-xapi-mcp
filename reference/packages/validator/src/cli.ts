@@ -18,6 +18,8 @@ const stdio: CliIo = { out: (s) => process.stdout.write(s), err: (s) => process.
 const USAGE = `Usage:
   cxm validate <dir|zip> [--json]   validate a course package; exit 0 when valid, 1 with errors
   cxm explain <code>                show what a validator code means and how to fix it
+
+Exit 2 on a usage error: a missing or unreadable path, an unknown command, flag or code.
 `;
 
 const EXIT_VALID = 0;

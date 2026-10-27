@@ -26,11 +26,25 @@ function packageJsons(): { name: string; license: string }[] {
   return files.map((f) => JSON.parse(readFileSync(f, 'utf8')));
 }
 
+const SPDX = '// SPDX-License-Identifier: Apache-2.0';
+
+/** The line that must be the SPDX line: the first, or the second when the first is a shebang. */
+function spdxLine(text: string): string | undefined {
+  const lines = text.split('\n');
+  return lines[0]!.startsWith('#!') ? lines[1] : lines[0];
+}
+
 describe('licence', () => {
   it('every source file starts with the Apache-2.0 SPDX line', () => {
     for (const f of sourceFiles(['reference', 'scripts', 'conformance', 'site'])) {
-      expect(readFileSync(f, 'utf8').split('\n')[0], f).toBe('// SPDX-License-Identifier: Apache-2.0');
+      expect(spdxLine(readFileSync(f, 'utf8')), f).toBe(SPDX);
     }
+  });
+  it('accepts the SPDX line second only after a shebang', () => {
+    expect(spdxLine(`${SPDX}\ncode`)).toBe(SPDX);
+    expect(spdxLine(`#!/usr/bin/env node\n${SPDX}\ncode`)).toBe(SPDX);
+    expect(spdxLine(`// a comment\n${SPDX}\ncode`)).not.toBe(SPDX);
+    expect(spdxLine(`#!/usr/bin/env node\ncode\n${SPDX}`)).not.toBe(SPDX);
   });
   it('every package.json is Apache-2.0', () => {
     for (const p of packageJsons()) expect(p.license, p.name).toBe('Apache-2.0');

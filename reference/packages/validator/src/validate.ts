@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // `validatePackage`: the loader's checks plus XSD, behavioural and lint checks, all in one pass.
-import { CourseJsonSchema, DistributionLessonJsonSchema, LessonJsonSchema, loadPackage, parseCmi5Xml } from '@course-xapi-mcp/core/package';
+import { CourseJsonSchema, DistributionLessonJsonSchema, LessonJsonSchema, loadPackage, parseCmi5Xml, resolvePointer } from '@course-xapi-mcp/core/package';
 import type { LessonJson, PackageFiles } from '@course-xapi-mcp/core/package';
 import type { ValidationIssue } from '@course-xapi-mcp/core';
 import { behaviourIssues } from './behaviour.ts';
@@ -32,18 +32,6 @@ export interface ValidationResult {
 const CMI5_FILE = 'cmi5.xml';
 const decoder = new TextDecoder('utf-8');
 
-function resolvePointer(doc: unknown, pointer: string): unknown {
-  if (pointer === '') return doc;
-  if (!pointer.startsWith('/')) return undefined;
-  let cur = doc;
-  for (const raw of pointer.slice(1).split('/')) {
-    const seg = raw.replace(/~1/g, '/').replace(/~0/g, '~');
-    if (cur === null || typeof cur !== 'object' || !Object.hasOwn(cur, seg)) return undefined;
-    cur = (cur as Record<string, unknown>)[seg];
-  }
-  return cur;
-}
-
 /** Reads the JSON a `src` points at. Failures are left to the loader, which reports them. */
 function readSrc(files: PackageFiles, src: string): { file: string; base: string; value: unknown } | undefined {
   const hash = src.indexOf('#');
@@ -52,7 +40,8 @@ function readSrc(files: PackageFiles, src: string): { file: string; base: string
   if (!bytes) return undefined;
   try {
     const base = hash < 0 ? '' : decodeURIComponent(src.slice(hash + 1));
-    return { file, base, value: resolvePointer(JSON.parse(decoder.decode(bytes)), base) };
+    const hit = resolvePointer(JSON.parse(decoder.decode(bytes)), base);
+    return hit.found ? { file, base, value: hit.value } : undefined;
   } catch {
     return undefined;
   }

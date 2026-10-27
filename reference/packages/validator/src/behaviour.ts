@@ -3,11 +3,16 @@
 // and the secret-field rules of the two package flavours: CXM-PKG-014, 022-025, 027.
 import { makeIssue, runChecks } from '@course-xapi-mcp/core';
 import type { Check, IssueCode, ValidationIssue } from '@course-xapi-mcp/core';
+import { hasNestedQuantifier } from './lint.ts';
 import type { LessonDoc } from './validate.ts';
 
-/** True when the check can run at all; a regex that does not compile is CXM-PKG-021, not a behavioural failure. */
+/**
+ * True when the check is safe to run. A regex that does not compile is CXM-PKG-021, and one with nested
+ * quantifiers is CXM-PKG-202: running it on author files could backtrack for minutes, so it is skipped.
+ */
 function runnable(c: Check): boolean {
   if (c.type !== 'regex') return true;
+  if (hasNestedQuantifier(c.pattern)) return false;
   try {
     new RegExp(c.pattern, c.flags);
     return true;
