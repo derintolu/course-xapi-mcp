@@ -1,0 +1,38 @@
+{
+  "minutes": 5,
+  "sources": [
+    {
+      "title": "Spec",
+      "url": "https://example.org/spec"
+    }
+  ],
+  "beats": [
+    {
+      "key": "b1",
+      "goal": "g",
+      "content": "c"
+    }
+  ],
+  "checkpoint": {
+    "key": "cp1",
+    "kind": "free-text",
+    "question": "q",
+    "rubric": "r",
+    "branches": [
+      {
+        "key": "ok",
+        "when": "good",
+        "success": true,
+        "to": "l2",
+        "message": "m"
+      },
+      {
+        "key": "bad",
+        "when": "bad",
+        "success": false,
+        "to": "l2",
+        "message": "m"
+      }
+    ]
+  }
+}

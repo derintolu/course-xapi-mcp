@@ -1,0 +1,16 @@
+{
+  "minutes": "ten",
+  "sources": [
+    {
+      "title": "Spec",
+      "url": "https://example.org/spec"
+    }
+  ],
+  "beats": [
+    {
+      "key": "b1",
+      "goal": "g",
+      "content": "c"
+    }
+  ]
+}

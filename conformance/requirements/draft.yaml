@@ -4,162 +4,194 @@
   class: package
   text: "A package MUST be a readable ZIP with `cmi5.xml` at its root."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-002
   class: package
   text: "`cmi5.xml` MUST be valid against the cmi5 CourseStructure XSD (namespace `https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd`)."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-003
   class: package
   text: "Every element and attribute in the cxm namespace (`https://course-xapi-mcp.sqwrlz.com/course/v1`) MUST be valid against `cxm.xsd`, and cxm extension elements MUST sit only at the tail positions the cmi5 XSD allows for extensions."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-004
   class: package
   text: "The `course` element MUST carry `<cxm:course src=\"...\" specVersion=\"...\"/>`, and a consumer MUST refuse a package whose `specVersion` major it does not support."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-005
   class: package
   text: "Every `src` reference MUST resolve to a file in the package and, when it has a fragment, to a JSON Pointer that resolves in that file."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-006
   class: package
   text: "`cxm/course.json` MUST be valid against `course.schema.json`."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-007
   class: package
   text: "Every lesson JSON MUST be valid against `lesson.schema.json`."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-020
   class: package
   text: "Every file name in a lesson MUST be a relative POSIX path with no empty, `.` or `..` segment, no backslash and no segment starting with a space."
   source: spec/draft/package.md#package-shape
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-009
   class: package
   text: "Every block and AU MUST carry a `cxm:key` matching `[a-z0-9-]{1,64}`."
   source: spec/draft/package.md#keys-and-identifiers
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-008
   class: package
   text: "Two blocks or AUs MUST NOT share a `cxm:key`."
   source: spec/draft/package.md#keys-and-identifiers
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-029
   class: package
   text: "The course, every block and every AU MUST have an absolute IRI as `id`, and these ids MUST be distinct."
   source: spec/draft/package.md#keys-and-identifiers
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-028
   class: package
   text: "Every AU `url` MUST be https; plain http is allowed only for `127.0.0.1` and `localhost`."
   source: spec/draft/package.md#keys-and-identifiers
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-030
   class: package
   text: "The course `language` MUST be an RFC 5646 tag and its `version` MUST be a semver version."
   source: spec/draft/package.md#keys-and-identifiers
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-015
   class: package
   text: "A package MUST declare exactly one placement AU (`cxm:role=\"placement\"`), first in the course, with `moveOn=\"NotApplicable\"`."
   source: spec/draft/package.md#course-structure
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-016
   class: package
   text: "Every live path in `course.json#/paths` MUST have exactly one block and every block MUST have a path entry; coming-soon paths MUST be left out of `cmi5.xml`."
   source: spec/draft/package.md#course-structure
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-012
   class: package
   text: "The block of every live path MUST contain at least one AU."
   source: spec/draft/package.md#course-structure
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-013
   class: package
   text: "A lesson AU's `moveOn` MUST be `CompletedAndPassed` when the lesson has a checkpoint and `Completed` when it has none."
   source: spec/draft/package.md#course-structure
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-019
   class: package
   text: "Beat keys MUST be unique within a lesson."
   source: spec/draft/package.md#course-structure
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-010
   class: package
   text: "Every branch `to` MUST be the `cxm:key` of a lesson in the package, or null."
   source: spec/draft/package.md#branches
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-011
   class: package
   text: "Every branch target MUST be in the same path (block) as the checkpoint."
   source: spec/draft/package.md#branches
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-017
   class: package
   text: "Branch keys MUST be unique within a checkpoint, and every checkpoint MUST have at least one branch with `success: true`."
   source: spec/draft/package.md#branches
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-026
   class: package
   text: "A `success: false` branch MUST target the current lesson, an earlier lesson in the same path, or null."
   source: spec/draft/package.md#branches
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-201
   class: package
   text: "The `when` texts of a checkpoint's branches SHOULD NOT overlap (word-set Jaccard similarity below 0.8)."
   source: spec/draft/package.md#branches
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-018
   class: package
   text: "A code checkpoint MUST have a `file`, at least one check and a branch with `success: false`."
   source: spec/draft/package.md#checks-and-planted-bugs
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-021
   class: package
   text: "Every regex check MUST compile as a JavaScript RegExp using only the flags `i`, `m`, `s` and `u`."
   source: spec/draft/package.md#checks-and-planted-bugs
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-202
   class: package
   text: "A regex check SHOULD NOT contain a quantifier inside a quantified group."
   source: spec/draft/package.md#checks-and-planted-bugs
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-022
   class: package
   text: "Every check MUST fail on the starter files."
   source: spec/draft/package.md#checks-and-planted-bugs
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-023
   class: package
   text: "Every check MUST pass on the reference solution."
   source: spec/draft/package.md#checks-and-planted-bugs
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-024
   class: package
   text: "Every fix check MUST fail on the planted bug code."
   source: spec/draft/package.md#checks-and-planted-bugs
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-025
   class: package
   text: "Every fix check MUST pass on `referenceSolution.bugFix`."
   source: spec/draft/package.md#checks-and-planted-bugs
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-027
   class: package
   text: "In an authoring package, every lesson with a code checkpoint or a planted bug MUST have a `referenceSolution` (with `bugFix` when it has a bug)."
   source: spec/draft/package.md#authoring-and-distribution-packages
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-014
   class: package
   text: "A distribution package MUST NOT contain any secret field."
   source: spec/draft/package.md#authoring-and-distribution-packages
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-034
   class: package
   text: "A course server MUST load only an authoring package and MUST refuse a distribution package."
@@ -169,42 +201,50 @@
   class: package
   text: "A course with custody `practice` MUST NOT declare badges or `allowPractice: true`."
   source: spec/draft/package.md#badge-declarations
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-032
   class: package
   text: "A badge's `for` MUST name a known lesson key for `au-moveon` and a known path key for `block-satisfied`, MUST be absent for `course-satisfied` and `any-path`, and its `id` MUST be https."
   source: spec/draft/package.md#badge-declarations
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-033
   class: package
   text: "A course that declares badges MUST declare `badgeIssuer`."
   source: spec/draft/package.md#badge-declarations
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-203
   class: package
   text: "A beat's content SHOULD be at most 250 words."
   source: spec/draft/package.md#content
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-204
   class: package
   text: "Course content and author rules MUST NOT address the agent beyond how to teach this course; a validator reports a likely breach as a warning."
   source: spec/draft/package.md#content
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-205
   class: package
   text: "Every lesson SHOULD list at least one source (title and url)."
   source: spec/draft/package.md#content
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-206
   class: package
   text: "A consumer SHOULD warn on a package whose `specVersion` minor is newer than it supports."
   source: spec/draft/package.md#versions-and-extensions
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-PKG-100
   class: package
   text: "A consumer MUST ignore foreign extension elements, attributes and `extensions` keys it does not know; a validator reports them as information, not as errors."
   source: spec/draft/package.md#versions-and-extensions
-  status: pending
+  status: tested
+  test: conformance/package/package.test.ts
 - id: CXM-SRV-001
   class: server
   text: "A server MUST advertise the extension `com.sqwrlz/course-xapi-mcp` in `capabilities.extensions` of its `server/discover` response, with a settings object holding `version`, `course`, `custody`, `official`, `allowPractice`, `badges`, `rulesVersion` and `authoring`."

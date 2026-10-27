@@ -1,0 +1,56 @@
+{
+  "minutes": 10,
+  "starterFiles": {
+    "a.json": "{}"
+  },
+  "beats": [
+    {
+      "key": "b1",
+      "goal": "g",
+      "content": "c",
+      "question": "q?"
+    }
+  ],
+  "checkpoint": {
+    "key": "cp",
+    "kind": "code",
+    "question": "Fix it",
+    "rubric": "r",
+    "file": "a.json",
+    "checks": [
+      {
+        "type": "contains",
+        "file": "a.json",
+        "value": "x",
+        "message": "needs x"
+      }
+    ],
+    "branches": [
+      {
+        "key": "ok",
+        "when": "the file has x",
+        "success": true,
+        "to": null,
+        "message": "Good"
+      },
+      {
+        "key": "retry",
+        "when": "the file has no x",
+        "success": false,
+        "to": "l2",
+        "message": "Again"
+      }
+    ]
+  },
+  "referenceSolution": {
+    "files": {
+      "a.json": "{\"x\":1}"
+    }
+  },
+  "sources": [
+    {
+      "title": "Spec",
+      "url": "https://example.org/spec"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "specVersion": "0.2",
+  "flavour": "authoring",
+  "version": "1.0.0",
+  "language": "en",
+  "placement": {
+    "intro": "Tell me what you know.",
+    "maxQuestions": 3
+  },
+  "custody": "server-kept",
+  "paths": {
+    "p": {
+      "tagline": "Learn P"
+    },
+    "later": {
+      "status": "coming-soon",
+      "title": "Later",
+      "tagline": "Soon"
+    },
+    "q": {
+      "tagline": "Q"
+    }
+  }
+}
