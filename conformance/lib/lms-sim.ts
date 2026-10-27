@@ -51,7 +51,6 @@ export function createLmsSim(o: LmsSimOptions): LmsSim {
   const version = o.xapiVersion ?? '1.0.3';
   const base = o.lrsUrl.replace(/\/+$/, '');
   const lmsToken = btoa(`lms:${randomUUID()}`);
-  o.lrs.addToken(lmsToken);
   const defaultRegistration = randomUUID();
   const launches: Launched[] = [];
   let lastStamp = 0;
@@ -65,13 +64,15 @@ export function createLmsSim(o: LmsSimOptions): LmsSim {
   async function call(path: string, init: RequestInit, query?: Record<string, string>): Promise<Response> {
     const url = new URL(`${base}/${path}`);
     for (const [k, v] of Object.entries(query ?? {})) url.searchParams.set(k, v);
+    o.lrs.addToken(lmsToken); // the LRS forgets tokens on reset(); the LMS's own credential must outlive that
     const headers = { authorization: `Basic ${lmsToken}`, 'x-experience-api-version': version, 'content-type': 'application/json' };
     const res = await o.lrs.fetch(new Request(url, { ...init, headers }));
     if (!res.ok) throw new Error(`the test LRS answered ${res.status} to ${init.method} ${path}: ${await res.text()}`);
     return res;
   }
 
-  function lmsStatement(l: Launched, verb: 'launched' | 'abandoned', result?: XapiStatement['result']): XapiStatement {
+  function lmsStatement(l: Launched, verb: 'launched' | 'abandoned', result?: (nowMs: number) => XapiStatement['result']): XapiStatement {
+    const timestamp = stamp();
     const s: XapiStatement = {
       id: randomUUID(),
       actor: structuredClone(actor),
@@ -82,9 +83,9 @@ export function createLmsSim(o: LmsSimOptions): LmsSim {
         contextActivities: { grouping: [{ objectType: 'Activity', id: l.auId }, { objectType: 'Activity', id: o.courseId }], category: [{ objectType: 'Activity', id: CMI5.categoryCmi5 }] },
         extensions: { [CMI5.extSessionId]: l.sessionId },
       },
-      timestamp: stamp(),
+      timestamp,
     };
-    if (result) s.result = result;
+    if (result) s.result = result(Date.parse(timestamp));
     return s;
   }
 
@@ -118,8 +119,9 @@ export function createLmsSim(o: LmsSimOptions): LmsSim {
         registration: l.registration,
         stateId: 'LMS.LaunchData',
       });
-      await call('statements', { method: 'POST', body: JSON.stringify(lmsStatement(l, 'launched')) });
-      l.at = lastStamp;
+      const stored = lmsStatement(l, 'launched');
+      await call('statements', { method: 'POST', body: JSON.stringify(stored) });
+      l.at = Date.parse(stored.timestamp);
       launches.push(l);
 
       const launch = new URL(au.url);
@@ -134,7 +136,7 @@ export function createLmsSim(o: LmsSimOptions): LmsSim {
     async abandonLatest() {
       const l = launches.at(-1);
       if (!l) throw new Error('no launch to abandon');
-      const s = lmsStatement(l, 'abandoned', { duration: isoDuration(Math.max(0, lastStamp - l.at)) });
+      const s = lmsStatement(l, 'abandoned', (now) => ({ duration: isoDuration(Math.max(0, now - l.at)) }));
       await call('statements', { method: 'POST', body: JSON.stringify(s) });
     },
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CMI5, type XapiStatement } from '@course-xapi-mcp/core';
 import { buildDefined } from '@course-xapi-mcp/core/xapi';
 import { createLmsSim, createTestLrs } from '../index.ts';
@@ -110,6 +110,30 @@ describe('cmi5 LMS simulator', () => {
     const ps = bad.sim.problems();
     expect(ps.length).toBeGreaterThan(0);
     expect(ps.some((p) => p.statementId === stmts[2].id)).toBe(true);
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('abandonLatest reports the time since that launch, not since any other', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    const { lrs, sim } = setup();
+    await sim.launch(AU);
+    vi.setSystemTime(new Date('2026-01-01T00:10:00.000Z'));
+    await sim.launch(AU);
+    vi.setSystemTime(new Date('2026-01-01T00:10:30.000Z'));
+    await sim.abandonLatest();
+    expect(lrs.statements().at(-1)!.result?.duration).toBe('PT30S');
+  });
+
+  it('keeps working after the LRS is reset', async () => {
+    const { lrs, sim } = setup();
+    await sim.launch(AU);
+    lrs.reset();
+    const l = await sim.launch(AU);
+    await sim.abandonLatest();
+    expect(lrs.statements()).toHaveLength(2);
+    expect(l.sessionId).toBeTruthy();
   });
 
   it('abandonLatest sends abandoned for the latest launch, in order', async () => {
