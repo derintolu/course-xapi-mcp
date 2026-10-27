@@ -15,7 +15,7 @@
     "@course-xapi-mcp/bridge": "0.2.0",
     "@course-xapi-mcp/core": "0.2.0",
     "@course-xapi-mcp/lrs-client": "0.2.0",
-    "@modelcontextprotocol/server": "2.3.1",
+    "@modelcontextprotocol/server": "2.4.0",
     "jose": "6.2.13",
     "openid-client": "6.8.8",
     "zod": "4.6.7"

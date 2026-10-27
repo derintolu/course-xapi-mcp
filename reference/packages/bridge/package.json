@@ -10,5 +10,8 @@
   "dependencies": {
     "@course-xapi-mcp/core": "0.2.0",
     "@course-xapi-mcp/lrs-client": "0.2.0"
+  },
+  "devDependencies": {
+    "@course-xapi-mcp/conformance": "0.2.0"
   }
 }

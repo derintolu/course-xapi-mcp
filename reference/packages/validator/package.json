@@ -10,6 +10,7 @@
   "dependencies": {
     "@course-xapi-mcp/core": "0.2.0",
     "@modelcontextprotocol/server": "2.4.0",
+    "fflate": "0.8.3",
     "xmllint-wasm": "5.3.0",
     "zod": "4.6.7"
   }

@@ -40,7 +40,25 @@ export interface Custody {
   links(l: LearnerRef): RecordLinks;
 }
 
-/** One cmi5 launch held by the bridge (option 1). Timestamps are ISO 8601 strings. */
+/**
+ * The key `LaunchStore.latestFor` matches actors by: the actor's inverse functional identifier,
+ * `account.homePage + '|' + account.name`, else `mbox`, `mbox_sha1sum` or `openid`, in that order.
+ * Throws when the actor has none.
+ */
+export function actorKey(actor: XapiAgent): string {
+  if (actor.account) return actor.account.homePage + '|' + actor.account.name;
+  const a = actor as { mbox?: string; mbox_sha1sum?: string; openid?: string };
+  const ifi = a.mbox ?? a.mbox_sha1sum ?? a.openid;
+  if (ifi === undefined) throw new TypeError('actor has no inverse functional identifier');
+  return ifi;
+}
+
+/**
+ * One cmi5 launch held by the bridge (option 1). Timestamps are ISO 8601 strings.
+ * `lms-launched` custody sets `lastActivityAt` on every deliver and `terminatedAt` when it delivers a
+ * `terminated` statement; the bridge sets `supersededAt` when a newer launch of the same AU arrives
+ * (no statements are sent for a superseded launch after that).
+ */
 export interface LaunchContext {
   launchId: string;
   endpoint: string;
@@ -57,7 +75,9 @@ export interface LaunchContext {
   returnURL?: string;
   sessionId: string;
   initializedAt: string;
+  lastActivityAt?: string;
   terminatedAt?: string;
+  supersededAt?: string;
   pairingCode: string;
   pairingExpiresAt: string;
   pairedSubject?: string;
@@ -67,7 +87,9 @@ export interface LaunchStore {
   put(c: LaunchContext): Promise<void>;
   get(launchId: string): Promise<LaunchContext | undefined>;
   byPairingCode(code: string): Promise<LaunchContext | undefined>;
-  latestFor(endpoint: string, actorKey: string, registration: string): Promise<LaunchContext | undefined>;
+  /** The newest launch (by `initializedAt`) for this endpoint, `actorKey(actor)` and registration, optionally for one AU. */
+  latestFor(endpoint: string, actorKey: string, registration: string, auKey?: string): Promise<LaunchContext | undefined>;
+  /** Throws `StoreError` when no launch has this id. */
   update(launchId: string, patch: Partial<LaunchContext>): Promise<void>;
 }
 

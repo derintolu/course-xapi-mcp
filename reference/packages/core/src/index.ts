@@ -14,6 +14,7 @@ export * from './errors.ts';
 export * from './model.ts';
 export * from './state.ts';
 export * from './custody.ts';
+export * from './launch-store.ts';
 export * from './issues.ts';
 export * from './xapi/types.ts';
 // Names the legacy modules (schema, engine, record, xapi) also export: the new contracts win at the package root.
