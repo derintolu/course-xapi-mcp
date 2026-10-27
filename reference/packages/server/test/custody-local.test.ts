@@ -135,6 +135,18 @@ describe('MemoryPracticeStore', () => {
     now += 1;
     expect(await store.get(h)).toBeUndefined();
   });
+
+  it('drops an expired copy nobody reads when another copy is saved', async () => {
+    let now = Date.parse('2026-10-27T12:00:00.000Z');
+    const store = new MemoryPracticeStore(undefined, () => now);
+    const abandoned = newPracticeHandle();
+    await store.put(abandoned, practiceRecord());
+    now += DEFAULTS.practiceTtlMs;
+    await store.put(newPracticeHandle(), practiceRecord());
+    // Lift the clock back: only a sweep on that put can have removed the abandoned copy.
+    now -= DEFAULTS.practiceTtlMs;
+    expect(await store.get(abandoned)).toBeUndefined();
+  });
 });
 
 function practiceRecord(over: Partial<PracticeRecord> = {}): PracticeRecord {
@@ -205,6 +217,21 @@ describe('DirectoryPracticeStore', () => {
     await store.put(h, practiceRecord());
     now += DEFAULTS.practiceTtlMs;
     expect(await store.get(h)).toBeUndefined();
+  });
+
+  it('removes an expired file nobody reads on a later put, at most once an hour', async () => {
+    let now = Date.parse('2026-10-27T12:00:00.000Z');
+    const dir = await tempDir();
+    const store = new DirectoryPracticeStore(dir, undefined, () => now);
+    await store.put(newPracticeHandle(), practiceRecord());
+    now += DEFAULTS.practiceTtlMs - 1000;
+    await store.put(newPracticeHandle(), practiceRecord());
+    now += 1000;
+    await store.put(newPracticeHandle(), practiceRecord());
+    expect(await readdir(dir)).toHaveLength(3);
+    now += 3_600_000;
+    await store.put(newPracticeHandle(), practiceRecord());
+    expect(await readdir(dir)).toHaveLength(3);
   });
 });
 
@@ -365,6 +392,18 @@ describe('practice custody', () => {
     const { etag } = await c.save(l, state());
     await c.save(l, state({ updatedAt: '2026-10-27T12:01:00.000Z' }), etag);
     await expect(c.save(l, state(), etag)).rejects.toBeInstanceOf(StoreConflictError);
+  });
+
+  it('a save after the loaded copy expired says the copy is gone, not a conflict', async () => {
+    let now = Date.parse('2026-10-27T12:00:00.000Z');
+    const c = createPracticeCustody({ store: new MemoryPracticeStore(undefined, () => now), courseId: COURSE });
+    const l = practiceRef();
+    const { etag } = await c.save(l, state());
+    now += DEFAULTS.practiceTtlMs;
+    const err = await c.save(l, state(), etag).catch((e) => e);
+    expect(err).toBeInstanceOf(StoreError);
+    expect(err).not.toBeInstanceOf(StoreConflictError);
+    expect(err.message).toContain('no longer exists');
   });
 
   it('refuses a learner without a practice handle', async () => {

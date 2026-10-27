@@ -4,7 +4,7 @@
 // means "this is new" and conflicts when something is already there.
 // Directory stores name files by the SHA-256 of the handle or subject, so a folder listing reveals neither.
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DEFAULTS, StoreConflictError, type LearnerState, type XapiStatement } from '@course-xapi-mcp/core';
 import type { PracticeRecord } from '@course-xapi-mcp/core/practice';
@@ -88,6 +88,8 @@ export class MemoryPracticeStore implements PracticeStore {
 
   async put(handle: string, rec: PracticeRecord, etag?: string) {
     checkEtag(this.#live(handle)?.etag, etag);
+    // Drop every expired copy, read or not, so abandoned practice runs do not outlive the TTL.
+    for (const h of [...this.#items.keys()]) this.#live(h);
     const next = randomUUID();
     this.#items.set(handle, { record: structuredClone(rec), etag: next, savedAt: this.#now() });
     return { etag: next };
@@ -106,12 +108,16 @@ interface PracticeFile {
   record: PracticeRecord;
 }
 
+/** How often a directory practice store looks for expired copies it has not been asked for: at most once an hour, on a put. */
+const SWEEP_EVERY_MS = 3_600_000;
+
 /** Practice relay in a folder (Node only), one file per copy, named by the SHA-256 of the handle. */
 export class DirectoryPracticeStore implements PracticeStore {
   readonly #dir: string;
   readonly #ttlMs: number;
   readonly #now: () => number;
   readonly #lock = createKeyedMutex();
+  #lastSweep = -Infinity;
 
   constructor(dir: string, ttlMs: number = DEFAULTS.practiceTtlMs, now: () => number = Date.now) {
     this.#dir = dir;
@@ -139,13 +145,27 @@ export class DirectoryPracticeStore implements PracticeStore {
 
   async put(handle: string, rec: PracticeRecord, etag?: string) {
     const file = this.#file(handle);
-    return this.#lock(file, async () => {
+    const result = await this.#lock(file, async () => {
       checkEtag((await this.#read(file))?.etag, etag);
       await mkdir(this.#dir, { recursive: true });
       const next = randomUUID();
       await writeJson(file, { etag: next, savedAt: this.#now(), record: rec } satisfies PracticeFile);
       return { etag: next };
     });
+    await this.#sweep(file);
+    return result;
+  }
+
+  /** Removes expired copies nobody has read, so abandoned practice runs do not outlive the TTL. */
+  async #sweep(skip: string) {
+    if (this.#now() - this.#lastSweep < SWEEP_EVERY_MS) return;
+    this.#lastSweep = this.#now();
+    for (const name of await readdir(this.#dir)) {
+      if (!/^[0-9a-f]{64}\.json$/.test(name)) continue;
+      const file = join(this.#dir, name);
+      // A copy that cannot be read is left for its own get to report; the put already succeeded.
+      if (file !== skip) await this.#lock(file, () => this.#read(file)).catch(() => undefined);
+    }
   }
 
   async delete(handle: string) {

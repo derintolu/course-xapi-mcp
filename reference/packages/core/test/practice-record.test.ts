@@ -114,6 +114,15 @@ describe('practice record', () => {
     expect(parsePracticeRecord(off, COURSE)).toEqual({ ok: false, error: expect.stringContaining('sessionid') });
   });
 
+  it('refuses a bad statement in state.outbox', () => {
+    const rec = record();
+    const t = clock('2026-10-27T14:00:00.000Z');
+    const pending = buildAllowed(pctx(), 'experienced', { id: AU + '/beats/next', kind: 'beat', name: 'Next' }, AU_REF, t());
+    pending.context.contextActivities!.category = pending.context.contextActivities!.category!.filter((a) => a.id !== PRACTICE_CATEGORY);
+    rec.state.outbox = [pending];
+    expect(parsePracticeRecord(rec, COURSE)).toEqual({ ok: false, error: `statement ${pending.id} does not carry the practice category ${PRACTICE_CATEGORY}` });
+  });
+
   it('refuses a malformed state', () => {
     const rec = { ...record(), state: { v: 2 } };
     expect(parsePracticeRecord(rec, COURSE)).toEqual({ ok: false, error: expect.stringContaining('state') });

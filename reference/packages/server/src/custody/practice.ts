@@ -34,6 +34,8 @@ export function createPracticeCustody(o: { store?: PracticeStore; courseId: stri
     async save(l, state: LearnerState, etag?: string) {
       const handle = handleOf(l);
       const got = await store.get(handle);
+      // The copy the caller loaded has expired (or was deleted) since: say so rather than report a conflict.
+      if (!got && etag !== undefined) throw gone();
       const record: PracticeRecord = got
         ? { ...got.record, state, updatedAt: state.updatedAt }
         : {
