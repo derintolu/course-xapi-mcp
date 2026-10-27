@@ -28,6 +28,8 @@ export interface AuSession {
   lastActivityAt: string;
   attempts: number;
   launchId?: string;
+  /** The AU's publisher id, kept so the session can still be terminated after a course update removes its lesson. */
+  auId?: string;
 }
 
 export interface AuProgress {
