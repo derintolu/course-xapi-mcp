@@ -8,7 +8,6 @@ export * from './record.ts';
 export * from './rules.ts';
 export * from './session.ts';
 export * from './store.ts';
-export * from './profile.ts';
 export * from './constants.ts';
 export * from './errors.ts';
 export * from './model.ts';

@@ -1,19 +1,19 @@
 {
   "@context": "https://w3id.org/xapi/profiles/context",
-  "id": "https://w3id.org/learning-mcp/xapi",
+  "id": "https://course-xapi-mcp.sqwrlz.com/xapi",
   "type": "Profile",
   "conformsTo": "https://w3id.org/xapi/profiles#1.0",
   "prefLabel": {
-    "en": "learning-mcp"
+    "en": "course-xapi-mcp"
   },
   "definition": {
-    "en": "Statements for learning that runs inside an AI agent through a Model Context Protocol course server: authored beats, server-validated branching, deterministic checks and planted-bug catches, about an anonymous learner who owns the record. Draft; unofficial."
+    "en": "cmi5-shaped statements for learning that runs inside an AI agent through a Model Context Protocol course server: authored beats, server-validated branching, deterministic checks, planted-bug catches and Open Badges earned. Draft."
   },
-  "seeAlso": "https://github.com/derintolu/learning-mcp",
+  "seeAlso": "https://course-xapi-mcp.sqwrlz.com/spec/draft/",
   "versions": [
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1",
-      "generatedAtTime": "2026-10-19T00:00:00Z"
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "generatedAtTime": "2026-10-27T00:00:00Z"
     }
   ],
   "author": {
@@ -23,20 +23,20 @@
   },
   "concepts": [
     {
-      "id": "https://w3id.org/learning-mcp/xapi/verbs/placed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/placed",
       "type": "Verb",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "placed"
       },
       "definition": {
-        "en": "The learner was placed into a learning path at a start lesson, by an agent choosing among authored options that the course server validated."
+        "en": "The learner was placed into a learning path at a start lesson, by an agent choosing among authored options that the course server validated. Recorded inside the placement AU session."
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/verbs/branched",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/branched",
       "type": "Verb",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "branched"
       },
@@ -45,9 +45,9 @@
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/verbs/caught",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/caught",
       "type": "Verb",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "caught"
       },
@@ -56,20 +56,31 @@
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/activity-types/path",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/revealed",
+      "type": "Verb",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "revealed"
+      },
+      "definition": {
+        "en": "After the author-set number of failed fix attempts, the course server revealed a planted bug to the learner. A revealed bug does not count as caught."
+      }
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/path",
       "type": "ActivityType",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "learning path"
       },
       "definition": {
-        "en": "An ordered sequence of lessons within a course."
+        "en": "An ordered sequence of lessons within a course; a cmi5 block."
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/activity-types/beat",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/beat",
       "type": "ActivityType",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "teaching beat"
       },
@@ -78,9 +89,9 @@
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/checkpoint",
       "type": "ActivityType",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "checkpoint"
       },
@@ -89,9 +100,9 @@
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/activity-types/file",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/file",
       "type": "ActivityType",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "learner file"
       },
@@ -100,44 +111,55 @@
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/activity-types/planted-bug",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/planted-bug",
       "type": "ActivityType",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "planted bug"
       },
       "definition": {
-        "en": "A deliberate mistake the course author planted in AI-written code. The course server never reveals it to the agent before it is fixed."
+        "en": "A deliberate mistake the course author planted in AI-written code. The course server never reveals it to the agent before it is caught or revealed."
       }
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/extensions/branch",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/achievement",
+      "type": "ActivityType",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "achievement"
+      },
+      "definition": {
+        "en": "An Open Badges 3.0 Achievement a learner earned in a course registration."
+      }
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/branch",
       "type": "ResultExtension",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "branch"
       },
       "definition": {
-        "en": "The authored id of the branch taken."
+        "en": "The authored key of the branch taken."
       },
       "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\"}"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/extensions/to",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/to",
       "type": "ResultExtension",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "branch target"
       },
       "definition": {
-        "en": "The activity IRI of the lesson the branch leads to, or null when the branch ends the path."
+        "en": "The AU activity id of the lesson the branch leads to, or null when the branch ends the path."
       },
       "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":[\"string\",\"null\"]}"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/extensions/rationale",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rationale",
       "type": "ResultExtension",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "judge rationale"
       },
@@ -147,9 +169,9 @@
       "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\",\"maxLength\":300}"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/extensions/checks",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/checks",
       "type": "ResultExtension",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "check results"
       },
@@ -159,93 +181,1235 @@
       "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"integer\"},\"passed\":{\"type\":\"boolean\"}},\"required\":[\"index\",\"passed\"]}}"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/extensions/start-lesson",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/start-lesson",
       "type": "ResultExtension",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "start lesson"
       },
       "definition": {
-        "en": "The activity IRI of the lesson the learner starts at after placement."
+        "en": "The AU activity id of the lesson the learner starts at after placement."
       },
       "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\"}"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/extensions/skipped",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/skipped",
       "type": "ResultExtension",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "skipped lessons"
       },
       "definition": {
-        "en": "Activity IRIs of lessons the placement skipped."
+        "en": "AU activity ids of lessons the placement skipped."
       },
       "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"array\",\"items\":{\"type\":\"string\"}}"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/extensions/rules-version",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/waive-recommended",
+      "type": "ResultExtension",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "waive recommended"
+      },
+      "definition": {
+        "en": "On placed or branched in LMS-launched custody: AU ids the course server recommends the LMS waive with reason \"Tested Out\". Only the LMS may waive."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"array\",\"items\":{\"type\":\"string\"}}"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/carried-over",
+      "type": "ResultExtension",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "carried over"
+      },
+      "definition": {
+        "en": "On a waived statement with reason \"Administrative\": the lesson was carried over from an earlier record version. It never counts towards a badge."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"boolean\"}"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/attempt",
+      "type": "ResultExtension",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "attempt"
+      },
+      "definition": {
+        "en": "The 1-based number of this checkpoint attempt within the AU session."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"integer\",\"minimum\":1}"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version",
       "type": "ContextExtension",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "rules version"
       },
       "definition": {
-        "en": "The version of the learning-mcp agent rules the course server sent with this step, for example \"v0.1\"."
+        "en": "The version of the course-xapi-mcp agent rules the course server sent with this step, for example \"0.2\"."
       },
       "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\"}"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody",
+      "type": "ContextExtension",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "record custody"
+      },
+      "definition": {
+        "en": "Who holds the record this statement was written to."
+      },
+      "inlineSchema": "{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"string\",\"enum\":[\"lms-launched\",\"author-lrs\",\"server-kept\",\"practice\"]}"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/practice",
+      "type": "Activity",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "activityDefinition": {
+        "@context": "https://w3id.org/xapi/profiles/activity-context",
+        "name": {
+          "en": "practice run"
+        },
+        "description": {
+          "en": "Category on every statement of a practice run. A practice run is not an official record and cannot earn badges."
+        }
+      }
     }
   ],
   "templates": [
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/placed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-launched",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "placed into a path"
+        "en": "cmi5 launched"
       },
       "definition": {
-        "en": "Emitted by choose_placement."
+        "en": "The LMS role launched the AU (cmi5 9.3.1)."
       },
-      "verb": "https://w3id.org/learning-mcp/xapi/verbs/placed",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/path",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "verb": "http://adlnet.gov/expapi/verbs/launched",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-initialized",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 initialized"
+      },
+      "definition": {
+        "en": "First statement of an AU session (cmi5 9.3.2). Sent when the first tool call on a lesson opens its session."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/initialized",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.result.extensions['https://w3id.org/learning-mcp/xapi/extensions/start-lesson']",
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-completed",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 completed"
+      },
+      "definition": {
+        "en": "The learner experienced all the material of the lesson: the last beat, and the planted bug caught or revealed (cmi5 9.3.3). At most once per registration."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/completed",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.result.duration",
+          "presence": "included"
+        },
+        {
+          "location": "$.result.completion",
+          "presence": "included",
+          "all": [
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-passed",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 passed"
+      },
+      "definition": {
+        "en": "A success branch was chosen at the lesson checkpoint (cmi5 9.3.4). At most once per registration."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/passed",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.result.duration",
+          "presence": "included"
+        },
+        {
+          "location": "$.result.success",
+          "presence": "included",
+          "all": [
+            true
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-failed",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 failed"
+      },
+      "definition": {
+        "en": "The author-set maximum number of checkpoint attempts ran out in this session (cmi5 9.3.5). Never after a defined passed in the registration."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/failed",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.result.duration",
+          "presence": "included"
+        },
+        {
+          "location": "$.result.success",
+          "presence": "included",
+          "all": [
+            false
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-terminated",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 terminated"
+      },
+      "definition": {
+        "en": "Last statement of an AU session (cmi5 9.3.8)."
+      },
+      "verb": "http://adlnet.gov/expapi/verbs/terminated",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.result.duration",
+          "presence": "included"
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-abandoned",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 abandoned"
+      },
+      "definition": {
+        "en": "The LMS role closed a session that ended abnormally (cmi5 9.3.6)."
+      },
+      "verb": "https://w3id.org/xapi/adl/verbs/abandoned",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.result.duration",
+          "presence": "included"
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-waived",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 waived"
+      },
+      "definition": {
+        "en": "The LMS role waived the lesson: \"Tested Out\" for lessons skipped by placement or a success branch, \"Administrative\" for lessons carried over (cmi5 9.3.7)."
+      },
+      "verb": "https://w3id.org/xapi/adl/verbs/waived",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.result.success",
+          "presence": "included",
+          "all": [
+            true
+          ]
+        },
+        {
+          "location": "$.result.completion",
+          "presence": "included",
+          "all": [
+            true
+          ]
+        },
+        {
+          "location": "$.result.extensions['https://w3id.org/xapi/cmi5/result/extensions/reason']",
+          "presence": "included",
+          "any": [
+            "Tested Out",
+            "Administrative"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-satisfied-block",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 satisfied block"
+      },
+      "definition": {
+        "en": "The LMS role found every lesson of a path satisfied (cmi5 9.3.9)."
+      },
+      "verb": "https://w3id.org/xapi/adl/verbs/satisfied",
+      "objectActivityType": "https://w3id.org/xapi/cmi5/activitytype/block",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-satisfied-course",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "cmi5 satisfied course"
+      },
+      "definition": {
+        "en": "The LMS role found every lesson of the course satisfied (cmi5 9.3.9)."
+      },
+      "verb": "https://w3id.org/xapi/adl/verbs/satisfied",
+      "objectActivityType": "https://w3id.org/xapi/cmi5/activitytype/course",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/placed-path",
+      "type": "StatementTemplate",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
+      "prefLabel": {
+        "en": "placed into a learning path"
+      },
+      "definition": {
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
+      },
+      "verb": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/placed",
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/path",
+      "rules": [
+        {
+          "location": "$.context.registration",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
+        },
+        {
+          "location": "$.version",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextAgents",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
+        },
+        {
+          "location": "$.result.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/start-lesson']",
           "presence": "included"
         },
         {
@@ -258,102 +1422,212 @@
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-experienced",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/experienced-beat",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "experienced a beat"
+        "en": "experienced a teaching beat"
       },
       "definition": {
-        "en": "Emitted when next_beat serves a beat."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
       "verb": "http://adlnet.gov/expapi/verbs/experienced",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/beat",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/beat",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.name",
+          "location": "$.context.contextGroups",
           "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         }
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-answered",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/answered-beat",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "answered a beat question"
+        "en": "answered a teaching beat"
       },
       "definition": {
-        "en": "Emitted when next_beat carries the learner reply to the previous beat question."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
       "verb": "http://adlnet.gov/expapi/verbs/answered",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/beat",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/beat",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.name",
+          "location": "$.context.contextGroups",
           "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         },
         {
           "location": "$.result.response",
@@ -365,52 +1639,107 @@
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-answered",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/answered-checkpoint",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "answered a checkpoint"
       },
       "definition": {
-        "en": "Emitted by submit_checkpoint."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
       "verb": "http://adlnet.gov/expapi/verbs/answered",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/checkpoint",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.name",
+          "location": "$.context.contextGroups",
           "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         },
         {
           "location": "$.result.response",
@@ -422,55 +1751,111 @@
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-passed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/passed-checkpoint",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "passed a checkpoint"
       },
       "definition": {
-        "en": "Emitted by choose_branch when the branch has success: true."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
       "verb": "http://adlnet.gov/expapi/verbs/passed",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/checkpoint",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
-          "presence": "excluded"
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         },
         {
           "location": "$.result.success",
+          "presence": "included",
           "all": [
             true
           ]
@@ -478,169 +1863,344 @@
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-failed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/failed-checkpoint",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "did not pass a checkpoint"
+        "en": "failed a checkpoint"
       },
       "definition": {
-        "en": "Emitted by choose_branch when the branch has success: false."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
       "verb": "http://adlnet.gov/expapi/verbs/failed",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/checkpoint",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
-          "presence": "excluded"
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         },
         {
           "location": "$.result.success",
+          "presence": "included",
           "all": [
             false
           ]
+        },
+        {
+          "location": "$.result.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/attempt']",
+          "presence": "recommended"
         }
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/branched",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/branched-checkpoint",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "branched at a checkpoint"
       },
       "definition": {
-        "en": "Emitted by choose_branch after the server validated the branch."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
-      "verb": "https://w3id.org/learning-mcp/xapi/verbs/branched",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/checkpoint",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "verb": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/branched",
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/checkpoint",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
-          "presence": "excluded"
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
-          "location": "$.result.extensions['https://w3id.org/learning-mcp/xapi/extensions/branch']",
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
+        },
+        {
+          "location": "$.result.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/branch']",
           "presence": "included"
         },
         {
-          "location": "$.result.extensions['https://w3id.org/learning-mcp/xapi/extensions/rationale']",
+          "location": "$.result.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/to']",
+          "presence": "included"
+        },
+        {
+          "location": "$.result.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rationale']",
           "presence": "included"
         }
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-passed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/passed-file",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "file passed checks"
+        "en": "passed a learner file"
       },
       "definition": {
-        "en": "Emitted by check_code or submit_checkpoint when every authored check passes."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
       "verb": "http://adlnet.gov/expapi/verbs/passed",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/file",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/file",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
-          "presence": "excluded"
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         },
         {
           "location": "$.result.success",
+          "presence": "included",
           "all": [
             true
           ]
@@ -648,55 +2208,111 @@
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-failed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/failed-file",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "file failed checks"
+        "en": "failed a learner file"
       },
       "definition": {
-        "en": "Emitted by check_code or submit_checkpoint when any authored check fails."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
       "verb": "http://adlnet.gov/expapi/verbs/failed",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/file",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/file",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
-          "presence": "excluded"
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         },
         {
           "location": "$.result.success",
+          "presence": "included",
           "all": [
             false
           ]
@@ -704,55 +2320,111 @@
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/bug-caught",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/caught-planted-bug",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
         "en": "caught a planted bug"
       },
       "definition": {
-        "en": "Emitted by check_code when the authored fix checks pass."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
-      "verb": "https://w3id.org/learning-mcp/xapi/verbs/caught",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/planted-bug",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "verb": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/caught",
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/planted-bug",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.name",
+          "location": "$.context.contextGroups",
           "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.name",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         },
         {
           "location": "$.result.success",
+          "presence": "included",
           "all": [
             true
           ]
@@ -760,240 +2432,275 @@
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/lesson-completed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/revealed-planted-bug",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "completed a lesson"
+        "en": "was shown a planted bug"
       },
       "definition": {
-        "en": "Emitted when a lesson finishes: a success branch, or the end of a lesson with no checkpoint."
+        "en": "cmi5 allowed statement inside an AU session, with the AU activity id as parent."
       },
-      "verb": "http://adlnet.gov/expapi/verbs/completed",
-      "objectActivityType": "http://adlnet.gov/expapi/activities/lesson",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "verb": "https://course-xapi-mcp.sqwrlz.com/xapi/verbs/revealed",
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/planted-bug",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
-          "presence": "excluded"
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
-          "location": "$.result.completion",
-          "all": [
-            true
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
           ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.parent[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The AU activity id."
+          }
         }
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/templates/path-completed",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/earned-achievement",
       "type": "StatementTemplate",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "completed a path"
+        "en": "earned an achievement"
       },
       "definition": {
-        "en": "Emitted when a branch with target null ends the path, or the last lesson completes."
+        "en": "Written by the badge issuer after it issues the Open Badges 3.0 credential. Refers to the earning statement and the credential id."
       },
-      "verb": "http://adlnet.gov/expapi/verbs/completed",
-      "objectActivityType": "https://w3id.org/learning-mcp/xapi/activity-types/path",
-      "contextGroupingActivityType": [
-        "http://adlnet.gov/expapi/activities/course"
-      ],
+      "verb": "http://specification.openbadges.org/xapi/verbs/earned",
+      "objectActivityType": "https://course-xapi-mcp.sqwrlz.com/xapi/activity-types/achievement",
       "rules": [
-        {
-          "location": "$.actor.account.homePage",
-          "all": [
-            "https://w3id.org/learning-mcp/learner"
-          ]
-        },
-        {
-          "location": "$.context.contextActivities.category[*].id",
-          "any": [
-            "https://w3id.org/learning-mcp/xapi/v0.1"
-          ]
-        },
         {
           "location": "$.context.registration",
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/learning-mcp/xapi/extensions/rules-version']",
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
           "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/custody']",
+          "presence": "included",
+          "any": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        {
+          "location": "$.context.contextActivities.grouping[*].id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The publisher id of the AU (from the cmi5 contextTemplate) and the course id."
+          }
         },
         {
           "location": "$.version",
           "presence": "excluded"
         },
         {
-          "location": "$.actor.mbox",
+          "location": "$.context.contextAgents",
           "presence": "excluded"
+        },
+        {
+          "location": "$.context.contextGroups",
+          "presence": "excluded"
+        },
+        {
+          "location": "$.actor.mbox",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.mbox_sha1sum",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.actor.openid",
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
           "location": "$.actor.name",
-          "presence": "excluded"
+          "presence": "excluded",
+          "scopeNote": {
+            "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
         },
         {
-          "location": "$.result.completion",
-          "all": [
-            true
+          "location": "$.context.contextActivities.category[*].id",
+          "presence": "included",
+          "any": [
+            "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2"
           ]
+        },
+        {
+          "location": "$.context.contextActivities.category[*].id",
+          "none": [
+            "https://w3id.org/xapi/cmi5/context/categories/cmi5",
+            "https://w3id.org/xapi/cmi5/context/categories/moveon"
+          ]
+        },
+        {
+          "location": "$.result.extensions['http://specification.openbadges.org/xapi/extensions/badgeassertion']",
+          "presence": "included"
+        },
+        {
+          "location": "$.context.statement.id",
+          "presence": "included",
+          "scopeNote": {
+            "en": "The statement that earned the badge."
+          }
         }
       ]
     }
   ],
   "patterns": [
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beat",
-      "type": "Pattern",
-      "sequence": [
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-experienced",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-beat-answer"
-      ]
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-beat-answer",
-      "type": "Pattern",
-      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/beat-answered"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-result",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/session-statement",
       "type": "Pattern",
       "alternates": [
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-passed",
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-failed"
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/placed-path",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/experienced-beat",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/answered-beat",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/answered-checkpoint",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/passed-checkpoint",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/failed-checkpoint",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/branched-checkpoint",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/passed-file",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/failed-file",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/caught-planted-bug",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/revealed-planted-bug",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-completed",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-passed",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-failed"
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/bug-attempts",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/session-body",
       "type": "Pattern",
-      "sequence": [
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/file-passed",
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/bug-caught"
-      ]
+      "zeroOrMore": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/session-statement"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/optional-launched",
       "type": "Pattern",
-      "zeroOrMore": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-result"
+      "optional": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-launched"
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint-outcome",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/session-end",
       "type": "Pattern",
       "alternates": [
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-passed",
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-failed"
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-terminated",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-abandoned"
       ]
     },
     {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint",
-      "type": "Pattern",
-      "sequence": [
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/checkpoint-answered",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/file-results",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint-outcome",
-        "https://w3id.org/learning-mcp/xapi/v0.1/templates/branched"
-      ]
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-bug",
-      "type": "Pattern",
-      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/bug-attempts"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-checkpoint",
-      "type": "Pattern",
-      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/checkpoint"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-lesson-completed",
-      "type": "Pattern",
-      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/lesson-completed"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beats",
-      "type": "Pattern",
-      "oneOrMore": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beat"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lesson",
-      "type": "Pattern",
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
-      "prefLabel": {
-        "en": "One pass through a lesson: beats, then an optional planted bug, then an optional checkpoint, then completion when it was passed."
-      },
-      "definition": {
-        "en": "One pass through a lesson: beats, then an optional planted bug, then an optional checkpoint, then completion when it was passed."
-      },
-      "sequence": [
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/beats",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-bug",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-checkpoint",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-lesson-completed"
-      ]
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lessons",
-      "type": "Pattern",
-      "zeroOrMore": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lesson"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-placed",
-      "type": "Pattern",
-      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/placed"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-path-completed",
-      "type": "Pattern",
-      "optional": "https://w3id.org/learning-mcp/xapi/v0.1/templates/path-completed"
-    },
-    {
-      "id": "https://w3id.org/learning-mcp/xapi/v0.1/patterns/course-registration",
+      "id": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/au-session",
       "type": "Pattern",
       "primary": true,
-      "inScheme": "https://w3id.org/learning-mcp/xapi/v0.1",
+      "inScheme": "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2",
       "prefLabel": {
-        "en": "Everything one learner does in one course registration: an optional placement, any number of lesson passes, and path completion."
+        "en": "One AU session (informative): launched when the server holds the LMS role, initialized, allowed statements and the defined outcomes, then terminated or abandoned. The conformance suite checks cmi5 order directly."
       },
       "definition": {
-        "en": "Everything one learner does in one course registration: an optional placement, any number of lesson passes, and path completion."
+        "en": "One AU session (informative): launched when the server holds the LMS role, initialized, allowed statements and the defined outcomes, then terminated or abandoned. The conformance suite checks cmi5 order directly."
       },
       "sequence": [
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-placed",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/lessons",
-        "https://w3id.org/learning-mcp/xapi/v0.1/patterns/optional-path-completed"
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/optional-launched",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/templates/cmi5-initialized",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/session-body",
+        "https://course-xapi-mcp.sqwrlz.com/xapi/v0.2/patterns/session-end"
       ]
     }
   ]
