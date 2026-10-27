@@ -2,7 +2,7 @@
 // Builds the static spec site into site/dist (or the directory given). Every IRI under SITE that the profile, the
 // constants, the schemas and the error help links use must resolve to a file in the output, or the build fails.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, posix } from 'node:path';
+import { dirname, join, posix, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Marked, type Tokens } from 'marked';
 import * as constants from '../reference/packages/core/src/constants.ts';
@@ -45,10 +45,43 @@ const slugify = (s: string) =>
     .trim()
     .replace(/ /g, '-');
 
-const SAFE_SCHEME = /^(https?:|mailto:)/i;
+const NAMED_ENTITIES: Record<string, string> = {
+  colon: ':', Tab: '\t', NewLine: '\n', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", sol: '/', period: '.', num: '#',
+};
+
+function safeCodePoint(n: number): string {
+  return Number.isInteger(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);?/gi, (_, h: string) => safeCodePoint(parseInt(h, 16)))
+    .replace(/&#([0-9]+);?/g, (_, d: string) => safeCodePoint(parseInt(d, 10)))
+    .replace(/&([A-Za-z][A-Za-z0-9]*);/g, (m, n: string) => NAMED_ENTITIES[n] ?? m);
+}
+
+const ALLOWED_HREF = /^(\/(?!\/)|#|\.\/|\.\.\/|https?:|mailto:)/i;
+
+/**
+ * Allow-list for link and image targets: entity-decoded, then only site paths, fragments, relative paths and
+ * http(s)/mailto survive. A relative `.md` link becomes the site path of that page, which must exist.
+ */
+function safeHref(raw: string, base: string, known: ReadonlySet<string>, from: string): string {
+  const decoded = decodeEntities(raw);
+  if (/&[A-Za-z][A-Za-z0-9]*;/.test(decoded)) return '#';
+  const href = decoded.replace(/[\u0000- \u007f]/g, '');
+  const md = /^([^#?:]*)\.md([#?].*)?$/.exec(href);
+  if (md && !/^[/#]/.test(href)) {
+    const target = posix.join(base, md[1]!);
+    const url = posix.basename(target) === 'index' ? posix.dirname(target) + '/' : target + '/';
+    if (!known.has(url)) throw new Error(`${from}: link to ${raw} does not resolve to a page of the site (${url})`);
+    return url + (md[2] ?? '');
+  }
+  return ALLOWED_HREF.test(href) ? href : '#';
+}
 
 /** Renders repo Markdown: front matter and HTML comments dropped, other raw HTML escaped, links rewritten to site paths. */
-function renderMarkdown(src: string, base: string): { title: string; html: string } {
+function renderMarkdown(src: string, base: string, known: ReadonlySet<string>, from: string): { title: string; html: string } {
   const text = src.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
   const used = new Map<string, number>();
   const md = new Marked({
@@ -58,14 +91,7 @@ function renderMarkdown(src: string, base: string): { title: string; html: strin
         t.text = /^\s*<!--[\s\S]*?-->\s*$/.test(t.text) ? '' : esc(t.text);
       } else if (token.type === 'link' || token.type === 'image') {
         const t = token as Tokens.Link | Tokens.Image;
-        if (/^[a-z][a-z0-9+.-]*:/i.test(t.href) && !SAFE_SCHEME.test(t.href)) t.href = '#';
-        else if (!/^[a-z][a-z0-9+.-]*:|^[/#]/i.test(t.href)) {
-          const m = /^([^#?]*)\.md(#.*)?$/.exec(t.href);
-          if (m) {
-            const page = posix.basename(m[1]!);
-            t.href = base + (page === 'index' ? '' : page + '/') + (m[2] ?? '');
-          }
-        }
+        t.href = safeHref(t.href, base, known, from);
       }
     },
     renderer: {
@@ -127,9 +153,15 @@ function fileForIri(iri: string): string {
   return posix.join(p.replace(/^\//, ''), 'index.html');
 }
 
-/** IRIs that are required but have no file in `out`. */
+/** IRIs that are required but have no file in `out`; a profile concept IRI needs its JSON-LD document too. */
 export function findMissingIris(out: string): string[] {
-  return requiredIris().filter((iri) => !existsSync(join(out, fileForIri(iri))));
+  const profile = JSON.parse(read('profile/xapi-profile.jsonld')) as { concepts: Concept[]; templates: Concept[]; patterns: Concept[] };
+  const concepts = new Set([PROFILE_ID, PROFILE_VERSION_IRI, ...[...profile.concepts, ...profile.templates, ...profile.patterns].map((c) => c.id)]);
+  return requiredIris().filter((iri) => {
+    const file = fileForIri(iri);
+    if (!existsSync(join(out, file))) return true;
+    return concepts.has(iri) && !existsSync(join(out, posix.dirname(file), 'index.jsonld'));
+  });
 }
 
 // ---- Build ----------------------------------------------------------------------------------------------------
@@ -149,6 +181,10 @@ export async function buildSite(out: string, opts: BuildOptions = {}): Promise<B
   const hasAuthoring = existsSync(authoringDir) && statSync(authoringDir).isDirectory();
   const template = read('site/template.html');
 
+  const target = resolve(out);
+  if (target === sep || target === root.replace(/[\\/]+$/, '') || root.startsWith(target + sep)) {
+    throw new Error(`refusing to build into ${target}: it is the repository root or one of its ancestors`);
+  }
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   const files: string[] = [];
@@ -181,10 +217,18 @@ export async function buildSite(out: string, opts: BuildOptions = {}): Promise<B
   };
 
   // Markdown sections: spec and (when present) authoring.
+  const sectionPages = (dir: string, urlBase: string) =>
+    readdirSync(dir)
+      .filter((n) => n.endsWith('.md'))
+      .sort()
+      .map((f) => ({ f, name: f.slice(0, -3), url: f === 'index.md' ? urlBase : `${urlBase}${f.slice(0, -3)}/` }));
+  const known = new Set<string>([
+    ...sectionPages(join(root, 'spec/draft'), '/spec/draft/').map((p) => p.url),
+    ...(hasAuthoring ? sectionPages(authoringDir, '/authoring/').map((p) => p.url) : []),
+  ]);
   const markdownSection = (dir: string, urlBase: string, outBase: string) => {
-    for (const f of readdirSync(dir).filter((n) => n.endsWith('.md')).sort()) {
-      const name = f.slice(0, -3);
-      const { title, html } = renderMarkdown(readFileSync(join(dir, f), 'utf8'), urlBase);
+    for (const { f, name } of sectionPages(dir, urlBase)) {
+      const { title, html } = renderMarkdown(readFileSync(join(dir, f), 'utf8'), urlBase, known, `${outBase}/${f}`);
       const desc = `${title}, course-xapi-mcp draft ${SPEC_VERSION}.`;
       page(`${outBase}/${name}/index.html`, title, desc, html);
       if (name === 'index') page(`${outBase}/index.html`, title, desc, html);
@@ -369,14 +413,6 @@ ${hasAuthoring ? '<li><a href="/authoring/">Authoring guide</a>: converting an e
   Content-Type: application/ld+json
 
 /schema/draft/*.json
-  Access-Control-Allow-Origin: *
-  Content-Type: application/schema+json
-
-/schema/draft/tools/*.json
-  Access-Control-Allow-Origin: *
-  Content-Type: application/schema+json
-
-/schema/draft/tools/practice/*.json
   Access-Control-Allow-Origin: *
   Content-Type: application/schema+json
 
