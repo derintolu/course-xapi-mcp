@@ -1,0 +1,16 @@
+{
+  "name": "@course-xapi-mcp/validator",
+  "version": "0.2.0",
+  "description": "Course package validator, linter and builder for course-xapi-mcp.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@course-xapi-mcp/core": "0.2.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "xmllint-wasm": "5.3.0",
+    "zod": "4.6.7"
+  }
+}

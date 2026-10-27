@@ -1,0 +1,14 @@
+{
+  "name": "@course-xapi-mcp/bridge",
+  "version": "0.2.0",
+  "description": "cmi5 launch bridge for LMS-launched courses (custody option 1).",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@course-xapi-mcp/core": "0.2.0",
+    "@course-xapi-mcp/lrs-client": "0.2.0"
+  }
+}

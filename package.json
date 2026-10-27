@@ -1,23 +1,32 @@
 {
   "name": "course-xapi-mcp",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "Apache-2.0",
   "workspaces": [
-    "reference/packages/*", "conformance"
+    "reference/packages/*",
+    "conformance"
   ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
     "rules": "node scripts/sync-rules.mjs",
     "profile": "node --experimental-strip-types scripts/build-profile.ts",
-    "start": "npm run start -w reference/packages/server"
+    "start": "npm run start -w reference/packages/server",
+    "schemas": "node --experimental-strip-types scripts/build-schemas.ts",
+    "requirements": "node --experimental-strip-types scripts/check-requirements.ts",
+    "author-skill": "node scripts/sync-author-skill.mjs",
+    "conformance": "vitest run --config conformance/vitest.config.ts",
+    "conformance:reference": "node --experimental-strip-types conformance/run-reference.ts",
+    "site": "node --experimental-strip-types site/build.ts"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "2.3.1",
     "@types/node": "26.6.5",
+    "marked": "18.1.2",
     "typescript": "7.0.2",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "yaml": "2.9.1"
   }
 }

@@ -1,13 +1,19 @@
 {
   "name": "@course-xapi-mcp/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Content schema, branch engine, deterministic checks, xAPI builders and the learner-owned record for learning over MCP.",
   "type": "module",
   "license": "Apache-2.0",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./xapi": "./src/xapi/index.ts",
+    "./package": "./src/package/index.ts",
+    "./session": "./src/session/index.ts",
+    "./practice": "./src/practice-record.ts"
   },
   "dependencies": {
+    "fast-xml-parser": "5.11.2",
+    "fflate": "0.8.3",
     "zod": "4.6.7"
   }
 }

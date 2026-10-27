@@ -1,6 +1,6 @@
 {
   "name": "@course-xapi-mcp/server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reference remote MCP server (Streamable HTTP) that serves a course-xapi-mcp course.",
   "type": "module",
   "license": "Apache-2.0",
@@ -11,8 +11,16 @@
     "start": "node --experimental-strip-types src/bin.ts"
   },
   "dependencies": {
-    "@course-xapi-mcp/core": "0.1.0",
+    "@course-xapi-mcp/badges": "0.2.0",
+    "@course-xapi-mcp/bridge": "0.2.0",
+    "@course-xapi-mcp/core": "0.2.0",
+    "@course-xapi-mcp/lrs-client": "0.2.0",
     "@modelcontextprotocol/server": "2.3.1",
+    "jose": "6.2.13",
+    "openid-client": "6.8.8",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@course-xapi-mcp/conformance": "0.2.0"
   }
 }

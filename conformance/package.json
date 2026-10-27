@@ -1,0 +1,16 @@
+{
+  "name": "@course-xapi-mcp/conformance",
+  "version": "0.2.0",
+  "description": "Conformance suite for course-xapi-mcp course packages, course servers, launch bridges and badge issuers.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@cmi5/requirements": "1.0.0",
+    "@course-xapi-mcp/core": "0.2.0",
+    "@modelcontextprotocol/client": "2.4.0",
+    "yaml": "2.9.1"
+  }
+}

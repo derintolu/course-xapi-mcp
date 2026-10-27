@@ -1,0 +1,13 @@
+{
+  "name": "@course-xapi-mcp/lrs-client",
+  "version": "0.2.0",
+  "description": "xAPI 1.0.3 and 2.0 LRS client with cmi5 launch token fetch.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@course-xapi-mcp/core": "0.2.0"
+  }
+}
