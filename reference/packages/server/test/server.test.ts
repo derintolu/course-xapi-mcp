@@ -46,7 +46,7 @@ describe.each(['legacy', 'modern'] as const)('over MCP (%s era)', (era) => {
   it('sends the teaching rules as instructions, a resource and a prompt', async () => {
     const { client } = await session(era);
     expect(client.getInstructions()).toContain('Never reveal the bug');
-    const res = await client.readResource({ uri: 'learning-mcp://rules/agent' });
+    const res = await client.readResource({ uri: 'course-xapi-mcp://rules/agent' });
     expect((res.contents[0] as any).text).toContain(`rules ${RULES_VERSION}`);
     const prompt = await client.getPrompt({ name: 'tutor' });
     expect(JSON.stringify(prompt.messages)).toContain('learner_input');
@@ -55,7 +55,7 @@ describe.each(['legacy', 'modern'] as const)('over MCP (%s era)', (era) => {
   it('carries the rules digest on every result, including errors', async () => {
     const { call } = await session(era);
     for (const r of [await call('list_paths'), await call('next_beat', { handle: 'lr_nope' })]) {
-      expect(r.data.rules).toMatchObject({ version: RULES_VERSION, full: 'learning-mcp://rules/agent' });
+      expect(r.data.rules).toMatchObject({ version: RULES_VERSION, full: 'course-xapi-mcp://rules/agent' });
       expect(r.data.rules.digest.length).toBeGreaterThan(3);
     }
   });
