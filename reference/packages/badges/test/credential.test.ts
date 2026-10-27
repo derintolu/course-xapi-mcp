@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { Award } from '@course-xapi-mcp/core';
+import type { Award, XapiScore } from '@course-xapi-mcp/core';
 import { buildCredential, createStatusList } from '../src/index.ts';
 import { badge } from './fixtures.ts';
 
@@ -10,9 +10,11 @@ const award: Award = { badgeId: 'https://course.example/badges/a', registration:
 const list = createStatusList();
 const status = list.entry('https://course.example/status/1', list.allocate());
 
-function build(o: { testedOut?: number; assessed?: 'checks' | 'agent-rubric' | 'mixed'; recipient?: { did: string } | { email: string; salt: string } } = {}) {
+function build(
+  o: { testedOut?: number; assessed?: 'checks' | 'agent-rubric' | 'mixed'; recipient?: { did: string } | { email: string; salt: string }; includeScore?: boolean; score?: XapiScore } = {},
+) {
   return buildCredential({
-    badge: badge({ id: award.badgeId, awardOn: 'block-satisfied', for: 'a' }),
+    badge: badge({ id: award.badgeId, awardOn: 'block-satisfied', for: 'a', includeScore: o.includeScore ?? false }),
     issuer: { id: 'did:web:course.example', name: 'Course Server' },
     recipient: o.recipient ?? { did: 'did:example:wallet' },
     award: { ...award, testedOut: o.testedOut ?? 0 },
@@ -20,6 +22,7 @@ function build(o: { testedOut?: number; assessed?: 'checks' | 'agent-rubric' | '
     validFrom: '2026-10-27T00:00:00Z',
     status,
     assessed: o.assessed ?? 'checks',
+    ...(o.score ? { score: o.score } : {}),
   }) as Record<string, any>;
 }
 
@@ -79,5 +82,18 @@ describe('buildCredential', () => {
     const expected = 'sha256$' + createHash('sha256').update('learner@example.com' + salt).digest('hex');
     expect(idObj.identityHash).toBe(expected);
     expect(JSON.stringify(c)).not.toContain('learner@example.com');
+  });
+
+  it('carries a score only when the badge sets includeScore', () => {
+    expect(JSON.stringify(build({ score: { scaled: 0.9 } }))).not.toMatch(/"(score|result|resultDescription)"/);
+    const scaled = build({ includeScore: true, score: { scaled: 0.9 } });
+    const described = award.badgeId + '#score';
+    expect(scaled.credentialSubject.achievement.resultDescription).toEqual([{ id: described, type: ['ResultDescription'], name: 'Score', resultType: 'ScaledScore' }]);
+    expect(scaled.credentialSubject.result).toEqual([{ type: ['Result'], resultDescription: described, value: '0.9' }]);
+    const raw = build({ includeScore: true, score: { raw: 7, min: 0, max: 10 } });
+    expect(raw.credentialSubject.achievement.resultDescription[0]).toMatchObject({ resultType: 'RawScore', valueMin: '0', valueMax: '10' });
+    expect(raw.credentialSubject.result[0].value).toBe('7');
+    // includeScore without a score: nothing to show.
+    expect(JSON.stringify(build({ includeScore: true }))).not.toMatch(/"(result|resultDescription)"/);
   });
 });

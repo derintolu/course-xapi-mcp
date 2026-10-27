@@ -95,6 +95,9 @@ function bindingOf(c: LaunchContext): LaunchBinding {
 
 /** Option 2: the actor the author-LRS custody keeps the record under (its `actorFor`), so statements match it. */
 const actorForOf = (c: Custody) => (c as Custody & { actorFor?: (subject: string) => Promise<XapiAgent> }).actorFor;
+/** Option 1: the badge issuer record, which `get_record` appends (design §11 BC-32). */
+const issuerRecordsOf = (b: BadgeService | undefined) =>
+  (b as (BadgeService & { records?: (l: LearnerRef) => Promise<{ statements: XapiStatement[]; credentials: string[] }> }) | undefined)?.records;
 const launchForOf = (c: Custody) => (c as Custody & { launchFor?: (l: LearnerRef, auKey?: string) => Promise<LaunchContext | { error: string }> }).launchFor;
 
 export function createTools(d: ToolDeps) {
@@ -318,7 +321,13 @@ export function createTools(d: ToolDeps) {
       const [record, state] = await Promise.all([guarded(() => custody.record(b.learner)), guarded(() => custody.load(b.learner))]);
       const { holder, ...links } = custody.links(b.learner);
       const data = { record, holder, links, note: `${TREAT_AS_DATA} ${record.note}` };
-      if (official) return ok(data, state.state);
+      if (official) {
+        const records = custody.option === 'lms-launched' ? issuerRecordsOf(d.badges) : undefined;
+        if (!records) return ok(data, state.state);
+        const issued = await guarded(() => records(b.learner));
+        const issuerRecord = { holder: 'this course server, as badge issuer', ...issued, note: 'The badges this course server issued: the earned statements and the credential ids. It is authoritative for these badges.' };
+        return ok({ ...data, issuerRecord }, state.state);
+      }
       const copy = await guarded(() => d.practice!.exportCopy(b.learner.handle!));
       const exported: Content = { type: 'resource', resource: { uri: URIS.recordExport, mimeType: 'application/json', text: JSON.stringify(copy, null, 2) } };
       return ok({ ...data, instruction: 'Offer the attached practice copy as a file named practice-record.json. resume_practice continues it later.' }, state.state, [exported]);

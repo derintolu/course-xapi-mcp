@@ -6,6 +6,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { Readable } from 'node:stream';
 import { isLoopbackHost } from './auth/clients.ts';
 import { ConfigError, createAppFromConfig, type App } from './app.ts';
+import { badgesFromConfig } from './badges/service.ts';
 import { loadConfig, type AppConfig } from './config.ts';
 
 function fail(errors: string[]): never {
@@ -19,7 +20,8 @@ const config: AppConfig = loaded;
 
 let app: App & { course: { title: string; custody: string }; warnings: string[] };
 try {
-  app = await createAppFromConfig(config);
+  // Badge issuing, when this course server signs the course's badges (badgeIssuer.signer, or custody server-kept).
+  app = await createAppFromConfig(config, { badges: (parts) => badgesFromConfig(parts) });
 } catch (e) {
   if (e instanceof ConfigError) fail(e.errors);
   throw e;

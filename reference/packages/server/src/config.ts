@@ -28,8 +28,8 @@ export interface AppConfig {
   oidc?: { issuer: string; clientId: string; clientSecret?: string };
   /** Ed25519 private JWK that signs access tokens. */
   signingKey: JWK;
-  /** Raw `CXM_BADGE_KEY`, loaded by the badge service. */
-  badgeKey?: string;
+  /** `CXM_BADGE_KEY`: the Ed25519 Multikey that signs badges (its id and controller come from the public URL). */
+  badgeKey?: BadgeKey;
   badgeIssuerName?: string;
   /** Browser origins allowed besides the public URL's own. */
   allowedOrigins: string[];
@@ -39,6 +39,11 @@ export interface AppConfig {
   unset: string[];
   /** Things the operator should know, such as a signing key generated for this process only. */
   warnings: string[];
+}
+
+export interface BadgeKey {
+  publicKeyMultibase: string;
+  secretKeyMultibase: string;
 }
 
 type Env = Record<string, string | undefined>;
@@ -77,6 +82,21 @@ function signingKeyOf(raw: string, errors: string[]): JWK | undefined {
     return undefined;
   }
   return j as JWK;
+}
+
+/** Never echoes the value: it holds a private key. */
+function badgeKeyOf(raw: string, errors: string[]): BadgeKey | undefined {
+  const fail = () => void errors.push('CXM_BADGE_KEY must be JSON with the Ed25519 Multikey strings publicKeyMultibase and secretKeyMultibase');
+  let k: unknown;
+  try {
+    k = JSON.parse(raw);
+  } catch {
+    return fail();
+  }
+  const j = k as Partial<BadgeKey> | null;
+  const multibase = (v: unknown) => typeof v === 'string' && /^z[1-9A-HJ-NP-Za-km-z]+$/.test(v);
+  if (!j || typeof j !== 'object' || Array.isArray(j) || !multibase(j.publicKeyMultibase) || !multibase(j.secretKeyMultibase)) return fail();
+  return { publicKeyMultibase: j.publicKeyMultibase!, secretKeyMultibase: j.secretKeyMultibase! };
 }
 
 /** The variables a custody option needs that the configuration lacks, one message per variable. */
@@ -131,6 +151,9 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
     warnings.push('CXM_SIGNING_KEY is not set: generated a signing key for this process only, so access tokens stop working when it restarts.');
   }
 
+  const badgeRaw = set(env.CXM_BADGE_KEY);
+  const badgeKey = badgeRaw === undefined ? undefined : badgeKeyOf(badgeRaw, errors);
+
   const allowedOrigins: string[] = [];
   for (const raw of (env.CXM_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
     const origin = originOf(raw, 'CXM_ALLOWED_ORIGINS', errors);
@@ -146,7 +169,7 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
     ...(lrs ? { lrs } : {}),
     ...(oidc ? { oidc } : {}),
     signingKey,
-    ...(set(env.CXM_BADGE_KEY) ? { badgeKey: set(env.CXM_BADGE_KEY) } : {}),
+    ...(badgeKey ? { badgeKey } : {}),
     ...(set(env.CXM_BADGE_ISSUER_NAME) ? { badgeIssuerName: set(env.CXM_BADGE_ISSUER_NAME) } : {}),
     allowedOrigins,
     retention: set(env.CXM_RETENTION) ?? DEFAULT_RETENTION,

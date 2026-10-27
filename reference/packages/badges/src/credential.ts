@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // The unsigned OpenBadgeCredential (OB 3.0 on VC Data Model 2.0), design §11.
-// It never carries the xAPI actor, statements, or (without `includeScore` and a score) a score.
+// It never carries the xAPI actor or statements, and carries a score only with `includeScore` and a score.
 import { createHash } from 'node:crypto';
-import type { Award, BadgeDecl } from '@course-xapi-mcp/core';
+import type { Award, BadgeDecl, XapiScore } from '@course-xapi-mcp/core';
 import { CONTEXTS } from './document-loader.ts';
 import type { StatusEntry } from './status-list.ts';
 
@@ -30,8 +30,11 @@ export function buildCredential(o: {
   validFrom: string;
   status: StatusEntry;
   assessed: Assessed;
+  /** The earning statement's score; it appears only when the badge sets `includeScore`. */
+  score?: XapiScore;
 }): object {
   const b = o.badge;
+  const scored = b.includeScore ? scoreOf(b.id, o.score) : undefined;
   const achievement = {
     id: b.id,
     type: ['Achievement'],
@@ -41,6 +44,7 @@ export function buildCredential(o: {
     achievementType: b.achievementType,
     ...(b.image ? { image: { id: b.image, type: 'Image' } } : {}),
     ...(b.alignment?.length ? { alignment: b.alignment.map((a) => ({ type: ['Alignment'], ...a })) } : {}),
+    ...(scored ? { resultDescription: [scored.description] } : {}),
   };
   const subject =
     'did' in o.recipient
@@ -63,7 +67,7 @@ export function buildCredential(o: {
     name: b.name,
     issuer: { id: o.issuer.id, type: ['Profile'], name: o.issuer.name },
     validFrom: o.validFrom,
-    credentialSubject: { type: ['AchievementSubject'], ...subject, achievement },
+    credentialSubject: { type: ['AchievementSubject'], ...subject, achievement, ...(scored ? { result: [scored.result] } : {}) },
     evidence: [
       {
         id: 'urn:uuid:' + o.award.earningStatementId,
@@ -74,4 +78,24 @@ export function buildCredential(o: {
     ],
     credentialStatus: o.status,
   };
+}
+
+/** An OB 3.0 ResultDescription and Result for an xAPI score: the raw score with its range, else the scaled one. */
+function scoreOf(badgeId: string, score: XapiScore | undefined) {
+  const id = badgeId + '#score';
+  const raw = score?.raw;
+  const scaled = score?.scaled;
+  if (raw === undefined && scaled === undefined) return undefined;
+  const description =
+    raw !== undefined
+      ? {
+          id,
+          type: ['ResultDescription'],
+          name: 'Score',
+          resultType: 'RawScore',
+          ...(score!.min !== undefined ? { valueMin: String(score!.min) } : {}),
+          ...(score!.max !== undefined ? { valueMax: String(score!.max) } : {}),
+        }
+      : { id, type: ['ResultDescription'], name: 'Score', resultType: 'ScaledScore' };
+  return { description, result: { type: ['Result'], resultDescription: id, value: String(raw ?? scaled) } };
 }

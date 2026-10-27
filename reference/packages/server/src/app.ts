@@ -12,6 +12,8 @@ import {
   type CourseModel,
   type Custody,
   type LaunchStore,
+  type LearnerRef,
+  type XapiStatement,
 } from '@course-xapi-mcp/core';
 import { loadPackage, readDir, readZip } from '@course-xapi-mcp/core/package';
 import { createBridge, startSweeper, type Bridge } from '@course-xapi-mcp/bridge';
@@ -33,6 +35,8 @@ export type AppBadges = BadgeService & {
   routes(req: Request): Promise<Response | undefined>;
   /** Revokes every credential issued to this learner subject; returns how many. */
   revokeLearner(subject: string): Promise<number>;
+  /** Option 1: the issuer record (`earned` statements and credential ids) that `get_record` appends. */
+  records?(l: LearnerRef): Promise<{ statements: XapiStatement[]; credentials: string[] }>;
 };
 
 export interface AppOptions {
@@ -149,13 +153,15 @@ export interface BadgeParts {
   custody: Custody;
   auth?: AuthServer;
   launches?: LaunchStore;
+  /** Milliseconds since the epoch (tests). */
+  now?: () => number;
 }
 
 export interface FromConfigOptions {
   /** The course, instead of loading `config.packagePath` (tests override its custody this way). */
   course?: CourseModel;
-  /** Builds the badge service from the parts this function made (Task 28). */
-  badges?: (parts: BadgeParts) => AppBadges | Promise<AppBadges>;
+  /** Builds the badge service from the parts this function made (Task 28); undefined when the course server does not sign. */
+  badges?: (parts: BadgeParts) => AppBadges | undefined | Promise<AppBadges | undefined>;
   /** Replaces fetch for the LRS, the LMS and cmi5 token requests (tests). The OpenID Provider uses the global fetch. */
   lrsFetch?: typeof fetch;
   /** Milliseconds since the epoch, for every part (tests). */
@@ -212,7 +218,7 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
       break;
   }
 
-  const badges = await o.badges?.({ config, course, publicUrl, custody, auth, launches });
+  const badges = await o.badges?.({ config, course, publicUrl, custody, auth, launches, now });
   const host = new URL(publicUrl);
   const allowedHosts = isLoopbackHost(host.hostname) ? [host.host, `127.0.0.1:${config.port}`, `localhost:${config.port}`] : undefined;
   const app = createApp({
