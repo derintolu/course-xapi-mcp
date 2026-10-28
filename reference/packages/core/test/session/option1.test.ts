@@ -10,7 +10,7 @@ const LMS_ACTOR: XapiAgent = { objectType: 'Agent', account: { homePage: 'https:
 const REG = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
 let sessions = 0;
 
-function launch(auKey: string): LaunchBinding {
+function launch(auKey: string, launchMode: LaunchBinding['launchMode'] = 'Normal'): LaunchBinding {
   const sessionId = `aaaaaaaa-0000-4000-8000-${String(++sessions).padStart(12, '0')}`;
   const auId = auKey === 'placement' ? course.placement.auId : course.lessons[auKey]!.auId;
   return {
@@ -19,7 +19,7 @@ function launch(auKey: string): LaunchBinding {
     registration: REG,
     sessionId,
     contextTemplate: { contextActivities: { grouping: [{ objectType: 'Activity', id: auId }] }, extensions: { [CMI5.extSessionId]: sessionId } },
-    launchMode: 'Normal',
+    launchMode,
     returnURL: 'https://lms.example.org/course/return',
   };
 }
@@ -29,8 +29,8 @@ function lmsRun() {
   const env = makeEnv({ custody: 'lms-launched', actor: LMS_ACTOR, launch: launch('placement') });
   const run = new Run(course, env);
   const bridge: XapiStatement[] = [];
-  const relaunch = (auKey: string) => {
-    env.launch = launch(auKey);
+  const relaunch = (auKey: string, mode?: LaunchBinding['launchMode']) => {
+    env.launch = launch(auKey, mode);
     const l = env.launch;
     const auId = auKey === 'placement' ? course.placement.auId : course.lessons[auKey]!.auId;
     bridge.push(
@@ -91,6 +91,25 @@ describe('session engine: option 1 (lms-launched)', () => {
     expect(verbs(end.statements)).toEqual(['completed', 'terminated']);
     expect(end.next).toEqual({ type: 'done' });
     expect(run.state!.satisfied).toEqual({ blocks: [], course: false });
+    expectClean(all(), { lmsActor: true });
+  });
+
+  it.each(['Browse', 'Review'] as const)('a %s launch sends no completed, passed or failed on the AU (cmi5 10.2.2)', (mode) => {
+    const { run, relaunch, all } = lmsRun();
+    run.start();
+    run.place('p', 'b', ['a'], 'Already knows A.');
+    relaunch('b', mode);
+    run.beat();
+    run.beat();
+    run.code('{"port":8080}');
+    const done = run.beat();
+    expect(verbs(done.statements)).not.toContain('completed');
+    run.submit('timeout is compared with elapsed time.', { 'config.json': GOOD_FILE });
+    const r = run.branch('fixed');
+    // The allowed passed on the checkpoint stays; the AU gets no defined passed, and the session still ends.
+    expect(verbs(r.statements)).toEqual(['passed', 'branched', 'terminated']);
+    expect(r.events).toEqual([]);
+    expect(run.state!.au.b?.passed).not.toBe(true);
     expectClean(all(), { lmsActor: true });
   });
 

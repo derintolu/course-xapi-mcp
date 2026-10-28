@@ -21,6 +21,9 @@ export function isSatisfied(course: CourseModel, state: LearnerState, key: strin
 
 /** Sends the defined `completed`, `passed` or `failed` on the open session's AU and records it; reports a newly met moveOn. */
 export function recordOutcome(tx: Tx, key: string, verb: 'completed' | 'passed' | 'failed'): void {
+  // cmi5 10.2.2: an AU launched in Browse or Review mode records no satisfaction (no completed, passed or failed).
+  const mode = tx.option1 ? tx.env.launch?.launchMode : undefined;
+  if (mode !== undefined && mode !== 'Normal') return;
   const session = tx.state.session!;
   const was = isSatisfied(tx.course, tx.state, key);
   const s = tx.definedAu(verb, session);
