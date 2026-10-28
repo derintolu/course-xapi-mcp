@@ -20,7 +20,7 @@ export interface AppConfig {
   /** The origin learners and agents reach the server at, with no trailing slash. */
   publicUrl: string;
   port: number;
-  /** Where directory stores keep practice copies and badge issuer data; memory stores when unset. Refused with custody server-kept until accounts are kept on disk too (R61). */
+  /** Where directory stores keep practice copies, server-kept records, accounts and tokens (`auth/`) and badge issuer data; memory stores when unset. */
   dataDir?: string;
   /** The author's LRS (custody author-lrs). Set only when all three variables are. */
   lrs?: { endpoint: string; key: string; secret: string; version?: XapiVersion };

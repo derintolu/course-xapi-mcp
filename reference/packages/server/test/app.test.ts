@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { spawn } from 'node:child_process';
 import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { connect, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -116,14 +116,15 @@ async function startSignIn(app: App, browser: Jar) {
   const page = await app.fetch(req('/oauth/authorize?' + query, { cookies: browser }));
   expect(page.status).toBe(200);
   browser.take(page);
-  const finish = async (signedIn: Response) => {
+  const tokens = async (signedIn: Response) => {
     browser.take(signedIn);
     const code = codeFrom(await signedIn.text());
     const tok = await app.fetch(req('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: clientId, redirect_uri: REDIRECT, code_verifier: verifier, resource: PUBLIC + '/mcp' }) }));
     expect(tok.status).toBe(200);
-    return ((await tok.json()) as { access_token: string }).access_token;
+    return { code, ...((await tok.json()) as { access_token: string; refresh_token: string }) };
   };
-  return { id: requestId(await page.text()), finish };
+  const finish = async (signedIn: Response) => (await tokens(signedIn)).access_token;
+  return { id: requestId(await page.text()), clientId, finish, tokens };
 }
 
 /** Option 3: signs up through the accounts page; returns the access token. */
@@ -287,18 +288,127 @@ describe('composition', () => {
     }
   });
 
-  it('refuses CXM_DATA_DIR with custody server-kept: accounts are held in memory, so records on disk could not be reached or deleted after a restart (R61)', async () => {
+  it('accepts CXM_DATA_DIR with custody server-kept, keeping its sign-in data in a 0700 auth folder (R65)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'cxm-data-'));
     try {
       const example = await loadExample();
-      const err = await createAppFromConfig(config({ CXM_DATA_DIR: dir }), { course: { ...example, custody: 'server-kept' } }).catch((e) => e);
-      expect(err).toBeInstanceOf(ConfigError);
-      expect(err.errors).toHaveLength(1);
-      expect(err.errors[0]).toMatch(/CXM_DATA_DIR .*custody server-kept/);
-      // Practice copies on disk are still fine.
-      const practice = await createAppFromConfig(config({ CXM_DATA_DIR: dir }), { course: { ...example, custody: 'practice', allowPractice: false } });
-      apps.push(practice);
-      expect((await practice.fetch(req('/'))).status).toBe(200);
+      const app = await createAppFromConfig(config({ CXM_DATA_DIR: dir }), { course: { ...example, custody: 'server-kept' } });
+      apps.push(app);
+      expect((await app.fetch(req('/'))).status).toBe(200);
+      expect((await stat(join(dir, 'auth'))).mode & 0o777).toBe(0o700);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('CXM_DATA_DIR with custody server-kept (R65)', () => {
+  const PASSWORD = 'correct horse battery';
+  const subjectOf = (accessToken: string) => (JSON.parse(Buffer.from(accessToken.split('.')[1]!, 'base64url').toString()) as { sub: string }).sub;
+  const refreshWith = (app: App, clientId: string, refreshToken: string) =>
+    app.fetch(req('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, resource: PUBLIC + '/mcp' }) }));
+  /** The status of a bare MCP request with this bearer token (401 when it no longer signs anyone in). */
+  const mcpStatus = async (app: App, token: string) =>
+    (await app.fetch(req('/mcp', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) }))).status;
+  async function signInWith(app: App, browser: Jar, action: 'signup' | 'signin', username = 'ada.l') {
+    const s = await startSignIn(app, browser);
+    const res = await app.fetch(formPost('/oauth/login', { request_id: s.id, action, username, password: PASSWORD }, browser));
+    return { clientId: s.clientId, res, tokens: () => s.tokens(res) };
+  }
+  async function walk(dir: string) {
+    const out: { path: string; mode: number; text: string }[] = [];
+    for (const e of await readdir(dir, { withFileTypes: true, recursive: true })) {
+      const path = join(e.parentPath, e.name);
+      if (e.isFile()) out.push({ path: path.slice(dir.length + 1), mode: (await stat(path)).mode & 0o777, text: await readFile(path, 'utf8') });
+    }
+    return out;
+  }
+
+  it('after a restart: the refresh token works, a fresh sign-in reaches the record, and deleting it leaves nothing of the learner under auth/', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cxm-data-'));
+    try {
+      const course = { ...(await loadExample()), custody: 'server-kept' as const };
+      const cfg = config({ CXM_DATA_DIR: dir });
+      const first = await createAppFromConfig(cfg, { course });
+      const signedUp = await signInWith(first, jar(), 'signup');
+      const { access_token, refresh_token } = await signedUp.tokens();
+      const subject = subjectOf(access_token);
+      const call = await mcp(first, '/mcp', access_token);
+      await call('start_placement');
+      await call('choose_placement', { pathKey: 'json', startLessonKey: 'what-is-json', skip: [], reason: 'New to JSON.' });
+      const written = (await call('get_record')).data.record.statements.length;
+      expect(written).toBeGreaterThan(0);
+      await Promise.all(clients.splice(0).map((c) => c.close()));
+      await first.close();
+
+      const second = await createAppFromConfig(cfg, { course });
+      apps.push(second);
+      const refreshed = await refreshWith(second, signedUp.clientId, refresh_token);
+      expect(refreshed.status).toBe(200);
+      const fresh = (await refreshed.json()) as { access_token: string; refresh_token: string };
+      expect(subjectOf(fresh.access_token)).toBe(subject);
+      expect((await (await mcp(second, '/mcp', fresh.access_token))('get_record')).data.record.statements).toHaveLength(written);
+      // The rotated refresh token was spent before the restart's successor was issued: presenting it again is refused.
+      expect((await refreshWith(second, signedUp.clientId, refresh_token)).status).toBe(400);
+
+      const browser = jar();
+      const signedIn = await signInWith(second, browser, 'signin');
+      const again = await signedIn.tokens();
+      expect(subjectOf(again.access_token)).toBe(subject);
+      const view = await second.fetch(req('/record', { cookies: browser }));
+      expect(view.status).toBe(200);
+      const page = await view.text();
+      expect(page).not.toContain('Nothing is recorded yet');
+      const exported = (await (await second.fetch(req('/record/export.json', { cookies: browser }))).json()) as { record: { statements: unknown[] } };
+      expect(exported.record.statements).toHaveLength(written);
+
+      expect((await second.fetch(formPost('/record', { action: 'delete', csrf: csrfOf(page)! }, browser))).status).toBe(200);
+      const auth = await walk(join(dir, 'auth'));
+      // Only the agents' registrations are left: no account, refresh token or revoked family of the learner.
+      expect(auth.map((f) => f.path.split('/')[0])).toEqual(['clients', 'clients']);
+      for (const f of auth) expect(f.text).not.toContain(subject);
+      expect(await readdir(join(dir, 'server'))).toEqual([]);
+      // Nothing the learner had signs anyone in any more.
+      expect(await mcpStatus(second, again.access_token)).toBe(401);
+      expect((await refreshWith(second, signedIn.clientId, again.refresh_token)).status).toBe(400);
+      expect((await second.fetch(req('/record', { cookies: browser }))).status).toBe(401);
+      expect((await signInWith(second, jar(), 'signin')).res.status).toBe(400);
+
+      // And after another restart, the account is still gone.
+      const third = await createAppFromConfig(cfg, { course });
+      apps.push(third);
+      expect((await signInWith(third, jar(), 'signin')).res.status).toBe(400);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('auth/ files are 0600 in 0700 folders and hold none of the issued secrets: password, codes, refresh, access or session tokens', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cxm-data-'));
+    try {
+      const course = { ...(await loadExample()), custody: 'server-kept' as const };
+      const app = await createAppFromConfig(config({ CXM_DATA_DIR: dir }), { course });
+      apps.push(app);
+      const browser = jar();
+      const signedUp = await signInWith(app, browser, 'signup');
+      const first = await signedUp.tokens();
+      const rotated = (await (await refreshWith(app, signedUp.clientId, first.refresh_token)).json()) as { access_token: string; refresh_token: string };
+      const issued = [PASSWORD, first.code, first.access_token, first.refresh_token, rotated.access_token, rotated.refresh_token, browser.get('cxm_sid')!, browser.get('cxm_areq')!];
+      for (const v of issued) expect(v.length).toBeGreaterThan(8);
+
+      const auth = await walk(join(dir, 'auth'));
+      expect(auth.length).toBeGreaterThanOrEqual(4);
+      for (const f of auth) {
+        expect(f.mode).toBe(0o600);
+        for (const v of issued) expect(f.text).not.toContain(v);
+        expect(f.text).not.toContain('ada.l');
+      }
+      for (const e of await readdir(join(dir, 'auth'), { withFileTypes: true, recursive: true })) {
+        if (e.isDirectory()) expect((await stat(join(e.parentPath, e.name))).mode & 0o777).toBe(0o700);
+      }
+      // The refresh tokens are kept by their SHA-256 alone.
+      const kept = auth.filter((f) => f.path.startsWith('refresh/')).map((f) => f.text).join('\n');
+      expect(kept).toContain(createHash('sha256').update(rotated.refresh_token).digest('hex'));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -545,9 +655,12 @@ describe('end to end', () => {
     const deleted = await app.fetch(formPost('/record', { action: 'delete', csrf: csrfOf(view)! }, browser));
     expect(deleted.status).toBe(200);
     expect(revoked).toHaveLength(1);
-    const after = (await (await app.fetch(req('/record/export.json', { cookies: browser }))).json()) as { record: { statements: unknown[] } };
-    expect(after.record.statements).toEqual([]);
-    expect((await call('get_status')).data.ok).toBe(true);
+    // The account went with the record (R65): neither the browser session nor the agent's token signs the learner in.
+    expect((await app.fetch(req('/record/export.json', { cookies: browser }))).status).toBe(401);
+    await expect(call('get_status')).rejects.toThrow();
+    // Signing up again with the username is a new learner, starting from the beginning.
+    const anew = await mcp(app, '/mcp', await signUp(app, jar()));
+    expect((await anew('get_record')).data.record.statements).toEqual([]);
   });
 
   it('option 1: a simulator launch, the pairing code, MCP calls; the statements land in the LMS in cmi5 order', async () => {

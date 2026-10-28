@@ -29,6 +29,12 @@ export interface FederationHooks {
   complete(req: Request): Promise<{ subject: string; state: string }>;
 }
 
+/** The authorization server, and the erase the option 3 record delete form uses. */
+export interface LearnerAuthServer extends AuthServer {
+  /** Forgets everything kept to sign this learner subject in: account, refresh tokens, codes, sessions. Takes no learner lock. */
+  eraseLearner(subject: string): Promise<void>;
+}
+
 export interface AuthServerOptions {
   publicUrl: string;
   course: CourseModel;
@@ -96,7 +102,7 @@ export function launchSubject(c: LaunchContext): string {
   return createHash('sha256').update(c.endpoint + '\n' + actorKey(c.actor) + '\n' + c.registration).digest('hex');
 }
 
-export function createAuthServer(o: AuthServerOptions): AuthServer {
+export function createAuthServer(o: AuthServerOptions): LearnerAuthServer {
   const base = new URL(o.publicUrl);
   if (base.pathname !== '/' || base.search || base.hash) throw new TypeError('publicUrl must be an origin with no path, query or fragment');
   const publicUrl = base.origin;
@@ -333,7 +339,7 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       if (!found) return oauthError('invalid_grant', 'the code is not valid');
       const c = found.code;
       if (found.used) {
-        if (c.familyId) await store.revokeFamily(c.familyId);
+        if (c.familyId) await store.revokeFamily(c.familyId, c.subject);
         return oauthError('invalid_grant', 'the code was already used');
       }
       if (c.expiresAt <= now()) return oauthError('invalid_grant', 'the code has expired');
@@ -351,7 +357,7 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       if (!found) return oauthError('invalid_grant', 'the refresh token is not valid');
       const t = found.token;
       if (found.used) {
-        await store.revokeFamily(t.familyId);
+        await store.revokeFamily(t.familyId, t.subject);
         return oauthError('invalid_grant', 'the refresh token was already used; sign in again');
       }
       if (t.expiresAt <= now()) return oauthError('invalid_grant', 'the refresh token has expired');
@@ -398,6 +404,8 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       return { kind: 'official', subject: g.subject, actor: c.actor, launchId: g.launchId };
     }
     if (g.launchId) return undefined;
+    // An erased learner's access tokens and sessions sign nobody in, so nothing is written for an account that is gone.
+    if (o.mode === 'accounts' && !(await store.hasAccount(g.subject))) return undefined;
     return { kind: 'official', subject: g.subject, actor: { objectType: 'Agent', account: { homePage: o.course.id, name: g.subject } } };
   }
 
@@ -442,5 +450,7 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       if (!s || s.expiresAt <= now()) return undefined;
       return learnerFor(s);
     },
+
+    eraseLearner: (subject) => store.eraseLearner(subject),
   };
 }

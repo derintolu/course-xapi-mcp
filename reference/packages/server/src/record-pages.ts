@@ -3,7 +3,8 @@
 // learner signed in with: `/record` (view), `/record/export.json` (download) and, in option 3, a delete form
 // (POST `/record` with a CSRF token) and `/record/policy` (how long records are kept).
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { StoreError, type AuthServer, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
+import { StoreError, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
+import type { LearnerAuthServer } from './auth/auth-server.ts';
 import { readCapped } from './auth/clients.ts';
 import { html, page } from './auth/pages.ts';
 import { withLearnerLock } from './custody/mutex.ts';
@@ -12,7 +13,8 @@ import type { ServerStore } from './custody/stores.ts';
 export interface RecordPagesOptions {
   course: CourseModel;
   custody: Custody;
-  auth: AuthServer;
+  /** Option 3: the delete form erases the learner's account here too. */
+  auth: LearnerAuthServer;
   /** Option 3: the store the delete form erases from. */
   serverStore?: ServerStore;
   /** Called with the learner's subject before the record is erased (badge revocation). */
@@ -73,7 +75,7 @@ export function createRecordPages(o: RecordPagesOptions): (req: Request) => Prom
     const { holder } = custody.links(l);
     const rows = record.statements.map((s) => html`<tr><td>${s.timestamp ?? ''}</td><td>${verbOf(s)}</td><td>${objectOf(s)}</td></tr>`);
     const del = canDelete
-      ? html`<form method="post" action="/record"><p><strong>Delete your record.</strong> This erases your progress and every statement this course server keeps for you. It cannot be undone; download a copy first if you want one.</p><input type="hidden" name="csrf" value="${csrfFor(sid)}"><input type="hidden" name="action" value="delete"><button type="submit">Delete my record</button></form><p><a href="/record/policy">How long records are kept</a></p>`
+      ? html`<form method="post" action="/record"><p><strong>Delete your record.</strong> This erases your progress, every statement this course server keeps for you, and your account. It cannot be undone; download a copy first if you want one.</p><input type="hidden" name="csrf" value="${csrfFor(sid)}"><input type="hidden" name="action" value="delete"><button type="submit">Delete my record</button></form><p><a href="/record/policy">How long records are kept</a></p>`
       : undefined;
     return page(
       title,
@@ -105,12 +107,14 @@ export function createRecordPages(o: RecordPagesOptions): (req: Request) => Prom
       return page(title, html`<p class="error">This form has expired. Open <a href="/record">your record</a> and try again.</p>`, 403);
     }
     // Under the learner's lock, so no tool call is between reading and writing the record meanwhile. Credentials
-    // first: if revoking fails, nothing is erased and the learner can try again.
+    // first: if revoking fails, nothing is erased and the learner can try again. The account last, so the learner
+    // can still sign in to retry if the record could not be deleted.
     await withLearnerLock(l.subject, async () => {
       await o.revokeLearner?.(l.subject);
       await o.serverStore!.deleteLearner(l.subject);
+      await auth.eraseLearner(l.subject);
     });
-    return page(title, html`<p>Your record was deleted. If you use this course again, it starts from the beginning.</p>`);
+    return page(title, html`<p>Your record and your account were deleted. To use this course again, sign up again; it starts from the beginning.</p>`);
   }
 
   return async (req) => {

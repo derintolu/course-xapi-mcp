@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import {
   MemoryLaunchStore,
   RULES_URI,
-  type AuthServer,
   type BadgeService,
   type CourseModel,
   type Custody,
@@ -18,8 +17,9 @@ import {
 import { loadPackage, readDir, readZip } from '@course-xapi-mcp/core/package';
 import { createBridge, startSweeper, type Bridge } from '@course-xapi-mcp/bridge';
 import type { ResolveHost } from '@course-xapi-mcp/lrs-client';
-import { createAuthServer, launchSubject } from './auth/auth-server.ts';
+import { createAuthServer, launchSubject, type LearnerAuthServer } from './auth/auth-server.ts';
 import { isLoopbackHost } from './auth/clients.ts';
+import { DirectoryAuthStore } from './auth/directory-store.ts';
 import { createOidcFederation } from './auth/oidc.ts';
 import { custodyErrors, DEFAULT_RETENTION, type AppConfig } from './config.ts';
 import { createAuthorLrsCustody } from './custody/author-lrs.ts';
@@ -27,7 +27,7 @@ import { createLmsLaunchedCustody } from './custody/lms-launched.ts';
 import { withLearnerLock } from './custody/mutex.ts';
 import { createPracticeCustody, type PracticeCustody } from './custody/practice.ts';
 import { createServerKeptCustody } from './custody/server-kept.ts';
-import { DirectoryPracticeStore, MemoryPracticeStore, MemoryServerStore, type ServerStore } from './custody/stores.ts';
+import { DirectoryPracticeStore, DirectoryServerStore, MemoryPracticeStore, MemoryServerStore, type ServerStore } from './custody/stores.ts';
 import { createRecordPages } from './record-pages.ts';
 import { createCourseServer } from './server.ts';
 
@@ -56,7 +56,7 @@ export interface AppOptions {
   /** Behind `/mcp/practice` (or `/mcp` when custody is practice). */
   practice?: PracticeCustody;
   /** The authorization server (options 1-3). */
-  auth?: AuthServer;
+  auth?: LearnerAuthServer;
   /** The cmi5 launch bridge (option 1). */
   bridge?: Bridge;
   /** Option 3: the store the record delete form erases from. */
@@ -129,9 +129,6 @@ export function createApp(o: AppOptions): App {
   };
 }
 
-const SERVER_KEPT_ON_DISK =
-  'CXM_DATA_DIR cannot be used with custody server-kept yet: accounts are held in memory, so after a restart learners could not sign in to reach or delete the records kept on disk. Unset CXM_DATA_DIR to keep records in memory.';
-
 /** A package that does not load, or a configuration the package's custody cannot run with. */
 export class ConfigError extends Error {
   readonly errors: string[];
@@ -163,7 +160,7 @@ export interface BadgeParts {
   course: CourseModel;
   publicUrl: string;
   custody: Custody;
-  auth?: AuthServer;
+  auth?: LearnerAuthServer;
   launches?: LaunchStore;
   /** Milliseconds since the epoch (tests). */
   now?: () => number;
@@ -189,9 +186,6 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
   const course = o.course ?? (await loadCourse(config.packagePath));
   const missing = custodyErrors(config, course.custody);
   if (missing.length) throw new ConfigError(missing);
-  // Until a directory AuthStore exists, accounts live in memory: after a restart nobody could sign in to reach, or
-  // delete, a server-kept record kept on disk (R61).
-  if (config.dataDir && course.custody === 'server-kept') throw new ConfigError([SERVER_KEPT_ON_DISK]);
   const { publicUrl } = config;
   const now = o.now;
   const iso = now && (() => new Date(now()).toISOString());
@@ -201,11 +195,13 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
   const practiceStore = dir ? new DirectoryPracticeStore(join(dir, 'practice'), undefined, now) : new MemoryPracticeStore(undefined, now);
   const practice = course.custody === 'practice' || course.allowPractice ? createPracticeCustody({ store: practiceStore, courseId: course.id }) : undefined;
 
+  // With a data dir, accounts, clients and refresh tokens survive a restart alongside the records (R65).
+  const authStore = dir && course.custody !== 'practice' ? await DirectoryAuthStore.open(join(dir, 'auth'), { now }) : undefined;
   const authFor = (mode: 'accounts' | 'federated' | 'launch-paired', extra: Partial<Parameters<typeof createAuthServer>[0]> = {}) =>
-    createAuthServer({ publicUrl, course, signingKey: config.signingKey, mode, now, ...extra });
+    createAuthServer({ publicUrl, course, signingKey: config.signingKey, mode, now, store: authStore, ...extra });
 
   let custody: Custody;
-  let auth: AuthServer | undefined;
+  let auth: LearnerAuthServer | undefined;
   let serverStore: ServerStore | undefined;
   let launches: LaunchStore | undefined;
   let bridge: Bridge | undefined;
@@ -215,8 +211,7 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
       custody = practice!;
       break;
     case 'server-kept':
-      // Memory only: CXM_DATA_DIR is refused with this custody above.
-      serverStore = new MemoryServerStore();
+      serverStore = dir ? new DirectoryServerStore(join(dir, 'server')) : new MemoryServerStore();
       custody = createServerKeptCustody({ store: serverStore, publicUrl, courseTitle: course.title });
       auth = authFor('accounts');
       break;

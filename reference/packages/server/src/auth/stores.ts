@@ -2,6 +2,8 @@
 // What the authorization server keeps: clients, pending authorization requests, codes, refresh tokens,
 // browser sessions, accounts and spent pairing codes. Codes, refresh tokens and session ids are stored by
 // their SHA-256 hash, never in the clear.
+import { createHash } from 'node:crypto';
+import { DEFAULTS } from '@course-xapi-mcp/core';
 
 export interface ClientRecord {
   clientId: string;
@@ -74,10 +76,12 @@ export interface AuthStore {
   redeemCode(hash: string): Promise<{ code: CodeRecord; used: boolean } | undefined>;
   setCodeFamily(hash: string, familyId: string): Promise<void>;
 
+  /** A token of a revoked family is not kept. */
   putRefresh(hash: string, r: RefreshRecord): Promise<void>;
   /** Marks the token rotated and returns it; `used` is true when it had already been rotated. Undefined when unknown or revoked. */
   rotateRefresh(hash: string): Promise<{ token: RefreshRecord; used: boolean } | undefined>;
-  revokeFamily(familyId: string): Promise<void>;
+  /** Drops the family's refresh tokens and refuses any later one of it; `subject` is whose family it is. */
+  revokeFamily(familyId: string, subject: string): Promise<void>;
 
   putSession(hash: string, s: SessionRecord): Promise<void>;
   getSession(hash: string): Promise<SessionRecord | undefined>;
@@ -85,6 +89,8 @@ export interface AuthStore {
   /** False when the username is taken. */
   createAccount(a: AccountRecord): Promise<boolean>;
   getAccount(username: string): Promise<AccountRecord | undefined>;
+  /** True while an account with this subject exists. */
+  hasAccount(subject: string): Promise<boolean>;
   /**
    * Atomically: if fewer than `max` attempts for `key` are recorded at or after `since`, records one at `at`
    * and returns true; otherwise records nothing and returns false.
@@ -97,6 +103,12 @@ export interface AuthStore {
 
   /** True the first time it is called for a launch, false after. */
   spendPairingCode(launchId: string): Promise<boolean>;
+
+  /**
+   * The learner's record was erased: forgets their account, refresh tokens, revoked families, codes and browser
+   * sessions. Takes no learner lock (the caller holds it).
+   */
+  eraseLearner(subject: string): Promise<void>;
 }
 
 /** The store is full right now: answered as "try again later" (HTTP 503), never by dropping someone else's entry. */
@@ -113,6 +125,21 @@ export const MAX_PENDING_REQUESTS = 10_000;
 export const MAX_REGISTERED_CLIENTS = 10_000;
 /** An expired authorization code is kept this much longer, so a late replay is still recognised and revokes its tokens. */
 export const CODE_REPLAY_GRACE_MS = 600_000;
+/** A revoked family is remembered as long as a token of it could live (no token of it is kept after the revocation). */
+const REVOKED_FAMILY_TTL_MS = DEFAULTS.refreshTokenTtlS * 1000;
+
+/** The parts of an AuthStore that a durable store keeps across restarts; the rest is short-lived and stays in memory. */
+export type DurableTable = 'clients' | 'refresh' | 'revoked' | 'accounts';
+
+/** An account as kept: by the SHA-256 of its username, which is not stored. */
+export type StoredAccount = Omit<AccountRecord, 'username'>;
+/** A revoked refresh token family: whose it was, and until when a token of it could still turn up. */
+export interface RevokedFamily {
+  subject: string;
+  expiresAt: number;
+}
+
+const usernameKey = (username: string) => createHash('sha256').update(username).digest('hex');
 
 export interface MemoryAuthStoreOptions {
   /** Milliseconds since the epoch, for sweeping expired entries. Default `Date.now`. */
@@ -129,18 +156,24 @@ function sweep<V>(map: Map<string, V>, expired: (v: V) => boolean) {
 }
 
 /**
- * In-memory AuthStore. Everything is lost on restart. Expired requests, codes, refresh tokens and sessions are swept
- * whenever a new one is put, and pending requests and registered clients are capped, so unauthenticated traffic
- * cannot grow it without bound.
+ * In-memory AuthStore. Everything is lost on restart. Expired requests, codes, refresh tokens, revoked families and
+ * sessions are swept whenever a new one is put, and pending requests and registered clients are capped, so
+ * unauthenticated traffic cannot grow it without bound.
+ *
+ * Every change to a durable table is reported to `changed`, which does nothing here; a durable store overrides it
+ * to write the entry through, so it shares these semantics exactly.
  */
 export class MemoryAuthStore implements AuthStore {
   readonly #clients = new Map<string, ClientRecord>();
   readonly #requests = new Map<string, AuthRequest>();
   readonly #codes = new Map<string, CodeRecord & { used: boolean }>();
   readonly #refresh = new Map<string, RefreshRecord & { used: boolean }>();
-  readonly #revokedFamilies = new Set<string>();
+  readonly #revoked = new Map<string, RevokedFamily>();
   readonly #sessions = new Map<string, SessionRecord>();
-  readonly #accounts = new Map<string, AccountRecord>();
+  /** By the SHA-256 of the username. */
+  readonly #accounts = new Map<string, StoredAccount>();
+  /** Subject to the key of its account. */
+  readonly #subjects = new Map<string, string>();
   readonly #attempts = new Map<string, number[]>();
   readonly #spentPairing = new Set<string>();
   readonly #now: () => number;
@@ -153,11 +186,57 @@ export class MemoryAuthStore implements AuthStore {
     this.#maxClients = o.maxClients ?? MAX_REGISTERED_CLIENTS;
   }
 
+  /**
+   * An entry of a durable table was set or deleted; `current` reads what it holds now (undefined once deleted), so a
+   * write that runs late writes the latest. A rejection means the change is not kept. Nothing to do in memory.
+   */
+  protected async changed(_table: DurableTable, _key: string, _current: () => unknown): Promise<void> {}
+
+  /** Puts an entry read back from durable storage (clients in registration order), before the store is used. */
+  protected restore(table: DurableTable, key: string, value: unknown) {
+    if (table === 'clients') this.#clients.set(key, value as ClientRecord);
+    else if (table === 'refresh') this.#refresh.set(key, value as RefreshRecord & { used: boolean });
+    else if (table === 'revoked') this.#revoked.set(key, value as RevokedFamily);
+    else {
+      this.#accounts.set(key, value as StoredAccount);
+      this.#subjects.set((value as StoredAccount).id, key);
+    }
+  }
+
+  /** After `restore`: drops what expired meanwhile, and tokens of a family revoked before they could be dropped. */
+  protected async restored() {
+    const now = this.#now();
+    const revoked = [...this.#revoked].filter(([, f]) => f.expiresAt <= now).map(([k]) => k);
+    for (const k of revoked) this.#revoked.delete(k);
+    const refresh = [...this.#refresh].filter(([, r]) => r.expiresAt <= now || this.#revoked.has(r.familyId)).map(([k]) => k);
+    for (const k of refresh) this.#refresh.delete(k);
+    await this.#deleted('refresh', refresh);
+    await this.#deleted('revoked', revoked);
+  }
+
+  /** Reports a deletion of each key in `keys`, one after the other. */
+  async #deleted(table: DurableTable, keys: string[]) {
+    for (const k of keys) await this.changed(table, k, () => undefined);
+  }
+
   async putClient(c: ClientRecord) {
+    const evicted: string[] = [];
     this.#clients.delete(c.clientId);
     // Oldest registration first (a Map keeps insertion order).
-    while (this.#clients.size >= this.#maxClients) this.#clients.delete(this.#clients.keys().next().value!);
-    this.#clients.set(c.clientId, structuredClone(c));
+    while (this.#clients.size >= this.#maxClients) {
+      const oldest = this.#clients.keys().next().value!;
+      this.#clients.delete(oldest);
+      evicted.push(oldest);
+    }
+    const kept = structuredClone(c);
+    this.#clients.set(c.clientId, kept);
+    try {
+      await this.changed('clients', c.clientId, () => this.#clients.get(c.clientId));
+    } catch (e) {
+      if (this.#clients.get(c.clientId) === kept) this.#clients.delete(c.clientId);
+      throw e;
+    }
+    await this.#deleted('clients', evicted);
   }
   async getClient(clientId: string) {
     const c = this.#clients.get(clientId);
@@ -203,20 +282,40 @@ export class MemoryAuthStore implements AuthStore {
 
   async putRefresh(hash: string, r: RefreshRecord) {
     const now = this.#now();
-    sweep(this.#refresh, (x) => x.expiresAt <= now);
-    this.#refresh.set(hash, { ...structuredClone(r), used: false });
+    const expired = [...this.#refresh].filter(([, x]) => x.expiresAt <= now).map(([k]) => k);
+    for (const k of expired) this.#refresh.delete(k);
+    if (!this.#revoked.has(r.familyId)) {
+      const kept = { ...structuredClone(r), used: false };
+      this.#refresh.set(hash, kept);
+      try {
+        await this.changed('refresh', hash, () => this.#refresh.get(hash));
+      } catch (e) {
+        if (this.#refresh.get(hash) === kept) this.#refresh.delete(hash);
+        throw e;
+      }
+    }
+    await this.#deleted('refresh', expired);
   }
   async rotateRefresh(hash: string) {
     const r = this.#refresh.get(hash);
-    if (!r || this.#revokedFamilies.has(r.familyId)) return undefined;
+    if (!r || this.#revoked.has(r.familyId)) return undefined;
     const used = r.used;
     r.used = true;
     const { used: _, ...token } = structuredClone(r);
+    if (!used) await this.changed('refresh', hash, () => this.#refresh.get(hash));
     return { token, used };
   }
-  async revokeFamily(familyId: string) {
-    this.#revokedFamilies.add(familyId);
-    for (const [k, r] of this.#refresh) if (r.familyId === familyId) this.#refresh.delete(k);
+  async revokeFamily(familyId: string, subject: string) {
+    const now = this.#now();
+    const expired = [...this.#revoked].filter(([, f]) => f.expiresAt <= now).map(([k]) => k);
+    for (const k of expired) this.#revoked.delete(k);
+    this.#revoked.set(familyId, { subject, expiresAt: now + REVOKED_FAMILY_TTL_MS });
+    const dropped = [...this.#refresh].filter(([, r]) => r.familyId === familyId).map(([k]) => k);
+    for (const k of dropped) this.#refresh.delete(k);
+    // The revocation is kept before its tokens are deleted, so a crash in between leaves none of them usable.
+    await this.changed('revoked', familyId, () => this.#revoked.get(familyId));
+    await this.#deleted('refresh', dropped);
+    await this.#deleted('revoked', expired);
   }
 
   async putSession(hash: string, s: SessionRecord) {
@@ -230,13 +329,28 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async createAccount(a: AccountRecord) {
-    if (this.#accounts.has(a.username)) return false;
-    this.#accounts.set(a.username, structuredClone(a));
+    const key = usernameKey(a.username);
+    if (this.#accounts.has(key)) return false;
+    const { username: _, ...kept } = structuredClone(a);
+    this.#accounts.set(key, kept);
+    this.#subjects.set(a.id, key);
+    try {
+      await this.changed('accounts', key, () => this.#accounts.get(key));
+    } catch (e) {
+      if (this.#accounts.get(key) === kept) {
+        this.#accounts.delete(key);
+        this.#subjects.delete(a.id);
+      }
+      throw e;
+    }
     return true;
   }
   async getAccount(username: string) {
-    const a = this.#accounts.get(username);
-    return a && structuredClone(a);
+    const a = this.#accounts.get(usernameKey(username));
+    return a && { ...structuredClone(a), username };
+  }
+  async hasAccount(subject: string) {
+    return this.#subjects.has(subject);
   }
   async reserveAttempt(key: string, at: number, since: number, max: number) {
     const list = (this.#attempts.get(key) ?? []).filter((t) => t >= since);
@@ -260,5 +374,24 @@ export class MemoryAuthStore implements AuthStore {
     if (this.#spentPairing.has(launchId)) return false;
     this.#spentPairing.add(launchId);
     return true;
+  }
+
+  async eraseLearner(subject: string) {
+    const ofLearner = <V extends { subject: string }>(map: Map<string, V>) => {
+      const keys = [...map].filter(([, v]) => v.subject === subject).map(([k]) => k);
+      for (const k of keys) map.delete(k);
+      return keys;
+    };
+    ofLearner(this.#codes);
+    ofLearner(this.#sessions);
+    const refresh = ofLearner(this.#refresh);
+    const revoked = ofLearner(this.#revoked);
+    const account = this.#subjects.get(subject);
+    this.#subjects.delete(subject);
+    if (account) this.#accounts.delete(account);
+    // The account last: if this fails part way, the learner can still sign in and delete again.
+    await this.#deleted('refresh', refresh);
+    await this.#deleted('revoked', revoked);
+    if (account) await this.#deleted('accounts', [account]);
   }
 }

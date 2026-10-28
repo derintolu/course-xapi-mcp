@@ -378,17 +378,21 @@ describe('authorization code flow', () => {
 
 describe('authenticate', () => {
   it('answers 401 with the resource metadata challenge when the token is missing, invalid or for another audience', async () => {
-    const s = accountsServer();
+    const store = new MemoryAuthStore({ now });
+    const s = accountsServer(store);
+    // Accounts mode signs in only a subject that has an account.
+    await store.createAccount({ id: 'someone', username: 'someone', salt: '', hash: '' });
     const key = await importJWK(signingKey, 'EdDSA');
     const otherKey = await importJWK(generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' }) as JWK, 'EdDSA');
-    const sign = (aud: string, k: CryptoKey | Uint8Array) =>
+    const sign = (aud: string, k: CryptoKey | Uint8Array, subject = 'someone') =>
       new SignJWT({ scope: 'cxm:learn' }).setProtectedHeader({ alg: 'EdDSA', typ: 'at+jwt' }).setIssuer(PUBLIC).setAudience(aud)
-        .setSubject('someone').setIssuedAt(T0 / 1000).setExpirationTime(T0 / 1000 + 3600).sign(k);
+        .setSubject(subject).setIssuedAt(T0 / 1000).setExpirationTime(T0 / 1000 + 3600).sign(k);
     const otherAudience = await sign('https://other.example/mcp', key);
     const otherSigner = await sign(RESOURCE, otherKey);
     expect(await s.authenticate(bearer(await sign(RESOURCE, key)))).not.toBeInstanceOf(Response);
 
-    for (const req of [new Request(RESOURCE), bearer('not-a-jwt'), bearer(otherAudience), bearer(otherSigner)]) {
+    const noAccount = await sign(RESOURCE, key, 'no-such-account');
+    for (const req of [new Request(RESOURCE), bearer('not-a-jwt'), bearer(otherAudience), bearer(otherSigner), bearer(noAccount)]) {
       const res = await s.authenticate(req);
       expect(res).toBeInstanceOf(Response);
       expect((res as Response).status).toBe(401);
@@ -461,6 +465,27 @@ describe('accounts mode', () => {
     const signin = await accountsLogin(s, client.client_id, c2, 'signin', 'ada.l', 'correct horse battery');
     const { body: b2 } = await exchange(s, client.client_id, await codeFrom(signin), v2);
     expect(((await s.authenticate(bearer(b2.access_token))) as LearnerRef).subject).toBe(fromToken.subject);
+  });
+
+  it('eraseLearner signs the learner out everywhere: access token, refresh token, browser session and password', async () => {
+    const store = new MemoryAuthStore({ now });
+    const s = accountsServer(store);
+    const { client, loginRes, code, verifier } = await fullAccountsFlow(s, 'ada.l', 'correct horse battery');
+    const sid = cookie(loginRes, 'cxm_sid')!.split(';')[0];
+    const { body } = await exchange(s, client.client_id, code, verifier);
+    const learner = (await s.authenticate(bearer(body.access_token))) as LearnerRef;
+    expect(learner.subject).toBeTruthy();
+    // Another learner is not touched.
+    const other = await fullAccountsFlow(s, 'grace.h', 'correct horse battery');
+    const { body: otherTokens } = await exchange(s, other.client.client_id, other.code, other.verifier);
+
+    await s.eraseLearner(learner.subject);
+    expect(((await s.authenticate(bearer(body.access_token))) as Response).status).toBe(401);
+    expect(await s.browserLearner(get('/record', { cookie: sid }))).toBeUndefined();
+    const refreshed = await route(s, tokenReq({ grant_type: 'refresh_token', refresh_token: body.refresh_token, client_id: client.client_id }));
+    expect(refreshed.status).toBe(400);
+    expect((await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'correct horse battery')).status).toBe(400);
+    expect(await s.authenticate(bearer(otherTokens.access_token))).not.toBeInstanceOf(Response);
   });
 
   it('validates usernames and passwords and refuses a taken username', async () => {

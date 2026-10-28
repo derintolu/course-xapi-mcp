@@ -343,9 +343,9 @@ describe('badges in option 3 (server-kept)', () => {
         for (const t of traces) expect(after).not.toContain(t);
         expect(after).not.toMatch(/"(subject|actor|registration|credentialSubject)"/);
       }
-      expect((await app.fetch(req('/badges/credentials/' + id, { cookies: browser }))).status).toBe(404);
-      expect((await call('get_badges')).data.badges).toEqual([]);
-      expect(claimable(await claimPage(app, browser))).toEqual([]);
+      // The account went with the record (R65), so the learner's browser and agent are signed out.
+      expect((await app.fetch(req('/badges/credentials/' + id, { cookies: browser }))).status).toBe(401);
+      await expect(call('get_badges')).rejects.toThrow();
     } finally {
       if (dir) await rm(dir, { recursive: true, force: true });
     }
