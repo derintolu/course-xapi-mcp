@@ -1,0 +1,22 @@
+{
+  "specVersion": "0.2",
+  "flavour": "authoring",
+  "version": "1.0.0",
+  "language": "en",
+  "license": "Apache-2.0",
+  "rules": [
+    "Conformance course rule: always name the JSON value type you are talking about."
+  ],
+  "placement": {
+    "intro": "Ask whether the learner has edited JSON files by hand.",
+    "maxQuestions": 2
+  },
+  "custody": "server-kept",
+  "allowPractice": true,
+  "paths": {
+    "basics": {
+      "tagline": "Strings, numbers and booleans in JSON files.",
+      "placementHints": "Start at intro for anyone new to JSON. Start at fix, skipping intro and types, only if the learner already edits JSON by hand."
+    }
+  }
+}

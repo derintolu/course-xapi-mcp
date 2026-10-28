@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<courseStructure xmlns="https://w3id.org/xapi/profiles/cmi5/v1/CourseStructure.xsd" xmlns:cxm="https://course-xapi-mcp.sqwrlz.com/course/v1">
+  <course id="https://course-xapi-mcp.sqwrlz.com/conformance/course">
+    <title><langstring lang="en">Conformance course</langstring></title>
+    <description><langstring lang="en">The course every course server under test loads: three lessons with questions, two planted bugs and both checkpoint kinds.</langstring></description>
+    <cxm:course src="cxm/course.json" specVersion="0.2" mcp="http://127.0.0.1:8787/mcp"/>
+  </course>
+  <au id="https://course-xapi-mcp.sqwrlz.com/conformance/course/placement" cxm:key="placement" cxm:role="placement" moveOn="NotApplicable" launchMethod="OwnWindow">
+    <title><langstring lang="en">Placement</langstring></title>
+    <description><langstring lang="en">Find out where to start.</langstring></description>
+    <url>http://127.0.0.1:8787/cmi5/launch?au=placement</url>
+  </au>
+  <block id="https://course-xapi-mcp.sqwrlz.com/conformance/course/paths/basics" cxm:key="basics">
+    <title><langstring lang="en">JSON value types</langstring></title>
+    <description><langstring lang="en">Strings, numbers and booleans in JSON files.</langstring></description>
+    <au id="https://course-xapi-mcp.sqwrlz.com/conformance/course/lessons/intro" cxm:key="intro" moveOn="CompletedAndPassed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Quotes make strings</langstring></title>
+      <description><langstring lang="en">Quotes make strings</langstring></description>
+      <url>http://127.0.0.1:8787/cmi5/launch?au=intro</url>
+      <cxm:lesson src="cxm/lessons/intro.json"/>
+    </au>
+    <au id="https://course-xapi-mcp.sqwrlz.com/conformance/course/lessons/types" cxm:key="types" moveOn="Completed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Booleans are not strings</langstring></title>
+      <description><langstring lang="en">Booleans are not strings</langstring></description>
+      <url>http://127.0.0.1:8787/cmi5/launch?au=types</url>
+      <cxm:lesson src="cxm/lessons/types.json"/>
+    </au>
+    <au id="https://course-xapi-mcp.sqwrlz.com/conformance/course/lessons/fix" cxm:key="fix" moveOn="CompletedAndPassed" launchMethod="OwnWindow">
+      <title><langstring lang="en">Fix the config</langstring></title>
+      <description><langstring lang="en">Fix the config</langstring></description>
+      <url>http://127.0.0.1:8787/cmi5/launch?au=fix</url>
+      <cxm:lesson src="cxm/lessons/fix.json"/>
+    </au>
+    <cxm:path src="cxm/course.json#/paths/basics"/>
+  </block>
+</courseStructure>

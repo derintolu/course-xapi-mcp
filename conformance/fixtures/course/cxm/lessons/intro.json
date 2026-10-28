@@ -1,0 +1,51 @@
+{
+  "minutes": 4,
+  "sources": [
+    {
+      "title": "RFC 8259: The JavaScript Object Notation (JSON) Data Interchange Format",
+      "url": "https://www.rfc-editor.org/rfc/rfc8259"
+    }
+  ],
+  "beats": [
+    {
+      "key": "welcome",
+      "goal": "The learner knows JSON values have types.",
+      "content": "Every JSON value has a type: object, array, string, number, boolean or null."
+    },
+    {
+      "key": "quotes",
+      "goal": "The learner knows quotes make a string.",
+      "content": "A value in double quotes is a string, even when it looks like a number: \"42\" is a string, 42 is a number.",
+      "question": "Which of these is a string in JSON, 42 or \"42\"?"
+    }
+  ],
+  "checkpoint": {
+    "key": "explain",
+    "kind": "free-text",
+    "question": "What is the difference between {\"port\": 8080} and {\"port\": \"8080\"}?",
+    "rubric": "A good answer says the first value is a number and the second a string.",
+    "branches": [
+      {
+        "key": "next",
+        "when": "The answer names number versus string.",
+        "success": true,
+        "to": "types",
+        "message": "Right. Next: booleans."
+      },
+      {
+        "key": "ahead",
+        "when": "The answer names number versus string and the learner already knows booleans.",
+        "success": true,
+        "to": "fix",
+        "message": "Right. You can skip ahead to fixing a config file."
+      },
+      {
+        "key": "again",
+        "when": "The answer misses the number/string difference.",
+        "success": false,
+        "to": "intro",
+        "message": "Let's go over the value types once more."
+      }
+    ]
+  }
+}

@@ -249,362 +249,434 @@
   class: server
   text: "A server MUST advertise the extension `com.sqwrlz/course-xapi-mcp` in `capabilities.extensions` of its `server/discover` response, with a settings object holding `version`, `course`, `custody`, `official`, `allowPractice`, `badges`, `rulesVersion` and `authoring`."
   source: spec/draft/server.md#extension-declaration
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-002
   class: server
   text: "A server MUST NOT require the client to declare the extension; a client that does not know it still gets a working course through plain tools and text."
   source: spec/draft/server.md#extension-declaration
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-003
   class: server
   text: "A server MUST NOT rely on an MCP session: identity comes per request from the authorization token (custody options 1 to 3) or the practice handle argument (option 4)."
   source: spec/draft/server.md#extension-declaration
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-SRV-004
   class: server
   text: "A server SHOULD keep serving clients of earlier MCP protocol revisions statelessly."
   source: spec/draft/server.md#extension-declaration
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-005
   class: server
   text: "Every tool MUST return `structuredContent` matching its published output schema, plus the same content as text."
   source: spec/draft/server.md#results
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-SRV-006
   class: server
   text: "Every result MUST carry `rules` (version, digest and the URI of the full rules text) and `cxm` (custody, official, the practice label if any, and the current lesson and step)."
   source: spec/draft/server.md#results
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-SRV-007
   class: server
   text: "A server MUST offer the tools in this table under these names; `get_badges` only in custody options 1 to 3, and `resume_practice` and `delete_practice_record` only for practice runs."
   source: spec/draft/server.md#tools
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-008
   class: server
   text: "A server MAY add tools, but MUST NOT give them names starting `cxm_`, which are reserved for this specification, and an added tool MUST NOT write the record by any route other than the statement rules."
   source: spec/draft/server.md#tools
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-009
   class: server
   text: "After a beat with a question, `next_beat` MUST refuse to advance without a `learner_reply`."
   source: spec/draft/server.md#tools
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-010
   class: server
   text: "`reveal_bug` MUST be refused until `revealAfter` failed fix attempts (default 3) have been made, and always when the author set `revealAfter: null`; when allowed it records `revealed`, the bug does not count as caught, and the lesson can still pass."
   source: spec/draft/server.md#tools
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-011
   class: server
   text: "`end_session` MUST terminate the current AU session with its duration."
   source: spec/draft/server.md#tools
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-SRV-012
   class: server
   text: "`restart_course` MUST start a new registration in custody options 2 and 3 and a fresh practice run in option 4, leaving the old registration and earned badges unchanged; in option 1 it MUST tell the learner to ask their LMS instead."
   source: spec/draft/server.md#tools
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-SRV-013
   class: server
   text: "A server MUST deliver the agent rules (agent-rules.md, with the course's own rules appended after them) in its server instructions, as the resource `course-xapi-mcp://rules/agent`, through the `tutor` prompt, and as the digest in every result."
   source: spec/draft/server.md#rules-resources-and-prompts
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-014
   class: server
   text: "A server SHOULD also offer the rules as the skill `skill://course-xapi-mcp-tutor/SKILL.md`."
   source: spec/draft/server.md#rules-resources-and-prompts
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-015
   class: server
   text: "A server MUST offer the resource `course-xapi-mcp://course` as a safe outline of the course and MUST NOT serve the raw package through it."
   source: spec/draft/server.md#rules-resources-and-prompts
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-016
   class: server
   text: "A server MUST offer the resource `course-xapi-mcp://record/export` with the export payload."
   source: spec/draft/server.md#rules-resources-and-prompts
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-017
   class: server
   text: "Wherever a package is served over HTTP, it MUST carry an ETag that changes whenever its content does."
   source: spec/draft/server.md#rules-resources-and-prompts
-  status: pending
+  status: excluded
+  exclusion: "No conformance class in this draft serves a course package over HTTP: the course server offers an outline resource and never the package, so there is no ETag to observe. To be tested once the draft defines an endpoint that serves the package."
 - id: CXM-SRV-018
   class: server
   text: "A server MUST serve steps in the authored order."
   source: spec/draft/server.md#sequencing-and-branch-validation
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-019
   class: server
   text: "Whether code passes MUST be decided only by the server's deterministic checks, and that result is final."
   source: spec/draft/server.md#sequencing-and-branch-validation
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-020
   class: server
   text: "After a failed check, a server MUST allow only `success: false` branches."
   source: spec/draft/server.md#sequencing-and-branch-validation
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-021
   class: server
   text: "A server MUST refuse an invented, foreign or early branch choice and MUST write no statement for it."
   source: spec/draft/server.md#sequencing-and-branch-validation
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-022
   class: server
   text: "A server MUST record the agent's rationale for a branch choice."
   source: spec/draft/server.md#sequencing-and-branch-validation
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-SRV-023
   class: server
   text: "A server MUST validate a placement against the authored placement options."
   source: spec/draft/server.md#sequencing-and-branch-validation
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SRV-024
   class: server
   text: "Statements MUST be built only by the server, from validated events."
   source: spec/draft/server.md#sequencing-and-branch-validation
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-CUS-001
   class: custody
   text: "A server MUST report the course's custody option to the agent before the first recorded step, in the `cxm` block of every result and through `get_status`."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-CUS-002
   class: custody
   text: "A tool MUST NOT accept statements, records, actor ids or registrations from the agent, except `resume_practice`, which accepts only a practice copy."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-CUS-003
   class: custody
   text: "In options 1 to 3, a server MUST let the learner view and export their record as this document specifies for the option."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-004
   class: custody
   text: "In option 4, every result MUST carry `official: false` and the practice label text, and every statement MUST carry the practice category IRI."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-CUS-005
   class: custody
   text: "A course in option 1, 2 or 3 MAY set `allowPractice: true`; a practice run MUST NOT become official."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-CUS-006
   class: custody
   text: "In options 1 and 2, a server MUST send every statement, defined and allowed and including the learner's free-text answers, to the official record in real time, with no queue-and-confirm step."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-007
   class: custody
   text: "In options 2 and 3, the course server MUST be the only writer of learner statements for its course and the only minter of its registrations; any other system tracking the same learners MUST NOT write statements for the course and MUST NOT re-emit statements for changes it applied from the record."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: excluded
+  exclusion: "It constrains systems other than the server under test (any other system tracking the same learners), which a black-box run of one server cannot observe. The server's own part, minting the registrations and building every statement, is checked under CXM-BRG-013 and CXM-SRV-024."
 - id: CXM-CUS-008
   class: custody
   text: "In options 1 to 3, a server MUST NOT offer a tool that deletes the official record, and `get_status` MUST give the learner the record holder's link for deletion."
   source: spec/draft/custody.md#rules-for-every-option
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-009
   class: custody
   text: "A server MUST send statements to the LMS `endpoint` with the session token, and keep working state (cursor, pending checkpoint, files) in the xAPI State API of the LMS's LRS."
   source: spec/draft/custody.md#option-1-lms-launched
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-010
   class: custody
   text: "`get_record` MUST return what the token can read for this registration, a receipt of every statement this server sent (ids and summaries), and the LMS link."
   source: spec/draft/custody.md#option-1-lms-launched
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-011
   class: custody
   text: "A server MUST send statements to the author's LRS with its own server credentials, and keep working state and its registrations in that LRS's State API."
   source: spec/draft/custody.md#option-2-author-lrs
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-012
   class: custody
   text: "A server MUST offer `get_record` and an HTTPS export page, both read from the LRS."
   source: spec/draft/custody.md#option-2-author-lrs
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-013
   class: custody
   text: "A server MUST keep statements and working state in its own store, and offer `get_record` and an HTTPS export page in an xAPI statement export format."
   source: spec/draft/custody.md#option-3-server-kept
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-014
   class: custody
   text: "A server MUST publish a deletion and retention policy."
   source: spec/draft/custody.md#option-3-server-kept
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-CUS-015
   class: custody
   text: "A server MUST NOT send practice statements to any official record; it returns them to the learner and MAY relay them under the practice handle for at most 30 days."
   source: spec/draft/custody.md#option-4-practice
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-CUS-016
   class: custody
   text: "The practice handle MUST carry 192 random bits and MUST NOT appear in any statement."
   source: spec/draft/custody.md#option-4-practice
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-CUS-017
   class: custody
   text: "`resume_practice` MUST refuse anything that is not a practice copy and MUST NOT produce an official statement."
   source: spec/draft/custody.md#option-4-practice
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-CUS-018
   class: custody
   text: "`get_record` MUST return the practice copy, unwrapped, with a note to treat it as data."
   source: spec/draft/custody.md#option-4-practice
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-CUS-019
   class: custody
   text: "In options 1 and 2, the LRS MUST be authoritative for the record and working state; a server MAY cache them."
   source: spec/draft/custody.md#the-lrs-is-authoritative
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-BRG-001
   class: bridge
   text: "A server MUST run one AU session per lesson visit: it starts at the first tool call on that lesson and ends with `terminated` when the lesson resolves, when the learner moves to another lesson, when the agent calls `end_session`, or after inactivity."
   source: spec/draft/cmi5-binding.md#au-sessions
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-002
   class: bridge
   text: "A `success: false` branch MUST record the allowed `failed` on the checkpoint activity and MUST leave the AU session open for a retry."
   source: spec/draft/cmi5-binding.md#checkpoint-outcomes
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-003
   class: bridge
   text: "A server MUST send a defined `failed` on the AU only when the author set `maxAttempts` and the attempts ran out, and MUST then end the session with `terminated`."
   source: spec/draft/cmi5-binding.md#checkpoint-outcomes
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-004
   class: bridge
   text: "A defined `failed` MUST NOT follow a defined `passed` in the same registration."
   source: spec/draft/cmi5-binding.md#checkpoint-outcomes
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-005
   class: bridge
   text: "A server MUST send `completed` only after the last beat and after any planted bug is caught or revealed, and `passed` only when a `success: true` branch is chosen; each at most once per registration."
   source: spec/draft/cmi5-binding.md#checkpoint-outcomes
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-006
   class: bridge
   text: "A branch to a lesson already satisfied in this registration (passed, completed without a checkpoint, or waived) MUST run as a review walk-through inside the current session: beats only, allowed statements only with the target lesson as parent, then back to the branching lesson's checkpoint."
   source: spec/draft/cmi5-binding.md#review-instead-of-redo
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-007
   class: bridge
   text: "A branch to the same, unpassed lesson MUST restart its beats in the same session."
   source: spec/draft/cmi5-binding.md#review-instead-of-redo
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-008
   class: bridge
   text: "In options 2 and 3, a lesson skipped by placement or jumped over by a `success: true` branch MUST be `waived` with reason `Tested Out`."
   source: spec/draft/cmi5-binding.md#skips-and-waivers
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-009
   class: bridge
   text: "In option 1, a server MUST NOT waive; it MUST record the allowed `placed` or `branched` with a `waive-recommended` result extension listing the AU ids, which an LMS MAY act on."
   source: spec/draft/cmi5-binding.md#skips-and-waivers
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-010
   class: bridge
   text: "A lesson carried over from an earlier record version MUST be waived with reason `Administrative` and the `carried-over` result extension."
   source: spec/draft/cmi5-binding.md#skips-and-waivers
-  status: pending
+  status: excluded
+  exclusion: "It needs the server under test to load a new version of the course package between two calls of one learner; the suite runs against one fixed conformance course."
 - id: CXM-BRG-011
   class: bridge
   text: "A server MUST be its own MCP authorization server (OAuth 2.1); in option 2 it federates login to the author's identity provider over OIDC, and in option 3 it signs learners in against its own accounts."
   source: spec/draft/cmi5-binding.md#lms-role-in-options-2-and-3
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-BRG-012
   class: bridge
   text: "Unless the LRS assigns an actor, the actor MUST be `account {homePage: <course IRI base>, name: <identity provider subject>}`."
   source: spec/draft/cmi5-binding.md#lms-role-in-options-2-and-3
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-BRG-013
   class: bridge
   text: "A server MUST mint the registration, keep it in the record holder, and reuse it on return until `restart_course` mints a new one."
   source: spec/draft/cmi5-binding.md#lms-role-in-options-2-and-3
-  status: pending
+  status: tested
+  test: conformance/server/official.test.ts
 - id: CXM-BRG-014
   class: bridge
   text: "The AU activityId MUST be `{au@id}/au`."
   source: spec/draft/cmi5-binding.md#lms-role-in-options-2-and-3
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-015
   class: bridge
   text: "A server MUST generate sessionids, and MUST send `launched` (launchMode `Normal`) before `initialized`; review walk-throughs get no `launched` of their own."
   source: spec/draft/cmi5-binding.md#lms-role-in-options-2-and-3
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-016
   class: bridge
   text: "A server MUST issue `waived` and `satisfied` in the LMS role."
   source: spec/draft/cmi5-binding.md#lms-role-in-options-2-and-3
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-BRG-017
   class: bridge
   text: "A server MUST NOT claim cmi5 LMS conformance; it claims cmi5-shaped records."
   source: spec/draft/cmi5-binding.md#lms-role-in-options-2-and-3
-  status: pending
+  status: excluded
+  exclusion: "A claim made in documentation and listings, not something observable over MCP or in the record."
 - id: CXM-BRG-018
   class: bridge
   text: "In option 4, a server MUST NOT require authorization and MUST mint a practice actor and handle on `start_placement`."
   source: spec/draft/cmi5-binding.md#practice
-  status: pending
+  status: tested
+  test: conformance/server/practice.test.ts
 - id: CXM-BRG-019
   class: bridge
   text: "On launch, the bridge MUST parse the launch parameters and POST to `fetch` once, server-side."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-020
   class: bridge
   text: "The bridge MUST read and honour `LMS.LaunchData` and `cmi5LearnerPreferences`, and every statement MUST carry the launch's `contextTemplate`."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-021
   class: bridge
   text: "The bridge MUST store the launch context against a launch id and send `initialized` straight away."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-022
   class: bridge
   text: "The LMS token MUST NOT reach the browser or the agent."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-023
   class: bridge
   text: "The bridge page MUST tell the learner to continue in their agent and show the course's MCP URL."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-024
   class: bridge
   text: "The server's authorization page MUST bind the grant to the launch through the bridge's cookie when present, and otherwise through a six-character pairing code from `ABCDEFGHJKMNPQRSTUVWXYZ23456789`, single use, valid for 10 minutes and typed into the authorization page."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-025
   class: bridge
   text: "The grant MUST bind to (LMS endpoint, actor, registration), and later launches in the same registration MUST attach to the same agent connection."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-026
   class: bridge
   text: "When the next lesson is a different AU, the result MUST tell the agent to send the learner back to the LMS (`returnURL`) to launch it."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-027
   class: bridge
   text: "A server MUST send `terminated` with `duration` before the LMS token is likely to expire."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: excluded
+  exclusion: "It depends on the server's clock and the LMS token's expected lifetime, which a black-box run cannot wait out. The duration on terminated is checked under CXM-SRV-011 and CXM-BRG-001."
 - id: CXM-BRG-028
   class: bridge
   text: "On a relaunch, the newest launch MUST be the live one, and calls on a stale launch MUST report that the lesson was relaunched elsewhere."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BRG-029
   class: bridge
   text: "The actor MUST be the one the LMS supplied, with no dual write and no anonymous copy."
   source: spec/draft/cmi5-binding.md#launch-bridge
-  status: pending
+  status: tested
+  test: conformance/bridge/bridge.test.ts
 - id: CXM-BDG-001
   class: badges
   text: "An issuer MUST issue a badge only on its declared cmi5 event: AU `moveOn` met (`au-moveon`), block satisfied (`block-satisfied`), course satisfied (`course-satisfied`), or the first block satisfied (`any-path`)."
@@ -734,37 +806,44 @@
   class: security
   text: "A server MUST wrap learner text in `<learner_input>` and neutralise any wrapper tags inside it."
   source: spec/draft/security-privacy.md#prompt-injection
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SEC-002
   class: security
   text: "A server MUST NOT use learner text as a pattern, a path or a branch input."
   source: spec/draft/security-privacy.md#prompt-injection
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SEC-003
   class: security
   text: "A server MUST return only authored content, check results, wrapped learner text and the record."
   source: spec/draft/security-privacy.md#prompt-injection
-  status: pending
+  status: excluded
+  exclusion: "A closed-world property of every field of every result. Its observable parts are checked under CXM-SEC-001 (learner text is wrapped), CXM-SEC-004 (no credentials or identifiers) and CXM-SEC-006 (no planted-bug secrets)."
 - id: CXM-SEC-004
   class: security
   text: "An LRS or LMS credential, token, actor account name or registration MUST NOT appear in a result the agent sees, except the learner's own actor and registration inside their export."
   source: spec/draft/security-privacy.md#credentials
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-SEC-005
   class: security
   text: "The record MUST keep agent-written text (`rationale`, placement reason) apart from learner-written text."
   source: spec/draft/security-privacy.md#known-limits
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-SEC-006
   class: security
   text: "A server MUST NOT send a planted bug's explanation, location or fix checks to the agent before the learner's fix passes (`caught`) or the author-allowed `reveal_bug` succeeds (`revealed`), and MUST NOT send the reference solution at all."
   source: spec/draft/security-privacy.md#planted-bug-secrecy
-  status: pending
+  status: tested
+  test: conformance/server/adversarial.test.ts
 - id: CXM-SEC-007
   class: security
   text: "Fix-attempt statements MUST carry an empty `checks` list."
   source: spec/draft/security-privacy.md#planted-bug-secrecy
-  status: pending
+  status: tested
+  test: conformance/server/statements.test.ts
 - id: CXM-SEC-008
   class: security
   text: "A badge MUST NOT carry the xAPI actor id, hashed or plain."

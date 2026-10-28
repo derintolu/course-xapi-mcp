@@ -9,5 +9,7 @@ export default defineConfig({
     include: ['conformance/**/*.test.ts'],
     exclude: ['conformance/lib/**', '**/node_modules/**'],
     testTimeout: 30_000,
+    // The course server class acts as one learner (one bearer token) across its files, so they run one at a time.
+    fileParallelism: false,
   },
 });
