@@ -1,0 +1,73 @@
+{
+  "minutes": 6,
+  "sources": [
+    {
+      "title": "RFC 8259, section 6: Numbers",
+      "url": "https://www.rfc-editor.org/rfc/rfc8259#section-6"
+    }
+  ],
+  "beats": [
+    {
+      "key": "read-as-types",
+      "goal": "The learner reads a JSON file by value types.",
+      "content": "When you review JSON, name the type of each value. Quoted means string.",
+      "question": "In {\"debug\": \"false\"}, what type is the value of debug?"
+    }
+  ],
+  "starterFiles": {
+    "config.json": "{\n  \"name\": \"demo\",\n  \"port\": \"8080\"\n}\n"
+  },
+  "bug": {
+    "key": "port-type",
+    "file": "config.json",
+    "code": "{\n  \"name\": \"demo\",\n  \"port\": \"8080\"\n}\n",
+    "hint": "Read every value aloud with its type."
+  },
+  "checkpoint": {
+    "key": "add-timeout",
+    "kind": "code",
+    "question": "Add a timeout of 30 seconds as a number to config.json, then explain the type you chose.",
+    "rubric": "The checks decide the file. A good explanation says timeout is a number because the program compares it.",
+    "file": "config.json",
+    "maxAttempts": 2,
+    "checks": [
+      {
+        "type": "json",
+        "file": "config.json",
+        "pointer": "/timeout",
+        "equals": 30,
+        "message": "config.json needs a top-level timeout whose value is the number 30."
+      },
+      {
+        "type": "json",
+        "file": "config.json",
+        "pointer": "/port",
+        "equals": 8080,
+        "message": "Keep port as the number 8080."
+      }
+    ],
+    "branches": [
+      {
+        "key": "done",
+        "when": "The checks passed and the learner explains why timeout is a number.",
+        "success": true,
+        "to": null,
+        "message": "That's the path done."
+      },
+      {
+        "key": "retry",
+        "when": "The checks failed, or the explanation is missing.",
+        "success": false,
+        "to": "fix",
+        "message": "Not quite yet. Look at the check messages and try again."
+      },
+      {
+        "key": "back-to-intro",
+        "when": "The learner is unsure what a string is.",
+        "success": false,
+        "to": "intro",
+        "message": "Let's look at quotes again first."
+      }
+    ]
+  }
+}

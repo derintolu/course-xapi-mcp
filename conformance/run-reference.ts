@@ -187,13 +187,28 @@ async function runBadgeProfile(custody: Custody): Promise<number> {
   }
 }
 
+/**
+ * The course server startup class: the suite starts the reference bin itself, with the conformance course's
+ * distribution build (which it must refuse) and its authoring package.
+ */
+async function runStartup(): Promise<number> {
+  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+  const env = {
+    CXM_SERVER_COMMAND: `CXM_PACKAGE={package} PORT={port} CXM_PUBLIC_URL=http://127.0.0.1:{port} ${q(process.execPath)} --experimental-strip-types ${q(ROOT + 'reference/packages/server/src/bin.ts')}`,
+    CXM_SERVER_URL: 'http://127.0.0.1:{port}/mcp',
+  };
+  console.log('\n== course-xapi-mcp conformance: reference server bin (conformance/startup)\n');
+  return runVitest(['conformance/startup'], env);
+}
+
 // `npm run conformance:reference -- server-kept` runs that option's profiles; `-- badges` the badge issuer class
-// alone, `-- badges:server-kept` one of its profiles.
+// alone, `-- badges:server-kept` one of its profiles; `-- startup` the course server startup class.
 const only = process.argv.slice(2);
 const pick = (name: string, custody: Custody) => !only.length || only.includes(custody) || only.includes(name) || (name.startsWith('badges:') && only.includes('badges'));
 const results: { name: string; code: number }[] = [];
 for (const p of PROFILES.filter((x) => pick(x.custody, x.custody))) results.push({ name: p.custody, code: await runProfile(p.custody, p.classes) });
 for (const custody of BADGE_PROFILES.filter((c) => pick('badges:' + c, c))) results.push({ name: 'badges:' + custody, code: await runBadgeProfile(custody) });
+if (!only.length || only.includes('startup')) results.push({ name: 'startup', code: await runStartup() });
 console.log('\n== summary');
 for (const r of results) console.log(`  ${r.name.padEnd(22)} ${r.code === 0 ? 'PASS' : 'FAIL'}`);
 process.exit(results.every((r) => r.code === 0) ? 0 : 1);

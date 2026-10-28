@@ -196,7 +196,8 @@
   class: package
   text: "A course server MUST load only an authoring package and MUST refuse a distribution package."
   source: spec/draft/package.md#authoring-and-distribution-packages
-  status: pending
+  status: tested
+  test: conformance/startup/startup.test.ts
 - id: CXM-PKG-031
   class: package
   text: "A course with custody `practice` MUST NOT declare badges or `allowPractice: true`."

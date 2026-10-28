@@ -1,0 +1,23 @@
+{
+  "minutes": 3,
+  "sources": [
+    {
+      "title": "RFC 8259, section 3: Values",
+      "url": "https://www.rfc-editor.org/rfc/rfc8259#section-3"
+    }
+  ],
+  "beats": [
+    {
+      "key": "booleans",
+      "goal": "The learner knows true and \"true\" differ.",
+      "content": "true and false are booleans. \"true\" in quotes is a string."
+    }
+  ],
+  "bug": {
+    "key": "flag-type",
+    "file": "flags.json",
+    "code": "{\n  \"enabled\": \"true\"\n}\n",
+    "hint": "Read each value with its type.",
+    "revealAfter": null
+  }
+}
