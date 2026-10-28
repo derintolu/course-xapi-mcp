@@ -64,7 +64,8 @@ async function run(name: keyof typeof runs, body: (l: Learner) => Promise<void>)
 }
 
 beforeAll(async () => {
-  if (OPTION1) lms = await startLms();
+  // The LMS's LRS records who wrote each statement, so CXM-SEC-004 can check that no authority reaches the agent.
+  if (OPTION1) lms = await startLms({ authority: true });
   const first = await newLearner(lms);
   learners.push(first);
   ok(await first.call('get_status'));
@@ -112,6 +113,13 @@ afterAll(async () => {
 });
 
 const all = () => [...runs.A, ...runs.B, ...runs.C];
+/** The identifying values of an authority (an Agent, or a Group of them): account names, mbox, mbox_sha1sum, openid. */
+function identifiers(a: unknown): string[] {
+  if (!a || typeof a !== 'object') return [];
+  const o = a as { account?: { name?: unknown }; mbox?: unknown; mbox_sha1sum?: unknown; openid?: unknown; member?: unknown };
+  const own = [o.account?.name, o.mbox, o.mbox_sha1sum, o.openid].filter((v): v is string => typeof v === 'string' && v.length > 0);
+  return [...own, ...(Array.isArray(o.member) ? o.member.flatMap(identifiers) : [])];
+}
 /** Statements the LMS itself sent (option 1: `launched`); the rest are the course server's. */
 const fromLms = (s: XapiStatement) => OPTION1 && isDefined(s) && verbOf(s) === 'launched';
 const server = (list: XapiStatement[]) => list.filter((s) => !fromLms(s));
@@ -136,7 +144,9 @@ describe('every statement', () => {
 
   it('[CXM-SRV-024] every statement is built by the server: valid under xAPI 1.0.3 and 2.0, on the cxm profile, in cmi5 order, with no version, contextAgents or contextGroups', () => {
     for (const s of all()) {
-      expect(validateStatement(s), s.id).toEqual([]);
+      // As the server sent it: the record holder adds authority and stored when it stores a statement.
+      const { authority: _authority, stored: _stored, ...sent } = s as XapiStatement & { authority?: unknown; stored?: unknown };
+      expect(validateStatement(sent as XapiStatement), s.id).toEqual([]);
       expect(s).not.toHaveProperty('version');
       expect(s.context).not.toHaveProperty('contextAgents');
       expect(s.context).not.toHaveProperty('contextGroups');
@@ -392,10 +402,16 @@ describe('every result', () => {
       if (s.context?.registration) ids.set(s.context.registration, who);
       if (s.actor.account?.name) ids.set(s.actor.account.name, who);
     }
+    // Who the record holder says wrote each statement: many LRSs name the credential's key or client there. Never shown,
+    // the export included (it is not the learner's own actor).
+    const authorities = new Set<string>();
+    for (const s of [...all(), ...(lms?.lrs.statements() ?? [])]) for (const v of identifiers((s as XapiStatement & { authority?: unknown }).authority)) authorities.add(v);
+    if (OPTION1) expect(authorities.size).toBeGreaterThan(0);
     expect(transcript.length).toBeGreaterThan(40);
     expect(transcript.some(isExport)).toBe(true);
     for (const t of transcript) {
       for (const secret of credentials) expect(t.plain.includes(secret), `${t.tool} shows a credential`).toBe(false);
+      for (const id of authorities) expect(t.plain.includes(id), `${t.tool} shows the authority ${id}`).toBe(false);
       // The learner's own export may hold their own actor and registrations, and nobody else's.
       const owner = isExport(t) ? actorOfConnection.get(t.conn) : undefined;
       for (const [id, who] of ids) if (who !== owner) expect(t.plain.includes(id), `${t.tool} shows ${id}`).toBe(false);

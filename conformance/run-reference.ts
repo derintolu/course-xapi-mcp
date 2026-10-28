@@ -63,7 +63,8 @@ async function runProfile(custody: Custody, classes: string[]): Promise<number> 
     const env: Record<string, string> = { CXM_URL: http.url + '/mcp', CXM_CUSTODY: custody, CXM_KNOWN_GAPS: JSON.stringify(KNOWN_GAPS[custody] ?? {}) };
 
     if (custody === 'author-lrs') {
-      const lrs = createTestLrs();
+      // It records an authority on every statement, as an LRS does, so CXM-SEC-004 can check none reaches the agent.
+      const lrs = createTestLrs({ authority: true });
       const lrsUrl = (await lrs.listen()) + '/xapi';
       closers.push(() => lrs.close());
       const idp = await startFakeIdp();

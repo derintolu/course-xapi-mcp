@@ -615,4 +615,36 @@ describe('option 2: the author\'s LRS', () => {
     const text = JSON.stringify(seen);
     for (const secret of [statements[0]!.context.registration!, SUBJECT, `mapped-${SUBJECT}`, credentials.key, credentials.secret, 'lrs.test']) expect(text).not.toContain(secret);
   });
+
+  it('an LRS that names its credential in the authority (as many do) never shows it to the agent: get_record and the export leave authority and stored out', async () => {
+    const course = await loadExample();
+    const credentials = { key: 'lrs-key-Auth7', secret: 'lrs-secret-Auth7' };
+    const lrs = createTestLrs({ credentials: [credentials] });
+    // Like an LRS that sets the authority to the Basic credential's key and the client's mbox, and stamps `stored`.
+    const authority = { objectType: 'Agent', account: { homePage: 'https://lrs.test', name: credentials.key }, mbox: 'mailto:lrs-client-Auth7@lrs.test' };
+    const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await lrs.fetch(new Request(input, init));
+      const u = new URL(new Request(input, init).url);
+      if ((init?.method ?? 'GET') !== 'GET' || !u.pathname.endsWith('/statements') || !res.ok) return res;
+      const body = (await res.json()) as { statements: XapiStatement[] };
+      body.statements = body.statements.map((s) => ({ ...s, authority, stored: '2026-10-27T00:00:00.000Z' }));
+      return Response.json(body, { headers: res.headers });
+    }) as typeof fetch;
+    const assignActor = async (subject: string) => ({ objectType: 'Agent' as const, account: { homePage: course.id, name: `mapped-${subject}` } });
+    const custody = createAuthorLrsCustody({ course, lrs: { endpoint: 'http://lrs.test/xapi', ...credentials }, publicUrl: PUBLIC_URL, assignActor, fetch: f });
+    const app = createCourseServer({ course, custody, practice: createPracticeCustody({ courseId: course.id }), authenticate: stubAuthenticate(course), publicUrl: PUBLIC_URL });
+    const s = await session('modern', app, '/mcp', TOKEN);
+    await s.call('start_placement');
+    await teachExample(s.call);
+    // The custody itself still sees who wrote what (badges need it).
+    expect((await custody.record({ kind: 'official', subject: SUBJECT, actor: await assignActor(SUBJECT) })).statements[0]).toHaveProperty('authority');
+
+    const record = await s.call('get_record');
+    expect(record.isError).toBe(false);
+    expect(record.data.record.statements.length).toBeGreaterThan(10);
+    const exported = await s.client.readResource({ uri: URIS.recordExport });
+    for (const shown of [JSON.stringify(record.raw), JSON.stringify(exported)]) {
+      for (const leak of [credentials.key, 'lrs-client-Auth7', '"authority"', '"stored"']) expect(shown).not.toContain(leak);
+    }
+  });
 });

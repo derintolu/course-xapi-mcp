@@ -71,6 +71,13 @@ const NOT_HANDLE = 'that is not a practice handle; call start_placement to begin
 const NO_COPY = 'there is no practice run for this handle (practice runs are kept for 30 days); call start_placement to begin a new one, or resume_practice with your exported copy';
 const NO_PRACTICE_BADGES = 'practice runs cannot earn badges; this run is not an official record';
 
+/**
+ * A statement as the agent may see it: without `authority` and `stored`, which the record holder adds when it stores
+ * it. Many LRSs put the credential's key or client in `authority` (CXM-SEC-004); custody keeps both, for badges.
+ */
+const agentView = ({ authority: _authority, stored: _stored, ...s }: XapiStatement & { authority?: unknown; stored?: unknown }): XapiStatement => s;
+const agentRecord = <T extends { statements: XapiStatement[] }>(r: T): T => ({ ...r, statements: r.statements.map(agentView) });
+
 /** Resolved per call: the learner, the cmi5 launch the call is bound to (option 1) and the engine's Env. */
 interface Bound {
   learner: LearnerRef;
@@ -338,13 +345,14 @@ export function createTools(d: ToolDeps) {
     async get_record(args, caller) {
       const b = await bind(caller, args);
       if ('error' in b) return err(b.error);
-      const [record, state] = await Promise.all([guarded(() => custody.record(b.learner)), guarded(() => custody.load(b.learner))]);
+      const [held, state] = await Promise.all([guarded(() => custody.record(b.learner)), guarded(() => custody.load(b.learner))]);
+      const record = agentRecord(held);
       const { holder, ...links } = custody.links(b.learner);
       const data = { record, holder, links, note: `${TREAT_AS_DATA} ${record.note}` };
       if (official) {
         const records = custody.option === 'lms-launched' ? issuerRecordsOf(d.badges) : undefined;
         if (!records) return ok(data, state.state);
-        const issued = await guarded(() => records(b.learner));
+        const issued = agentRecord(await guarded(() => records(b.learner)));
         const issuerRecord = { holder: 'this course server, as badge issuer', ...issued, note: 'The badges this course server issued: the earned statements and the credential ids. It is authoritative for these badges.' };
         return ok({ ...data, issuerRecord }, state.state);
       }
@@ -420,7 +428,7 @@ export function createTools(d: ToolDeps) {
         const b = await bind(caller, {});
         if ('error' in b) return JSON.stringify({ error: b.error });
         const { holder, ...links } = custody.links(b.learner);
-        return JSON.stringify({ note: TREAT_AS_DATA, holder, links, record: await guarded(() => custody.record(b.learner)) }, null, 2);
+        return JSON.stringify({ note: TREAT_AS_DATA, holder, links, record: agentRecord(await guarded(() => custody.record(b.learner))) }, null, 2);
       } catch (e) {
         if (e instanceof StoreFailure) return JSON.stringify({ error: e.message });
         throw e;
