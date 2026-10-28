@@ -176,6 +176,40 @@ const TYPE_HEADINGS: [string, string][] = [
   ['Pattern', 'Patterns'],
 ];
 
+/** The host's limit on header blocks (Spacefast: 100). */
+export const MAX_HEADER_BLOCKS = 100;
+
+/**
+ * `_headers` for a host whose matchers take `*` only at the end of a segment and `:name` for one segment (Spacefast),
+ * so a type cannot be set by extension alone (R69). Each JSON-LD document gets its type and CORS, and each IRI's page
+ * a `Link` to it; directories whose subdirectories are all IRIs share one `:name` block, others get exact blocks.
+ * Schemas get their type and CORS per directory with `:file.json`.
+ */
+export function hostingHeaders(files: readonly string[]): string {
+  const dirs = new Set<string>();
+  for (const f of files) for (let d = posix.dirname(f); d !== '.'; d = posix.dirname(d)) dirs.add(d);
+  const parentOf = (d: string) => (posix.dirname(d) === '.' ? '' : posix.dirname(d));
+  const ldDirs = files.filter((f) => f.endsWith('/index.jsonld')).map((f) => posix.dirname(f));
+  const ldSet = new Set(ldDirs);
+  const groups = new Set<string>();
+  for (const d of ldDirs) {
+    const parent = parentOf(d);
+    const shared = [...dirs].filter((s) => parentOf(s) === parent).every((s) => ldSet.has(s));
+    groups.add(shared ? `/${parent ? parent + '/' : ''}:name` : `/${d}`);
+  }
+  const blocks: string[] = [];
+  const ld = `  Access-Control-Allow-Origin: *\n  Content-Type: application/ld+json`;
+  for (const g of [...groups].sort()) {
+    const link = `  Link: <${g}/index.jsonld>; rel="alternate"; type="application/ld+json"`;
+    blocks.push(`${g}/index.jsonld\n${ld}`, `${g}\n${link}`, `${g}/\n${link}`);
+  }
+  const schemaDirs = new Set(files.filter((f) => f.startsWith('schema/draft/') && f.endsWith('.json')).map((f) => posix.dirname(f)));
+  for (const d of [...schemaDirs].sort()) blocks.push(`/${d}/:file.json\n  Access-Control-Allow-Origin: *\n  Content-Type: application/schema+json`);
+  blocks.push(`/course/v1/cxm.xsd\n  Access-Control-Allow-Origin: *\n  Content-Type: application/xml`);
+  if (blocks.length > MAX_HEADER_BLOCKS) throw new Error(`_headers has ${blocks.length} blocks; the host allows ${MAX_HEADER_BLOCKS}`);
+  return blocks.join('\n\n') + '\n';
+}
+
 export async function buildSite(out: string, opts: BuildOptions = {}): Promise<BuildResult> {
   const authoringDir = opts.authoringDir ?? join(root, 'docs/authoring');
   const hasAuthoring = existsSync(authoringDir) && statSync(authoringDir).isDirectory();
@@ -211,8 +245,8 @@ export async function buildSite(out: string, opts: BuildOptions = {}): Promise<B
     .filter(Boolean)
     .join('\n');
 
-  const page = (rel: string, title: string, description: string, body: string) => {
-    const values: Record<string, string> = { title: esc(title), description: esc(description), nav, body, version: SPEC_VERSION };
+  const page = (rel: string, title: string, description: string, body: string, head = '') => {
+    const values: Record<string, string> = { title: esc(title), description: esc(description), nav, body, version: SPEC_VERSION, head };
     write(rel, template.replace(/\{\{(\w+)\}\}/g, (_, k: string) => values[k] ?? ''));
   };
 
@@ -287,11 +321,8 @@ ${schemaRows}
   }
   const profileJson = JSON.stringify(profile, null, 2) + '\n';
   const ldContext = (profile['@context'] as string) ?? 'https://w3id.org/xapi/profiles/context';
-  const redirects: string[] = [];
-  const redirect = (iri: string) => {
-    const p = pathOf(iri);
-    redirects.push(`${p}  ${p}/index.jsonld  303  Accept=application/ld+json`);
-  };
+  // The host does no content negotiation: an IRI's HTML page points at its JSON-LD document (R69).
+  const alternate = (p: string) => `<link rel="alternate" type="application/ld+json" href="${esc(p)}/index.jsonld">\n`;
 
   const all: Concept[] = [...profile.concepts, ...profile.templates, ...profile.patterns];
   const conceptPage = (c: Concept) => {
@@ -299,7 +330,6 @@ ${schemaRows}
     const label = c.prefLabel?.en ?? posix.basename(p);
     const def = c.definition?.en ?? '';
     write(`${p.slice(1)}/index.jsonld`, JSON.stringify({ '@context': ldContext, ...c }, null, 2) + '\n');
-    redirect(c.id);
     const scheme = typeof c.inScheme === 'string' ? `<tr><th>In</th><td><a href="${esc(pathOf(c.inScheme))}/">${esc(c.inScheme)}</a></td></tr>` : '';
     page(
       `${p.slice(1)}/index.html`,
@@ -315,6 +345,7 @@ ${scheme}
 </table>
 <h2>Definition</h2>
 <pre><code>${esc(JSON.stringify(c, null, 2))}</code></pre>`,
+      alternate(p),
     );
   };
   all.forEach(conceptPage);
@@ -338,14 +369,13 @@ ${extra}
 ${groups}`;
   write('xapi/index.jsonld', profileJson);
   write(pathOf(PROFILE_VERSION_IRI).slice(1) + '/index.jsonld', profileJson);
-  redirect(PROFILE_ID);
-  redirect(PROFILE_VERSION_IRI);
-  page('xapi/index.html', `${profileLabel} xAPI profile`, profileDef, profileBody(`${profileLabel} xAPI profile`, `<p>The verbs, activity types, extensions, statement templates and patterns that course-xapi-mcp adds to cmi5. Each has its own page and JSON-LD document.</p>`));
+  page('xapi/index.html', `${profileLabel} xAPI profile`, profileDef, profileBody(`${profileLabel} xAPI profile`, `<p>The verbs, activity types, extensions, statement templates and patterns that course-xapi-mcp adds to cmi5. Each has its own page and JSON-LD document.</p>`), alternate(pathOf(PROFILE_ID)));
   page(
     pathOf(PROFILE_VERSION_IRI).slice(1) + '/index.html',
     `${profileLabel} xAPI profile, version ${SPEC_VERSION}`,
     profileDef,
     profileBody(`Version ${SPEC_VERSION}`, `<p>The concepts of this version of the profile. <a href="/xapi/">Profile overview</a>.</p>`),
+    alternate(pathOf(PROFILE_VERSION_IRI)),
   );
 
   page(
@@ -406,27 +436,7 @@ ${hasAuthoring ? '<li><a href="/authoring/">Authoring guide</a>: converting an e
   );
 
   // Hosting files.
-  write(
-    '_headers',
-    `/*.jsonld
-  Access-Control-Allow-Origin: *
-  Content-Type: application/ld+json
-
-/schema/draft/*.json
-  Access-Control-Allow-Origin: *
-  Content-Type: application/schema+json
-
-/course/v1/cxm.xsd
-  Access-Control-Allow-Origin: *
-  Content-Type: application/xml
-`,
-  );
-  write(
-    '_redirects',
-    `# A concept IRI answers a JSON-LD request with its JSON-LD document, on hosts that honour an Accept condition.
-${redirects.join('\n')}
-`,
-  );
+  write('_headers', hostingHeaders(files));
 
   const missingIris = findMissingIris(out);
   return { files: files.sort(), missingIris };

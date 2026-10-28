@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CXM_ACTIVITY_TYPES, CXM_EXT, CXM_VERBS, ERROR_HELP_BASE, SITE } from '../../reference/packages/core/src/constants.ts';
 import { ISSUE_CATALOG } from '../../reference/packages/core/src/issues.ts';
-import { buildSite, findMissingIris } from '../build.ts';
+import { buildSite, findMissingIris, MAX_HEADER_BLOCKS } from '../build.ts';
 
 const tmp = mkdtempSync(join(tmpdir(), 'cxm-site-'));
 const noAuthoring = join(tmp, 'no-such-authoring-dir');
@@ -114,12 +114,21 @@ describe('buildSite', () => {
     expect(existsSync(join(bare.dir, 'style.css'))).toBe(true);
   });
 
-  it('writes _headers with CORS and content types, and _redirects with 303s to JSON-LD', () => {
+  it('writes _headers with CORS, content types and Link headers the host can compile, and no _redirects (R69)', () => {
     const headers = read(bare.dir, '_headers');
-    expect(headers).toMatch(/^\/\*\.jsonld\n {2}Access-Control-Allow-Origin: \*\n {2}Content-Type: application\/ld\+json$/m);
-    expect(headers).toMatch(/^\/schema\/draft\/\*\.json\n {2}Access-Control-Allow-Origin: \*\n {2}Content-Type: application\/schema\+json$/m);
-    const redirects = read(bare.dir, '_redirects');
-    expect(redirects).toContain('/xapi/verbs/placed  /xapi/verbs/placed/index.jsonld  303  Accept=application/ld+json');
+    expect(headers).toMatch(/^\/xapi\/verbs\/:name\/index\.jsonld\n {2}Access-Control-Allow-Origin: \*\n {2}Content-Type: application\/ld\+json$/m);
+    expect(headers).toMatch(/^\/xapi\/v0\.2\/index\.jsonld\n {2}Access-Control-Allow-Origin: \*\n {2}Content-Type: application\/ld\+json$/m);
+    expect(headers).toMatch(/^\/schema\/draft\/:file\.json\n {2}Access-Control-Allow-Origin: \*\n {2}Content-Type: application\/schema\+json$/m);
+    expect(headers).toMatch(/^\/xapi\/verbs\/:name\/\n {2}Link: <\/xapi\/verbs\/:name\/index\.jsonld>; rel="alternate"; type="application\/ld\+json"$/m);
+    expect(headers).not.toContain('*.');
+    expect(headers.trim().split(/\n\n+/).length).toBeLessThanOrEqual(MAX_HEADER_BLOCKS);
+    expect(existsSync(join(bare.dir, '_redirects'))).toBe(false);
+  });
+
+  it('points each IRI page at its JSON-LD document', () => {
+    expect(read(bare.dir, 'xapi/verbs/placed/index.html')).toContain('<link rel="alternate" type="application/ld+json" href="/xapi/verbs/placed/index.jsonld">');
+    expect(read(bare.dir, 'xapi/v0.2/index.html')).toContain('<link rel="alternate" type="application/ld+json" href="/xapi/v0.2/index.jsonld">');
+    expect(read(bare.dir, 'spec/draft/server/index.html')).not.toContain('rel="alternate"');
   });
 });
 
@@ -151,7 +160,7 @@ describe('links', () => {
 describe('hosting files', () => {
   it('gives each served file at most one CORS rule', () => {
     const headers = read(bare.dir, '_headers');
-    const rules = headers.split(/\n\n+/).map((b) => b.trim().split('\n')).filter((l) => l[0]).map(([glob, ...lines]) => ({ re: new RegExp('^' + glob!.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$'), cors: lines.some((l) => /Access-Control-Allow-Origin/.test(l)) }));
+    const rules = headers.split(/\n\n+/).map((b) => b.trim().split('\n')).filter((l) => l[0]).map(([glob, ...lines]) => ({ re: new RegExp('^' + glob!.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/:\w+/g, '[^/]+').replace(/\*/g, '.*') + '$'), cors: lines.some((l) => /Access-Control-Allow-Origin/.test(l)) }));
     for (const f of bare.files) {
       const n = rules.filter((r) => r.cors && r.re.test('/' + f)).length;
       const served = /\.(jsonld|xsd)$/.test(f) || f.startsWith('schema/draft/') && f.endsWith('.json');
