@@ -18,7 +18,7 @@ const loaded = loadConfig(process.env);
 if ('errors' in loaded) fail(loaded.errors);
 const config: AppConfig = loaded;
 
-let app: App & { course: { title: string; custody: string }; warnings: string[] };
+let app: App & { course: { title: string; custody: string } };
 try {
   // Badge issuing, when this course server signs the course's badges (badgeIssuer.signer, or custody server-kept).
   app = await createAppFromConfig(config, { badges: (parts) => badgesFromConfig(parts) });
@@ -26,7 +26,7 @@ try {
   if (e instanceof ConfigError) fail(e.errors);
   throw e;
 }
-for (const w of [...config.warnings, ...app.warnings]) console.warn(`course-xapi-mcp: ${w}`);
+for (const w of config.warnings) console.warn(`course-xapi-mcp: ${w}`);
 
 /** The request as the app sees it: the URL is always on the public origin, so the Host header cannot change it. */
 function toRequest(req: IncomingMessage, target: string): Request {

@@ -26,7 +26,7 @@ import { createLmsLaunchedCustody } from './custody/lms-launched.ts';
 import { withLearnerLock } from './custody/mutex.ts';
 import { createPracticeCustody, type PracticeCustody } from './custody/practice.ts';
 import { createServerKeptCustody } from './custody/server-kept.ts';
-import { DirectoryPracticeStore, DirectoryServerStore, MemoryPracticeStore, MemoryServerStore, type ServerStore } from './custody/stores.ts';
+import { DirectoryPracticeStore, MemoryPracticeStore, MemoryServerStore, type ServerStore } from './custody/stores.ts';
 import { createRecordPages } from './record-pages.ts';
 import { createCourseServer } from './server.ts';
 
@@ -122,6 +122,9 @@ export function createApp(o: AppOptions): App {
   };
 }
 
+const SERVER_KEPT_ON_DISK =
+  'CXM_DATA_DIR cannot be used with custody server-kept yet: accounts are held in memory, so after a restart learners could not sign in to reach or delete the records kept on disk. Unset CXM_DATA_DIR to keep records in memory.';
+
 /** A package that does not load, or a configuration the package's custody cannot run with. */
 export class ConfigError extends Error {
   readonly errors: string[];
@@ -173,16 +176,19 @@ export interface FromConfigOptions {
 }
 
 /** Builds the server for one course package from the configuration: stores, custody, sign-in, bridge and pages. */
-export async function createAppFromConfig(config: AppConfig, o: FromConfigOptions = {}): Promise<App & { course: CourseModel; warnings: string[] }> {
+export async function createAppFromConfig(config: AppConfig, o: FromConfigOptions = {}): Promise<App & { course: CourseModel }> {
   const course = o.course ?? (await loadCourse(config.packagePath));
   const missing = custodyErrors(config, course.custody);
   if (missing.length) throw new ConfigError(missing);
+  // Until a directory AuthStore exists, accounts live in memory: after a restart nobody could sign in to reach, or
+  // delete, a server-kept record kept on disk (R61).
+  if (config.dataDir && course.custody === 'server-kept') throw new ConfigError([SERVER_KEPT_ON_DISK]);
   const { publicUrl } = config;
   const now = o.now;
   const iso = now && (() => new Date(now()).toISOString());
 
   const dir = config.dataDir;
-  if (dir) await Promise.all([mkdir(join(dir, 'practice'), { recursive: true }), mkdir(join(dir, 'server'), { recursive: true })]);
+  if (dir) await mkdir(join(dir, 'practice'), { recursive: true });
   const practiceStore = dir ? new DirectoryPracticeStore(join(dir, 'practice'), undefined, now) : new MemoryPracticeStore(undefined, now);
   const practice = course.custody === 'practice' || course.allowPractice ? createPracticeCustody({ store: practiceStore, courseId: course.id }) : undefined;
 
@@ -200,8 +206,8 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
       custody = practice!;
       break;
     case 'server-kept':
-      // A directory AuthStore is deferred, so accounts do not survive a restart (see the warning below).
-      serverStore = dir ? new DirectoryServerStore(join(dir, 'server')) : new MemoryServerStore();
+      // Memory only: CXM_DATA_DIR is refused with this custody above.
+      serverStore = new MemoryServerStore();
       custody = createServerKeptCustody({ store: serverStore, publicUrl, courseTitle: course.title });
       auth = authFor('accounts');
       break;
@@ -249,11 +255,5 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
     now: iso,
     onClose: stopSweeper,
   });
-  const warnings =
-    dir && course.custody === 'server-kept'
-      ? [
-          'CXM_DATA_DIR keeps practice copies and server-kept records on disk, but accounts, clients and refresh tokens are held in memory: after a restart, learners cannot sign in to their accounts again, so records written before it cannot be reached.',
-        ]
-      : [];
-  return { ...app, course, warnings };
+  return { ...app, course };
 }

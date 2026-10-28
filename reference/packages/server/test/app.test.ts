@@ -270,13 +270,19 @@ describe('composition', () => {
     }
   });
 
-  it('the bin warns that accounts are held in memory when CXM_DATA_DIR is set with custody server-kept', async () => {
+  it('refuses CXM_DATA_DIR with custody server-kept: accounts are held in memory, so records on disk could not be reached or deleted after a restart (R61)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'cxm-data-'));
-    const bin = await startBin({ CXM_DATA_DIR: dir });
     try {
-      await vi.waitFor(() => expect(bin.stderr()).toMatch(/CXM_DATA_DIR .*accounts, clients and refresh tokens are held in memory.*cannot be reached/));
+      const example = await loadExample();
+      const err = await createAppFromConfig(config({ CXM_DATA_DIR: dir }), { course: { ...example, custody: 'server-kept' } }).catch((e) => e);
+      expect(err).toBeInstanceOf(ConfigError);
+      expect(err.errors).toHaveLength(1);
+      expect(err.errors[0]).toMatch(/CXM_DATA_DIR .*custody server-kept/);
+      // Practice copies on disk are still fine.
+      const practice = await createAppFromConfig(config({ CXM_DATA_DIR: dir }), { course: { ...example, custody: 'practice', allowPractice: false } });
+      apps.push(practice);
+      expect((await practice.fetch(req('/'))).status).toBe(200);
     } finally {
-      bin.stop();
       await rm(dir, { recursive: true, force: true });
     }
   });
