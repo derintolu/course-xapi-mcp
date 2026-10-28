@@ -5,7 +5,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { TOOL_NAMES } from '../reference/packages/core/src/constants.ts';
 import { courseJsonSchema, lessonJsonSchema } from '../reference/packages/core/src/package/schemas.ts';
-import { toolInputJsonSchema, toolOutputJsonSchema } from '../reference/packages/server/src/tool-schemas.ts';
+import { toolSchemaDocument } from '../reference/packages/server/src/tool-schemas.ts';
 
 const write = (name: string, schema: unknown) => {
   writeFileSync(new URL(`../schema/draft/${name}`, import.meta.url), JSON.stringify(schema, null, 2) + '\n');
@@ -17,7 +17,7 @@ write('lesson.schema.json', lessonJsonSchema());
 
 mkdirSync(new URL('../schema/draft/tools/practice/', import.meta.url), { recursive: true });
 for (const tool of TOOL_NAMES) {
-  write(`tools/${tool}.input.schema.json`, toolInputJsonSchema(tool, 'official'));
-  write(`tools/practice/${tool}.input.schema.json`, toolInputJsonSchema(tool, 'practice'));
-  write(`tools/${tool}.output.schema.json`, toolOutputJsonSchema(tool));
+  write(`tools/${tool}.input.schema.json`, toolSchemaDocument(tool, 'input', 'official'));
+  write(`tools/practice/${tool}.input.schema.json`, toolSchemaDocument(tool, 'input', 'practice'));
+  write(`tools/${tool}.output.schema.json`, toolSchemaDocument(tool, 'output'));
 }

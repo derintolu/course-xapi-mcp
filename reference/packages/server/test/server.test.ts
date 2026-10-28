@@ -29,7 +29,8 @@ import {
   withLearnerLock,
   type PracticeCustody,
 } from '../src/index.ts';
-import { toolInputJsonSchema, toolOutputJsonSchema } from '../src/tool-schemas.ts';
+import { SITE } from '@course-xapi-mcp/core';
+import { toolInputJsonSchema, toolOutputJsonSchema, toolSchemaDocument } from '../src/tool-schemas.ts';
 import { PUBLIC_URL, SUBJECT, TOKEN, connect, loadExample, makeServer, stubAuthenticate, teachExample, type Era, type Session } from './helpers.ts';
 
 const RETRY = 'the record was changed by another call at the same time; call this tool again';
@@ -495,15 +496,23 @@ describe.each(['legacy', 'modern'] as const)('course server over MCP (%s era)', 
 
   it('tool schemas in schema/draft/tools match the server (run npm run schemas)', async () => {
     const file = (name: string) => JSON.parse(readFileSync(new URL(`../../../../schema/draft/tools/${name}`, import.meta.url), 'utf8'));
+    // The published file is the wire schema plus its $id, which is the file's own URL under SITE.
+    const wire = (name: string) => {
+      const { $id, ...rest } = file(name);
+      expect($id, name).toBe(`${SITE}/schema/draft/tools/${name}`);
+      return rest;
+    };
     const { app } = await makeServer('server-kept');
     for (const [path, kind] of [['/mcp', 'official'], ['/mcp/practice', 'practice']] as const) {
       const { client } = await session(era, app, path, TOKEN);
       for (const t of (await client.listTools()).tools) {
         const dir = kind === 'practice' ? 'practice/' : '';
-        expect(t.inputSchema, `${kind} ${t.name}`).toEqual(file(`${dir}${t.name}.input.schema.json`));
-        expect(toolInputJsonSchema(t.name as never, kind)).toEqual(file(`${dir}${t.name}.input.schema.json`));
-        expect(t.outputSchema, t.name).toEqual(file(`${t.name}.output.schema.json`));
-        expect(toolOutputJsonSchema(t.name as never)).toEqual(file(`${t.name}.output.schema.json`));
+        expect(t.inputSchema, `${kind} ${t.name}`).toEqual(wire(`${dir}${t.name}.input.schema.json`));
+        expect(toolInputJsonSchema(t.name as never, kind)).toEqual(wire(`${dir}${t.name}.input.schema.json`));
+        expect(toolSchemaDocument(t.name as never, 'input', kind)).toEqual(file(`${dir}${t.name}.input.schema.json`));
+        expect(t.outputSchema, t.name).toEqual(wire(`${t.name}.output.schema.json`));
+        expect(toolOutputJsonSchema(t.name as never)).toEqual(wire(`${t.name}.output.schema.json`));
+        expect(toolSchemaDocument(t.name as never, 'output')).toEqual(file(`${t.name}.output.schema.json`));
       }
     }
     // Only the practice endpoint's resume_practice takes a record.

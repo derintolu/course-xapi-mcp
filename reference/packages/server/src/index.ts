@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 export { createCourseServer, type CourseServer, type CourseServerOptions, type McpPath } from './server.ts';
-export { toolInputJsonSchema, toolOutputJsonSchema, type EndpointKind } from './tool-schemas.ts';
+export { toolInputJsonSchema, toolOutputJsonSchema, toolSchemaDocument, toolSchemaId, type EndpointKind } from './tool-schemas.ts';
 export { createPracticeCustody, type PracticeCustody } from './custody/practice.ts';
 export { createServerKeptCustody } from './custody/server-kept.ts';
 export { createAuthorLrsCustody } from './custody/author-lrs.ts';

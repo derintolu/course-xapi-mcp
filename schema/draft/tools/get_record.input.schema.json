@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/draft/tools/get_record.input.schema.json",
   "type": "object",
   "properties": {},
   "additionalProperties": false

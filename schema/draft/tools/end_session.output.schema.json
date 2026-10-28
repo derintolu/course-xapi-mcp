@@ -1,4 +1,5 @@
 {
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/draft/tools/end_session.output.schema.json",
   "type": "object",
   "properties": {
     "ok": {

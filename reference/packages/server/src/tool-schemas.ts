@@ -2,7 +2,7 @@
 // Input and output schemas and annotations of the 16 tools, per endpoint kind. `npm run schemas` writes them to
 // schema/draft/tools/ (official endpoint) and schema/draft/tools/practice/ (practice endpoint).
 import * as z from 'zod/v4';
-import { LIMITS, TOOL_NAMES, type ToolName } from '@course-xapi-mcp/core';
+import { LIMITS, SITE, TOOL_NAMES, type ToolName } from '@course-xapi-mcp/core';
 
 /** `official`: custody options 1 to 3, identity from the bearer token. `practice`: option 4, identity from the handle. */
 export type EndpointKind = 'official' | 'practice';
@@ -161,3 +161,14 @@ export function toolOutputJsonSchema(name: ToolName): Record<string, unknown> {
 }
 
 export { TOOL_NAMES };
+
+/** The IRI of a published tool schema: schema/draft/tools/[practice/]<tool>.<input|output>.schema.json under SITE. */
+export function toolSchemaId(name: ToolName, io: 'input' | 'output', kind: EndpointKind = 'official'): string {
+  return `${SITE}/schema/draft/tools/${io === 'input' && kind === 'practice' ? 'practice/' : ''}${name}.${io}.schema.json`;
+}
+
+/** A tool schema as published in schema/draft/tools: the schema the server sends, with its `$id`. */
+export function toolSchemaDocument(name: ToolName, io: 'input' | 'output', kind: EndpointKind = 'official'): Record<string, unknown> {
+  const { $schema, ...rest } = io === 'input' ? toolInputJsonSchema(name, kind) : toolOutputJsonSchema(name);
+  return { ...($schema === undefined ? {} : { $schema }), $id: toolSchemaId(name, io, kind), ...rest };
+}
