@@ -125,6 +125,18 @@ describe('buildSite', () => {
     expect(existsSync(join(bare.dir, '_redirects'))).toBe(false);
   });
 
+  it('publishes every schema with an $id that is its own URL', () => {
+    const schemas = bare.files.filter((f) => f.startsWith('schema/draft/') && f.endsWith('.json'));
+    expect(schemas.length).toBeGreaterThan(40);
+    for (const f of schemas) expect(JSON.parse(read(bare.dir, f)).$id, f).toBe(`${SITE}/${f}`);
+  });
+
+  it('writes each section index once, with no <section>/index/index.html beside it', () => {
+    expect(bare.files).toContain('spec/draft/index.html');
+    expect(bare.files.filter((f) => /(^|\/)index\/index\.html$/.test(f))).toEqual([]);
+    expect(withAuthoring.files).toContain('authoring/index.html');
+  });
+
   it('points each IRI page at its JSON-LD document', () => {
     expect(read(bare.dir, 'xapi/verbs/placed/index.html')).toContain('<link rel="alternate" type="application/ld+json" href="/xapi/verbs/placed/index.jsonld">');
     expect(read(bare.dir, 'xapi/v0.2/index.html')).toContain('<link rel="alternate" type="application/ld+json" href="/xapi/v0.2/index.jsonld">');

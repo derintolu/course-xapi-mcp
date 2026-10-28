@@ -264,8 +264,7 @@ export async function buildSite(out: string, opts: BuildOptions = {}): Promise<B
     for (const { f, name } of sectionPages(dir, urlBase)) {
       const { title, html } = renderMarkdown(readFileSync(join(dir, f), 'utf8'), urlBase, known, `${outBase}/${f}`);
       const desc = `${title}, course-xapi-mcp draft ${SPEC_VERSION}.`;
-      page(`${outBase}/${name}/index.html`, title, desc, html);
-      if (name === 'index') page(`${outBase}/index.html`, title, desc, html);
+      page(name === 'index' ? `${outBase}/index.html` : `${outBase}/${name}/index.html`, title, desc, html);
     }
   };
   markdownSection(join(root, 'spec/draft'), '/spec/draft/', 'spec/draft');
