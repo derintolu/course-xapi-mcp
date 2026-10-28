@@ -221,14 +221,14 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
       auth = authFor('accounts');
       break;
     case 'author-lrs': {
-      custody = createAuthorLrsCustody({ course, lrs: config.lrs!, publicUrl, recordHolderUrl: config.recordHolderUrl, fetch: o.lrsFetch });
+      custody = createAuthorLrsCustody({ course, lrs: config.lrs!, publicUrl, recordHolderUrl: config.recordHolderUrl, recordDeleteUrl: config.recordDeleteUrl, fetch: o.lrsFetch });
       const federation = await createOidcFederation({ ...config.oidc!, redirectUri: publicUrl + '/oauth/callback' });
       auth = authFor('federated', { federation });
       break;
     }
     case 'lms-launched': {
       launches = new MemoryLaunchStore({ now });
-      const lms = createLmsLaunchedCustody({ course, launches, recordHolderUrl: config.recordHolderUrl, fetch: o.lrsFetch, resolveHost: o.resolveHost });
+      const lms = createLmsLaunchedCustody({ course, launches, recordHolderUrl: config.recordHolderUrl, recordDeleteUrl: config.recordDeleteUrl, fetch: o.lrsFetch, resolveHost: o.resolveHost });
       custody = lms;
       auth = authFor('launch-paired', { launches });
       // The bridge sends `initialized` and the sweeper's `terminated` itself; the custody lists them in the receipt.

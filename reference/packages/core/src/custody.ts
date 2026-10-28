@@ -17,6 +17,8 @@ export interface RecordLinks {
   view?: string;
   export?: string;
   delete?: string;
+  /** Options 1 and 2: where the record holder lets the learner view their record. */
+  record?: string;
   policy?: string;
   /** Option 1: the LMS page the launch returns to. */
   lms?: string;

@@ -182,13 +182,15 @@ describe('configuration', () => {
     expect(JSON.stringify(r)).not.toMatch(/hunter2|s3cret|admin|key:/);
   });
 
-  it('reads CXM_RECORD_HOLDER_URL as an http(s) URL, and leaves it unset by default', () => {
+  it('reads CXM_RECORD_HOLDER_URL (the record link) and CXM_RECORD_DELETE_URL (the deletion link) as http(s) URLs, unset by default', () => {
     const none = loadConfig({});
     if ('errors' in none) throw new Error(none.errors.join());
     expect(none.recordHolderUrl).toBeUndefined();
-    const c = loadConfig({ CXM_RECORD_HOLDER_URL: ' https://lrs.example/account/delete?lang=en ' });
+    expect(none.recordDeleteUrl).toBeUndefined();
+    const c = loadConfig({ CXM_RECORD_HOLDER_URL: ' https://lrs.example/account/record?lang=en ', CXM_RECORD_DELETE_URL: ' https://lrs.example/account/delete?lang=en ' });
     if ('errors' in c) throw new Error(c.errors.join());
-    expect(c.recordHolderUrl).toBe('https://lrs.example/account/delete?lang=en');
+    expect(c.recordHolderUrl).toBe('https://lrs.example/account/record?lang=en');
+    expect(c.recordDeleteUrl).toBe('https://lrs.example/account/delete?lang=en');
   });
 
   it('reads CXM_LMS_ORIGINS as a list of http(s) origins, unset by default, and refuses anything else without echoing credentials', () => {
@@ -206,11 +208,11 @@ describe('configuration', () => {
     }
   });
 
-  it('refuses a CXM_RECORD_HOLDER_URL that is not an http(s) URL, or carries credentials, without echoing them', () => {
+  it.each(['CXM_RECORD_HOLDER_URL', 'CXM_RECORD_DELETE_URL'])('refuses a %s that is not an http(s) URL, or carries credentials, without echoing them', (name) => {
     for (const bad of ['not a url', 'ftp://key:s3cret@lrs.example/x', 'https://admin:hunter2@lrs.example/delete', 'javascript:alert(1)']) {
-      const r = loadConfig({ CXM_RECORD_HOLDER_URL: bad });
+      const r = loadConfig({ [name]: bad });
       expect('errors' in r && r.errors, bad).toHaveLength(1);
-      expect('errors' in r && r.errors[0], bad).toMatch(/^CXM_RECORD_HOLDER_URL /);
+      expect('errors' in r && r.errors[0], bad).toMatch(new RegExp(`^${name} `));
       expect(JSON.stringify(r)).not.toMatch(/hunter2|s3cret|admin|key:/);
     }
   });
@@ -451,26 +453,38 @@ describe('record holder links and the option 1 receipt', () => {
     return { lrs, app, paired, advance: (ms: number) => (offset += ms) };
   }
 
-  it('option 1: get_status gives the launch returnURL as the deletion link, and get_record gives it as the LMS link', async () => {
+  it('option 1: with nothing configured, get_status gives the launch returnURL as both the deletion link and the record link, and get_record as the LMS link', async () => {
     const { paired } = await option1();
     const call = await paired('https://lms.example/course?x=1');
     const status = (await call('get_status')).data;
-    expect(status.links).toMatchObject({ delete: 'https://lms.example/course?x=1', lms: 'https://lms.example/course?x=1' });
-    expect(status.deleteLink).toBeUndefined();
+    expect(status.links).toMatchObject({ delete: 'https://lms.example/course?x=1', record: 'https://lms.example/course?x=1', lms: 'https://lms.example/course?x=1' });
+    expect(status.deleteLink).toBe('https://lms.example/course?x=1');
+    expect(status.deleteNote).toBeUndefined();
     const record = (await call('get_record')).data;
     expect(record.links.lms).toBe('https://lms.example/course?x=1');
   });
 
-  it('option 1: CXM_RECORD_HOLDER_URL takes precedence over the returnURL for deletion', async () => {
-    const { paired } = await option1({ CXM_RECORD_HOLDER_URL: 'https://lms.example/privacy/delete' });
-    const call = await paired('https://lms.example/course');
-    expect((await call('get_status')).data.links).toMatchObject({ delete: 'https://lms.example/privacy/delete', lms: 'https://lms.example/course' });
+  it('option 1: CXM_RECORD_DELETE_URL is the deletion link and CXM_RECORD_HOLDER_URL the record link, ahead of the returnURL', async () => {
+    const { paired } = await option1({ CXM_RECORD_DELETE_URL: 'https://lms.example/privacy/delete', CXM_RECORD_HOLDER_URL: 'https://lms.example/privacy/record' });
+    const status = (await (await paired('https://lms.example/course'))('get_status')).data;
+    expect(status.links).toMatchObject({ delete: 'https://lms.example/privacy/delete', record: 'https://lms.example/privacy/record', lms: 'https://lms.example/course' });
+    expect(status.deleteLink).toBe('https://lms.example/privacy/delete');
+  });
+
+  it('option 1: each link falls back to the returnURL on its own', async () => {
+    const onlyRecord = await option1({ CXM_RECORD_HOLDER_URL: 'https://lms.example/privacy/record' });
+    const a = (await (await onlyRecord.paired('https://lms.example/course'))('get_status')).data;
+    expect(a.links).toMatchObject({ delete: 'https://lms.example/course', record: 'https://lms.example/privacy/record' });
+    const onlyDelete = await option1({ CXM_RECORD_DELETE_URL: 'https://lms.example/privacy/delete' });
+    const b = (await (await onlyDelete.paired('https://lms.example/course'))('get_status')).data;
+    expect(b.links).toMatchObject({ delete: 'https://lms.example/privacy/delete', record: 'https://lms.example/course' });
   });
 
   it('option 1: with no configured URL and no returnURL, deleteLink is null and the note says to ask the record holder', async () => {
     const { paired } = await option1();
     const status = (await (await paired())('get_status')).data;
     expect(status.links?.delete).toBeUndefined();
+    expect(status.links?.record).toBeUndefined();
     expect(status.deleteLink).toBeNull();
     expect(status.deleteNote).toMatch(/ask your LMS/i);
   });

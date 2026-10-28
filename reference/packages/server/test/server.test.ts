@@ -398,6 +398,38 @@ describe.each(['legacy', 'modern'] as const)('course server over MCP (%s era)', 
     expect(JSON.stringify(r.raw)).not.toContain('secret detail');
   });
 
+  it('get_status gives an official learner the deletion link as deleteLink, and the record link in links', async () => {
+    const withLinks = (c: Custody): Custody => ({ ...c, links: () => ({ holder: 'Some LMS', delete: 'https://holder.example/delete', record: 'https://holder.example/record' }) });
+    const { call } = await officialRun(era, { wrap: withLinks });
+    const { data } = await call('get_status');
+    expect(data).toMatchObject({ deleteLink: 'https://holder.example/delete', links: { delete: 'https://holder.example/delete', record: 'https://holder.example/record' } });
+    expect(data.deleteNote).toBeUndefined();
+  });
+
+  it('get_status with no deletion link says so: deleteLink null and a note naming the record holder', async () => {
+    const noLinks = (c: Custody): Custody => ({ ...c, links: () => ({ holder: 'Some LMS', record: 'https://holder.example/record' }) });
+    const { call } = await officialRun(era, { wrap: noLinks });
+    const { data } = await call('get_status');
+    expect(data.deleteLink).toBeNull();
+    expect(data.deleteNote).toMatch(/ask Some LMS to delete their record/);
+    expect(data.links.record).toBe('https://holder.example/record');
+  });
+
+  it('get_status on the practice endpoint has no deleteLink or deleteNote', async () => {
+    const { call, handle } = await practiceRun(era);
+    const { data } = await call('get_status', { handle });
+    expect(data).not.toHaveProperty('deleteLink');
+    expect(data).not.toHaveProperty('deleteNote');
+  });
+
+  it('the get_status output schema describes deleteLink (a URI string or null) and deleteNote', () => {
+    const props = (toolOutputJsonSchema('get_status') as { properties: Record<string, unknown>; additionalProperties: unknown }).properties;
+    expect(props.deleteLink).toEqual({ type: ['string', 'null'], format: 'uri' });
+    expect(props.deleteNote).toEqual({ type: 'string' });
+    expect((toolOutputJsonSchema('get_status') as { additionalProperties: unknown }).additionalProperties).toBe(true);
+    expect(JSON.parse(readFileSync(new URL('../../../../schema/draft/tools/get_status.output.schema.json', import.meta.url), 'utf8')).properties.deleteLink).toEqual(props.deleteLink);
+  });
+
   it('resume_practice refuses an official export and a learning-mcp record', async () => {
     const { app, course } = await makeServer('server-kept');
     const official = await session(era, app, '/mcp', TOKEN);

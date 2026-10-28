@@ -124,6 +124,9 @@ const TOOL_FIELDS: Partial<Record<ToolName, Record<string, unknown>>> = {
   get_status: {
     holder: { type: 'string' },
     links: { type: 'object', additionalProperties: { type: 'string' } },
+    // Official custody only: the record holder's deletion link, or null with a note when it has none to give.
+    deleteLink: { type: ['string', 'null'], format: 'uri' },
+    deleteNote: { type: 'string' },
     position: { type: 'object', additionalProperties: true },
     next_tools: { type: 'array', items: { type: 'string' } },
     practiceUrl: { type: 'string' },

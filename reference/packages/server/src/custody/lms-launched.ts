@@ -34,8 +34,10 @@ const RECEIPT_TRIES = 3;
 export function createLmsLaunchedCustody(o: {
   course: CourseModel;
   launches: LaunchStore;
-  /** Where the learner asks the LMS to delete their record; given as the deletion link ahead of the launch's `returnURL`. */
+  /** Where the learner views their record at the LMS; given as the record link ahead of the launch's `returnURL`. */
   recordHolderUrl?: string;
+  /** Where the learner asks the LMS to delete their record; given as the deletion link ahead of the launch's `returnURL`. */
+  recordDeleteUrl?: string;
   fetch?: typeof fetch;
   /** Resolves the LMS's host names (default: DNS): requests reach public addresses only, as the bridge's do. */
   resolveHost?: ResolveHost;
@@ -63,18 +65,19 @@ export function createLmsLaunchedCustody(o: {
   }
 
   /**
-   * Each launch's `returnURL`, learnt when a call reads the launch, because `links()` is synchronous and cannot read
-   * the launch store. Every tool that shows links reads the launch first.
+   * Each learner's `returnURL` (the newest launch read), learnt when a call reads a launch, because `links()` is
+   * synchronous and cannot read the launch store. Keyed by the learner's subject, so a later call finds it whichever
+   * launch it carries, and even before that launch has been read.
    */
   const returnUrls = new Map<string, string>();
-  const remember = (c: LaunchContext) => {
-    if (c.returnURL !== undefined) returnUrls.set(c.launchId, c.returnURL);
+  const remember = (c: LaunchContext, subject: string | undefined) => {
+    if (c.returnURL !== undefined && subject) returnUrls.set(subject, c.returnURL);
   };
 
   async function bound(l: LearnerRef): Promise<LaunchContext> {
     const c = l.launchId === undefined ? undefined : await o.launches.get(l.launchId);
     if (!c) throw new StoreError(NOT_LAUNCHED);
-    remember(c);
+    remember(c, l.subject);
     return c;
   }
 
@@ -123,7 +126,7 @@ export function createLmsLaunchedCustody(o: {
     official: true,
 
     async recordSent(c, statements) {
-      remember(c);
+      remember(c, c.pairedSubject);
       await addToReceipt(c, statements);
     },
 
@@ -190,9 +193,10 @@ export function createLmsLaunchedCustody(o: {
     },
 
     links(l) {
-      const lms = l.launchId === undefined ? undefined : returnUrls.get(l.launchId);
-      const del = o.recordHolderUrl ?? lms;
-      return { holder: 'your LMS', ...(lms ? { lms } : {}), ...(del ? { delete: del } : {}) };
+      const lms = returnUrls.get(l.subject);
+      const record = o.recordHolderUrl ?? lms;
+      const del = o.recordDeleteUrl ?? lms;
+      return { holder: 'your LMS', ...(lms ? { lms } : {}), ...(record ? { record } : {}), ...(del ? { delete: del } : {}) };
     },
   };
 }

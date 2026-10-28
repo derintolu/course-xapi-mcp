@@ -37,8 +37,10 @@ export function createAuthorLrsCustody(o: {
   course: CourseModel;
   lrs: { endpoint: string; key: string; secret: string; version?: XapiVersion };
   publicUrl: string;
-  /** Where the learner asks the LRS's operator to delete their record; given as the deletion link. */
+  /** Where the learner views their record at the LRS's operator; given as the record link. */
   recordHolderUrl?: string;
+  /** The record holder's deletion link (`CXM_RECORD_DELETE_URL`). */
+  recordDeleteUrl?: string;
   assignActor?: (subject: string) => Promise<XapiAgent>;
   fetch?: typeof fetch;
 }): Custody & {
@@ -129,7 +131,8 @@ export function createAuthorLrsCustody(o: {
         holder: `${o.course.title} (the course author's learning record store)`,
         view: base + '/record',
         export: base + '/record/export.json',
-        ...(o.recordHolderUrl ? { delete: o.recordHolderUrl } : {}),
+        ...(o.recordHolderUrl ? { record: o.recordHolderUrl } : {}),
+        ...(o.recordDeleteUrl ? { delete: o.recordDeleteUrl } : {}),
       };
     },
   };

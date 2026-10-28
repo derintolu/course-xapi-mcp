@@ -83,8 +83,10 @@ async function runProfile(custody: Custody, classes: string[]): Promise<number> 
       closers.push(() => idp.close());
       Object.assign(vars, { CXM_LRS_ENDPOINT: lrsUrl, CXM_LRS_KEY: 'test', CXM_LRS_SECRET: 'test', CXM_OIDC_ISSUER: idp.issuer, CXM_OIDC_CLIENT_ID: idp.clientId, CXM_OIDC_CLIENT_SECRET: idp.clientSecret });
       env.CXM_LRS_URL = lrsUrl;
-      // Option 2 has no launch to fall back on: the author's LRS operator gives the deletion link.
-      vars.CXM_RECORD_HOLDER_URL = lrsUrl.replace(/\/xapi$/, '') + '/account/delete';
+      // Option 2 has no launch to fall back on: the author's LRS operator gives the record and deletion links.
+      const lrsOrigin = lrsUrl.replace(/\/xapi$/, '');
+      vars.CXM_RECORD_HOLDER_URL = lrsOrigin + '/account/record';
+      vars.CXM_RECORD_DELETE_URL = lrsOrigin + '/account/delete';
     }
     const config = loadConfig(vars);
     if ('errors' in config) throw new Error(config.errors.join('\n'));

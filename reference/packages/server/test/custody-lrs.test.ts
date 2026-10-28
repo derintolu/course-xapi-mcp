@@ -293,12 +293,20 @@ describe('author-LRS custody', () => {
     expect((await custody.record(learner)).statements.map((s) => s.id)).toEqual([ofMine.id]);
   });
 
-  it('links() gives the configured record holder URL as the deletion link, and none otherwise', () => {
+  it('links() gives the configured deletion URL as delete and the record holder URL as record, and none otherwise', () => {
     const { make, learner } = authorSetup();
     expect(make().links(learner).delete).toBeUndefined();
+    expect(make().links(learner).record).toBeUndefined();
     const lrs = createTestLrs();
-    const custody = createAuthorLrsCustody({ course: COURSE, lrs: { endpoint: LRS_URL, key: 'a', secret: 'b' }, publicUrl: PUBLIC_URL, fetch: lrsFetch(lrs).f, recordHolderUrl: 'https://lrs.example/account/delete' });
-    expect(custody.links(learner)).toMatchObject({ holder: expect.any(String), view: PUBLIC_URL + '/record', delete: 'https://lrs.example/account/delete' });
+    const custody = createAuthorLrsCustody({
+      course: COURSE,
+      lrs: { endpoint: LRS_URL, key: 'a', secret: 'b' },
+      publicUrl: PUBLIC_URL,
+      fetch: lrsFetch(lrs).f,
+      recordHolderUrl: 'https://lrs.example/account/record',
+      recordDeleteUrl: 'https://lrs.example/account/delete',
+    });
+    expect(custody.links(learner)).toMatchObject({ holder: expect.any(String), view: PUBLIC_URL + '/record', record: 'https://lrs.example/account/record', delete: 'https://lrs.example/account/delete' });
   });
 
   it('assignActor replaces the minted actor', async () => {
@@ -317,7 +325,7 @@ describe('author-LRS custody', () => {
 /** The LMS's host resolves to a public address in tests. */
 const publicHost = async () => ['93.184.216.34'];
 
-function lmsSetup(o: { recordHolderUrl?: string; resolveHost?: (host: string) => Promise<string[]> } = {}) {
+function lmsSetup(o: { recordHolderUrl?: string; recordDeleteUrl?: string; resolveHost?: (host: string) => Promise<string[]> } = {}) {
   const lrs = createTestLrs();
   const { f, seen } = lrsFetch(lrs);
   const sim = createLmsSim({
@@ -575,36 +583,60 @@ describe('LMS-launched custody', () => {
     expect(JSON.stringify(links)).not.toContain(c.registration);
   });
 
-  it('links() give the launch returnURL as the LMS link and the fallback deletion link, once the custody has seen the launch', async () => {
+  it('links() give the launch returnURL as the LMS link and the fallback record and deletion link, once the custody has seen the launch', async () => {
     const { custody, launches, launch, learnerOf } = lmsSetup();
     const c = await launch(AU1, 'l1');
     await launches.update(c.launchId, { returnURL: 'https://lms.example/course/1' });
     // links() is synchronous: before any call has read the launch, there is nothing to give.
     expect(custody.links(learnerOf(c)).lms).toBeUndefined();
     await custody.load(learnerOf(c));
-    expect(custody.links(learnerOf(c))).toEqual({ holder: 'your LMS', lms: 'https://lms.example/course/1', delete: 'https://lms.example/course/1' });
-    // Another launch has its own returnURL.
+    expect(custody.links(learnerOf(c))).toEqual({ holder: 'your LMS', lms: 'https://lms.example/course/1', record: 'https://lms.example/course/1', delete: 'https://lms.example/course/1' });
+  });
+
+  it('links() are kept per learner: a later call, or another launch of the same learner, finds the returnURL; another learner does not', async () => {
+    const { custody, launches, launch, learnerOf } = lmsSetup();
+    const c = await launch(AU1, 'l1');
+    await launches.update(c.launchId, { returnURL: 'https://lms.example/course/1' });
+    await custody.load(learnerOf(c));
+    // A later launch of the same learner (same subject) that has not been read yet still finds the link.
     const d = await launch(AU2, 'l2', { registration: c.registration });
+    expect(custody.links(learnerOf(d)).lms).toBe('https://lms.example/course/1');
+    // Reading the later launch, with its own returnURL, replaces it.
     await launches.update(d.launchId, { returnURL: 'https://lms.example/course/2' });
     await custody.record(learnerOf(d));
     expect(custody.links(learnerOf(d)).lms).toBe('https://lms.example/course/2');
-    expect(custody.links(learnerOf(c)).lms).toBe('https://lms.example/course/1');
+    expect(custody.links(learnerOf(c)).lms).toBe('https://lms.example/course/2');
+    // A launch of another learner has no link until it is read.
+    const other = { ...learnerOf(c), subject: 'someone-else' };
+    expect(custody.links(other)).toEqual({ holder: 'your LMS' });
+    // A call with no launch at all (the status of a learner who has not paired) finds the learner's link by subject.
+    expect(custody.links({ ...learnerOf(c), launchId: undefined }).lms).toBe('https://lms.example/course/2');
   });
 
-  it('links() give no LMS link and no deletion link for a launch without a returnURL', async () => {
+  it('links() give no LMS, record or deletion link for a launch without a returnURL', async () => {
     const { custody, launch, learnerOf } = lmsSetup();
     const c = await launch(AU1, 'l1');
     await custody.load(learnerOf(c));
     expect(custody.links(learnerOf(c))).toEqual({ holder: 'your LMS' });
   });
 
-  it('links() give the configured record holder URL as the deletion link ahead of the returnURL', async () => {
-    const { custody, launches, launch, learnerOf } = lmsSetup({ recordHolderUrl: 'https://lms.example/privacy/delete' });
-    const c = await launch(AU1, 'l1');
-    await launches.update(c.launchId, { returnURL: 'https://lms.example/course/1' });
-    expect(custody.links(learnerOf(c)).delete).toBe('https://lms.example/privacy/delete');
-    await custody.load(learnerOf(c));
-    expect(custody.links(learnerOf(c))).toMatchObject({ lms: 'https://lms.example/course/1', delete: 'https://lms.example/privacy/delete' });
+  it('links() give the configured URLs as the record and deletion links ahead of the returnURL, each falling back on its own', async () => {
+    const both = lmsSetup({ recordHolderUrl: 'https://lms.example/privacy/record', recordDeleteUrl: 'https://lms.example/privacy/delete' });
+    const c = await both.launch(AU1, 'l1');
+    await both.launches.update(c.launchId, { returnURL: 'https://lms.example/course/1' });
+    await both.custody.load(both.learnerOf(c));
+    expect(both.custody.links(both.learnerOf(c))).toMatchObject({ lms: 'https://lms.example/course/1', record: 'https://lms.example/privacy/record', delete: 'https://lms.example/privacy/delete' });
+
+    const onlyRecord = lmsSetup({ recordHolderUrl: 'https://lms.example/privacy/record' });
+    const d = await onlyRecord.launch(AU1, 'l1');
+    await onlyRecord.launches.update(d.launchId, { returnURL: 'https://lms.example/course/1' });
+    await onlyRecord.custody.load(onlyRecord.learnerOf(d));
+    expect(onlyRecord.custody.links(onlyRecord.learnerOf(d))).toMatchObject({ record: 'https://lms.example/privacy/record', delete: 'https://lms.example/course/1' });
+
+    // Configured, and no returnURL at all: the configured link is still given before the launch is read.
+    const noReturn = lmsSetup({ recordDeleteUrl: 'https://lms.example/privacy/delete' });
+    const e = await noReturn.launch(AU1, 'l1');
+    expect(noReturn.custody.links(noReturn.learnerOf(e))).toEqual({ holder: 'your LMS', delete: 'https://lms.example/privacy/delete' });
   });
 
   it('recordSent puts statements the bridge sent into the receipt, once each, beside those the tools delivered', async () => {

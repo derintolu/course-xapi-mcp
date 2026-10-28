@@ -35,8 +35,10 @@ export interface AppConfig {
   allowedOrigins: string[];
   /** The text of `/record/policy`. */
   retention: string;
-  /** `CXM_RECORD_HOLDER_URL`: where the learner asks the record holder (the LMS, the author's LRS) to delete their record (options 1 and 2). */
+  /** `CXM_RECORD_HOLDER_URL`: the record holder's record link, where the learner views their record (options 1 and 2). */
   recordHolderUrl?: string;
+  /** `CXM_RECORD_DELETE_URL`: the record holder's deletion link, where the learner asks it to delete their record (options 1 and 2). */
+  recordDeleteUrl?: string;
   /**
    * `CXM_LMS_ORIGINS` (option 1): the origins of the LMS LRS endpoints this course takes launches from. When set, the
    * bridge refuses every other LMS, and the course server signs path and course badges from a listed LMS's
@@ -77,20 +79,20 @@ function originOf(raw: string, name: string, errors: string[]): string | undefin
 }
 
 /** An http(s) URL with no user name or password: it is shown to learners and agents. */
-function recordHolderUrlOf(raw: string, errors: string[]): string | undefined {
+function learnerLinkOf(raw: string, name: string, errors: string[]): string | undefined {
   let u: URL;
   try {
     u = new URL(raw);
   } catch {
-    errors.push(`CXM_RECORD_HOLDER_URL is not a URL: ${redact(raw)}`);
+    errors.push(`${name} is not a URL: ${redact(raw)}`);
     return undefined;
   }
   if (u.protocol !== 'https:' && u.protocol !== 'http:') {
-    errors.push(`CXM_RECORD_HOLDER_URL must be an http(s) URL: ${redact(raw)}`);
+    errors.push(`${name} must be an http(s) URL: ${redact(raw)}`);
     return undefined;
   }
   if (u.username || u.password) {
-    errors.push(`CXM_RECORD_HOLDER_URL must not contain credentials: ${redact(raw)}`);
+    errors.push(`${name} must not contain credentials: ${redact(raw)}`);
     return undefined;
   }
   return u.href;
@@ -183,7 +185,9 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
   const badgeKey = badgeRaw === undefined ? undefined : badgeKeyOf(badgeRaw, errors);
 
   const holderRaw = set(env.CXM_RECORD_HOLDER_URL);
-  const recordHolderUrl = holderRaw === undefined ? undefined : recordHolderUrlOf(holderRaw, errors);
+  const recordHolderUrl = holderRaw === undefined ? undefined : learnerLinkOf(holderRaw, 'CXM_RECORD_HOLDER_URL', errors);
+  const deleteRaw = set(env.CXM_RECORD_DELETE_URL);
+  const recordDeleteUrl = deleteRaw === undefined ? undefined : learnerLinkOf(deleteRaw, 'CXM_RECORD_DELETE_URL', errors);
 
   const allowedOrigins: string[] = [];
   for (const raw of (env.CXM_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
@@ -212,6 +216,7 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
     allowedOrigins,
     retention: set(env.CXM_RETENTION) ?? DEFAULT_RETENTION,
     ...(recordHolderUrl ? { recordHolderUrl } : {}),
+    ...(recordDeleteUrl ? { recordDeleteUrl } : {}),
     ...(lmsOrigins.length ? { lmsOrigins } : {}),
     unset: AUTHOR_LRS_VARS.filter((n) => set(env[n]) === undefined),
     warnings,

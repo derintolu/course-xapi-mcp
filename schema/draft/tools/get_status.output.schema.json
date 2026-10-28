@@ -47,6 +47,16 @@
         "type": "string"
       }
     },
+    "deleteLink": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri"
+    },
+    "deleteNote": {
+      "type": "string"
+    },
     "position": {
       "type": "object",
       "additionalProperties": true

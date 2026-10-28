@@ -310,7 +310,8 @@ export function createTools(d: ToolDeps) {
           holder,
           links,
           // The record holder's deletion link is required in options 1 to 3. When the holder has none to give, say so.
-          ...(official && !links.delete ? { deleteLink: null, deleteNote: `No deletion link is available. Tell the learner to ask ${holder} to delete their record.` } : {}),
+          ...(official ? { deleteLink: links.delete ?? null } : {}),
+          ...(official && !links.delete ? { deleteNote: `No deletion link is available. Tell the learner to ask ${holder} to delete their record.` } : {}),
           position: s.position,
           next_tools: launch?.ended ? [] : s.next,
           ...(launch ? { launch: { lessonKey: launch.auKey, ended: Boolean(launch.ended) } } : {}),

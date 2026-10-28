@@ -231,7 +231,7 @@ describe.skipIf(!OFFICIAL)('the record holder', () => {
     const l = await learner();
     await place(l, 'intro');
     const status = ok(await l.call('get_status'));
-    expect(status.data.links.delete).toMatch(/^https?:\/\//);
+    expect(status.data.deleteLink).toMatch(/^https?:\/\//);
   });
 
   it.skipIf(!LRS_HOLDER)('[CXM-CUS-006] options 1 and 2: every statement, including the learner free-text answer, reaches the official record in real time', async () => {
