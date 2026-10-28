@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ADL_VERBS, CMI5, DEFAULTS, MemoryLaunchStore, type CourseModel } from '@course-xapi-mcp/core';
+import { ADL_VERBS, CMI5, DEFAULTS, MemoryLaunchStore, type CourseModel, type XapiStatement } from '@course-xapi-mcp/core';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
 import { createBridge, newPairingCode, startSweeper, type BridgeOptions } from '../src/index.ts';
 
@@ -23,8 +23,8 @@ const course = {
   },
 } as unknown as CourseModel;
 
-function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent'] } = {}) {
-  const lrs = createTestLrs();
+function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; authority?: boolean } = {}) {
+  const lrs = createTestLrs({ authority: o.authority });
   const sim = createLmsSim({
     lrs,
     lrsUrl: LRS_URL,
@@ -90,6 +90,23 @@ describe('launch', () => {
     });
     expect(c.terminatedAt).toBeUndefined();
     expect(Date.parse(c.pairingExpiresAt) - Date.parse(c.initializedAt)).toBe(DEFAULTS.pairingTtlMs);
+  });
+
+  it('captures the authority on the LMS\'s launched for the session, once, when it takes the launch', async () => {
+    const { lrs, sim, bridge, launches, launchIdOf } = setup({ authority: true });
+    const l = await sim.launch(LESSON_AU);
+    const [launched] = lrs.statements() as (XapiStatement & { authority?: unknown })[];
+    const c = (await launches.get(launchIdOf((await bridge.fetch(new Request(l.launchUrl)))!)))!;
+    expect(c.lmsAuthority).toEqual(launched!.authority);
+    expect(c.lmsAuthority).toBeDefined();
+  });
+
+  it('starts the launch without an LMS authority when the LRS records none', async () => {
+    const { sim, bridge, launches, launchIdOf } = setup();
+    const l = await sim.launch(LESSON_AU);
+    const res = (await bridge.fetch(new Request(l.launchUrl)))!;
+    expect(res.status).toBe(200);
+    expect((await launches.get(launchIdOf(res)))!.lmsAuthority).toBeUndefined();
   });
 
   it('accepts the placement AU', async () => {

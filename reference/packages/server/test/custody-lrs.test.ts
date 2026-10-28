@@ -272,7 +272,7 @@ describe('author-LRS custody', () => {
     });
   });
 
-  it('record() keeps a voiding statement of one of the course\'s statements, even with no course in its context (badge revocation)', async () => {
+  it('record() keeps the learner\'s voiding statements, which name no course, and the LRS leaves out what they void (badge revocation)', async () => {
     const { lrs, make, learner, actor } = authorSetup();
     const custody = make();
     const [mine] = defined(cmi5Context(actor, randomUUID(), randomUUID(), 'author-lrs'), AU1, ['initialized']);
@@ -287,10 +287,10 @@ describe('author-LRS custody', () => {
       timestamp: stamp(),
     }) as unknown as XapiStatement;
     const ofMine = voids(mine!.id);
-    const ofOther = voids(other!.id);
-    await custody.deliver(learner, [ofMine, ofOther]);
-    expect(lrs.statements()).toHaveLength(4);
-    expect((await custody.record(learner)).statements.map((s) => s.id).sort()).toEqual([mine!.id, ofMine.id].sort());
+    await custody.deliver(learner, [ofMine]);
+    expect(lrs.statements()).toHaveLength(3);
+    // The other course's statement stays out; the voided one is hidden by the LRS; its void is in the record.
+    expect((await custody.record(learner)).statements.map((s) => s.id)).toEqual([ofMine.id]);
   });
 
   it('links() gives the configured record holder URL as the deletion link, and none otherwise', () => {

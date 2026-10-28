@@ -217,4 +217,19 @@ describe('test LRS', () => {
     const bad = statement({ object: { objectType: 'StatementRef', id: 'https://example.org/not-a-statement' } });
     expect((await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(bad) })).status).toBe(400);
   });
+
+  it('leaves voided statements out of queries and statementId, and returns them by voidedStatementId (xAPI)', async () => {
+    const lrs = createTestLrs();
+    const target = statement();
+    const kept = statement();
+    const voided = statement({ verb: { id: 'http://adlnet.gov/expapi/verbs/voided', display: { 'en-US': 'voided' } }, object: { objectType: 'StatementRef', id: target.id } });
+    for (const s of [target, kept, voided]) await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(s) });
+    const listed = (await (await send(lrs, '/statements?ascending=true')).json()) as { statements: { id: string }[] };
+    expect(listed.statements.map((s) => s.id)).toEqual([kept.id, voided.id]);
+    expect((await send(lrs, `/statements?statementId=${target.id}`)).status).toBe(404);
+    expect(((await (await send(lrs, `/statements?voidedStatementId=${target.id}`)).json()) as { id: string }).id).toBe(target.id);
+    expect((await send(lrs, `/statements?voidedStatementId=${kept.id}`)).status).toBe(404);
+    // In-process, every stored statement is still there.
+    expect(lrs.statements()).toHaveLength(3);
+  });
 });

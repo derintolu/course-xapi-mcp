@@ -83,6 +83,13 @@ export interface LaunchContext {
   pairingCode: string;
   pairingExpiresAt: string;
   pairedSubject?: string;
+  /**
+   * The authority the LMS's LRS recorded on the LMS's `launched` for this session, read once when the bridge took the
+   * launch (the first one stored: the LMS sends it before it hands out the launch URL). It tells the LMS's own
+   * statements from anyone else's (badges count only its `satisfied`) and never changes afterwards; absent when it
+   * could not be read.
+   */
+  lmsAuthority?: Record<string, unknown>;
 }
 
 export interface LaunchStore {

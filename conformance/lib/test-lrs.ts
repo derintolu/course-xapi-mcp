@@ -27,7 +27,7 @@ export interface TestLrs {
   /** Serves `fetch` on 127.0.0.1 and returns the base URL. */
   listen(port?: number): Promise<string>;
   close(): Promise<void>;
-  /** Stored statements in the order they were accepted. */
+  /** Stored statements in the order they were accepted, voided ones included. */
   statements(): XapiStatement[];
   /** Accepts `Authorization: Basic <token>` with this exact token. */
   addToken(token: string): void;
@@ -64,6 +64,7 @@ const text = (status: number, message: string) => new Response(message, { status
 
 const canonical = (v: unknown): string =>
   JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
+const VOIDED = 'http://adlnet.gov/expapi/verbs/voided';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * What `validateStatement` checks: it takes Activity objects only (the statements a course server writes), so a
@@ -117,8 +118,23 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
 
   // Statements
 
+  /**
+   * Ids of the statements a stored voiding statement voids. xAPI: queries leave them out, `statementId` answers 404
+   * for them and `voidedStatementId` returns them. A voiding statement that targets another voiding statement voids
+   * nothing.
+   */
+  function voidedIds(): Set<string> {
+    const out = new Set<string>();
+    for (const s of stored) {
+      const target = s.verb.id === VOIDED && (s.object as { objectType?: string }).objectType === 'StatementRef' ? byId.get(s.object.id) : undefined;
+      if (target && target.verb.id !== VOIDED) out.add(target.id);
+    }
+    return out;
+  }
+
   function filtered(q: URLSearchParams): XapiStatement[] {
-    let list = [...stored];
+    const voided = voidedIds();
+    let list = stored.filter((s) => !voided.has(s.id));
     const agent = q.get('agent');
     if (agent) {
       let key: string;
@@ -167,7 +183,12 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
     const id = q.get('statementId');
     if (id) {
       const s = byId.get(id);
-      return s ? json(s) : text(404, 'no such statement');
+      return s && !voidedIds().has(id) ? json(s) : text(404, 'no such statement');
+    }
+    const voidedId = q.get('voidedStatementId');
+    if (voidedId) {
+      const s = byId.get(voidedId);
+      return s && voidedIds().has(voidedId) ? json(s) : text(404, 'no such voided statement');
     }
     return page(url, q, 0);
   }

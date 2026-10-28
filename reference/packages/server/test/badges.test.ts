@@ -631,12 +631,19 @@ describe('badges in option 1 (lms-launched)', () => {
       timestamp: new Date(Date.now() + 5000).toISOString(),
     };
     const forged = { ...satisfied, id: '5a715f1e-0000-4000-8000-000000000002' };
-    // The other writer first copies the LMS's launched of every session, so its own authority is on a launched too.
-    const launchedCopies = o.lrs
-      .statements()
-      .filter((s) => s.verb.id === ADL_VERBS.launched)
-      .map(({ authority: _a, ...s }: XapiStatement & { authority?: unknown }, i) => ({ ...s, id: randomUUID(), timestamp: new Date(Date.now() + 4000 + i).toISOString() }));
-    for (const s of [...launchedCopies, forged]) {
+    // The other writer first copies the LMS's launched of every session (dated before it), so its own authority is on
+    // a launched too, then voids the LMS's originals, which the LRS then leaves out of every query.
+    const originals = o.lrs.statements().filter((s) => s.verb.id === ADL_VERBS.launched);
+    const launchedCopies = originals.map(({ authority: _a, ...s }: XapiStatement & { authority?: unknown }) => ({ ...s, id: randomUUID(), timestamp: new Date(Date.parse(s.timestamp) - 60_000).toISOString() }));
+    const voids = originals.map((s, i) => ({
+      id: randomUUID(),
+      actor: s.actor,
+      verb: { id: 'http://adlnet.gov/expapi/verbs/voided', display: { 'en-US': 'voided' } },
+      object: { objectType: 'StatementRef', id: s.id },
+      context: { registration },
+      timestamp: new Date(Date.now() + 4000 + i).toISOString(),
+    }));
+    for (const s of [...launchedCopies, ...voids, forged]) {
       const posted = await o.lrs.fetch(new Request(LRS_URL + '/statements', { method: 'POST', headers: { authorization: 'Basic ' + btoa('test:test'), 'x-experience-api-version': '1.0.3', 'content-type': 'application/json' }, body: JSON.stringify(s) }));
       expect(posted.status).toBe(200);
     }

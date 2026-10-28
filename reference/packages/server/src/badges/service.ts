@@ -6,7 +6,6 @@
 import { join } from 'node:path';
 import {
   ADL_VERBS,
-  CMI5,
   DEFAULTS,
   RULES_VERSION,
   actorKey,
@@ -48,9 +47,8 @@ const VOIDED = 'http://adlnet.gov/expapi/verbs/voided';
 const LMS_CRITERIA = "The learner's LMS launched each lesson and holds the official record; this course server issued the badge from the statements that LMS accepted.";
 const NOT_EARNED = 'That badge is not earned yet, or its record is not readable right now.';
 
-/** The authority the LRS recorded on a statement, in a form that compares by value; undefined when it has none. */
-function authorityKey(s: XapiStatement): string | undefined {
-  const authority = (s as XapiStatement & { authority?: unknown }).authority;
+/** An authority as the LRS recorded it, in a form that compares by value; undefined when there is none. */
+function authorityKey(authority: unknown): string | undefined {
   if (authority === undefined || authority === null) return undefined;
   const sorted = (v: unknown): unknown =>
     Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, x]) => [k, sorted(x)])) : v;
@@ -141,35 +139,30 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
   }
 
   /**
-   * Option 1: the LMS's authority, as the LRS records it, anchored to the course server's own launch: the first
-   * `launched` stored for that launch's session. The LMS sends it before it hands out the launch URL, so no other
-   * writer can store one ahead of it; a copy stored later (anyone can write a `launched`) never counts. Undefined
-   * when the launch is unknown or the LRS records no authority.
+   * Option 1: the LMS's authority, captured once by the bridge when it took the course server's own launch (the
+   * authority on the first `launched` stored for that session, `LaunchContext.lmsAuthority`). Later reads never
+   * change it, so a copied `launched`, or a void of the LMS's original, cannot move it. Undefined when it could not
+   * be captured: then no path or course badge is issued from that launch.
    */
-  async function lmsAuthority(l: LearnerRef, statements: XapiStatement[]): Promise<string | undefined> {
+  async function lmsAuthority(l: LearnerRef): Promise<string | undefined> {
     const mine = l.launchId === undefined ? undefined : await o.launches!.get(l.launchId);
-    if (!mine) return undefined;
-    const ours = statements.filter((s) => s.verb.id === ADL_VERBS.launched && s.context?.extensions?.[CMI5.extSessionId] === mine.sessionId);
-    const storedAt = (s: XapiStatement) => (s as XapiStatement & { stored?: string }).stored;
-    // By `stored` when the LRS gives it; otherwise by the LRS's own order, newest stored first (xAPI's default).
-    const first = ours.length > 0 && ours.every((s) => storedAt(s)) ? [...ours].sort((a, b) => Date.parse(storedAt(a)!) - Date.parse(storedAt(b)!))[0] : ours.at(-1);
-    return first && authorityKey(first);
+    return authorityKey(mine?.lmsAuthority);
   }
 
   /**
    * Option 1: path and course badges from the `satisfied` statements the LMS wrote for this registration. Only the
-   * LMS's own count (CXM-BDG-006): the authority the LRS recorded on a `satisfied` must be the LMS's (`lmsAuthority`).
-   * Statements without an authority give no way to tell who wrote them, so they never count.
+   * LMS's own count (CXM-BDG-006): the authority the LRS recorded on a `satisfied` must be the LMS's (`lmsAuthority`),
+   * and a voided one never counts. Statements without an authority give no way to tell who wrote them.
    */
-  async function fromLmsSatisfied(l: LearnerRef, statements: XapiStatement[]): Promise<void> {
+  async function fromLmsSatisfied(l: LearnerRef, statements: XapiStatement[], voided: Set<string>): Promise<void> {
     const events: SatisfactionEvent[] = [];
     const blocks = Object.values(course.paths).filter((p) => p.status === 'live' && p.blockId);
-    const lms = await lmsAuthority(l, statements);
+    const lms = await lmsAuthority(l);
     // Oldest first: an any-path badge takes the first block satisfied.
     const ordered = [...statements].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
     for (const s of ordered) {
-      if (s.verb.id !== ADL_VERBS.satisfied) continue;
-      const by = authorityKey(s);
+      if (s.verb.id !== ADL_VERBS.satisfied || voided.has(s.id)) continue;
+      const by = authorityKey((s as XapiStatement & { authority?: unknown }).authority);
       if (by === undefined || by !== lms) continue;
       const block = blocks.find((p) => p.blockId === s.object.id);
       if (block) events.push({ type: 'block', pathKey: block.key, statementId: s.id });
@@ -213,7 +206,7 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
       for (const a of await store.awards(l.subject)) if (voided.has(a.earningStatementId)) await store.setConfirmed(l.subject, a.badgeId, a.earningStatementId, false);
     }
     const present = new Set([...statements.map((s) => s.id), ...receipt].filter((id) => !voided.has(id)));
-    if (option === 'lms-launched') await fromLmsSatisfied(l, statements);
+    if (option === 'lms-launched') await fromLmsSatisfied(l, statements, voided);
     else {
       for (const c of await store.credentials(l.subject)) {
         if (!c.earnedPending || c.revoked) continue;

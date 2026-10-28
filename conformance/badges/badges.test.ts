@@ -11,6 +11,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { checkCmi5Order } from '@course-xapi-mcp/core/xapi';
 import { DataIntegrityProof } from '@digitalbazaar/data-integrity';
 import { cryptosuite } from '@digitalbazaar/eddsa-rdfc-2022-cryptosuite';
 import * as vc from '@digitalbazaar/vc';
@@ -364,7 +365,7 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
   let fixSession: string | undefined;
   let lmsSatisfied: XapiStatement[] = [];
   let forged: XapiStatement[] = [];
-  /** Option 1: copies of the LMS's launched statements, written with the other credential. */
+  /** Option 1: copies of the LMS's launched statements and voids of the originals, written with the other credential. */
   let forgedLaunched: XapiStatement[] = [];
   /** A claim with an 8-byte salt: what it gave, if anything. */
   let shortSalt: { salt: string; credential: any; page: Page };
@@ -440,13 +441,15 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
 
     if (OPTION1) {
       // Satisfied statements shaped exactly as the LMS's, but written with another credential of the LMS's LRS. That
-      // writer first copies the LMS's launched of every session, so its authority is on a launched as well.
+      // writer first copies the LMS's launched of every session (dated before the original), so its authority is on
+      // a launched as well, then voids the LMS's originals, which the LRS then leaves out of every query (xAPI).
       const other = btoa(`learner-${randomUUID()}:x`);
       lms!.lrs.addToken(other);
-      forgedLaunched = lms!.lrs
-        .statements()
-        .filter((s) => s.verb.id === ADL_VERBS.launched && s.context?.registration === registration)
-        .map((s) => ({ ...withoutAuthority(s), id: randomUUID(), timestamp: stamp() }));
+      const originals = lms!.lrs.statements().filter((s) => s.verb.id === ADL_VERBS.launched && s.context?.registration === registration);
+      forgedLaunched = [
+        ...originals.map((s) => ({ ...withoutAuthority(s), id: randomUUID(), timestamp: new Date(Date.parse(s.timestamp) - 60_000).toISOString() })),
+        ...originals.map((s) => voiding(s.id, actor, registration)),
+      ];
       forged = [satisfiedFor(BLOCK_ID, actor, registration, fixSession), satisfiedFor(COURSE_ID, actor, registration, fixSession)];
       for (const s of [...forgedLaunched, ...forged]) {
         const res = await lms!.lrs.fetch(
@@ -751,9 +754,9 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
     expect(earnedFor(inLms, credentialOf(B.intro).id)).toHaveLength(1);
     expect(inLms[0]!.context?.extensions?.[CMI5.extSessionId]).toBe(fixSession);
     expect(inLms[0]!.context?.contextActivities?.category?.map((a) => a.id)).toContain(PROFILE_VERSION_IRI);
-    // Nothing after a terminated, nothing out of cmi5 order (leaving out the launched copies this suite forged).
-    const copies = new Set(forgedLaunched.map((s) => s.id));
-    expect(lms!.sim.problems().filter((p) => !copies.has(p.statementId))).toEqual([]);
+    // Nothing after a terminated, nothing out of cmi5 order (in what the LMS and the course server wrote).
+    const mine = new Set([...forgedLaunched, ...forged].map((s) => s.id));
+    expect(checkCmi5Order(lms!.lrs.statements().filter((s) => !mine.has(s.id)))).toEqual([]);
   });
 
   it.skipIf(!OPTION2)('[CXM-BDG-021] option 2 with badgeIssuer.signer "course-server": the course server signs, and earned goes to the author\'s LRS', () => {

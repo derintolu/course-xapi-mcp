@@ -30,9 +30,8 @@ function decode(etag: string | undefined): Tag | undefined {
 
 const isForCourse = (s: XapiStatement, courseId: string) =>
   s.object.id === courseId || (s.context?.contextActivities?.grouping ?? []).some((a) => a.id === courseId);
-/** The id of the statement a voiding statement voids, if `s` is one. */
-const voidedBy = (s: XapiStatement): string | undefined =>
-  s.verb.id === 'http://adlnet.gov/expapi/verbs/voided' && (s.object as { objectType?: string }).objectType === 'StatementRef' ? s.object.id : undefined;
+/** A voiding statement (object StatementRef). */
+const isVoiding = (s: XapiStatement) => s.verb.id === 'http://adlnet.gov/expapi/verbs/voided' && (s.object as { objectType?: string }).objectType === 'StatementRef';
 
 export function createAuthorLrsCustody(o: {
   course: CourseModel;
@@ -118,11 +117,10 @@ export function createAuthorLrsCustody(o: {
 
     async record(l) {
       const agent = await actorFor(l);
-      const all = await client.getStatements({ agent });
-      const course = new Set(all.filter((s) => isForCourse(s, courseId)).map((s) => s.id));
-      // A voiding statement rarely names the course; it belongs to the record when it voids one of its statements
-      // (the badge issuer revokes on it, CXM-BDG-024).
-      const statements = all.filter((s) => course.has(s.id) || course.has(voidedBy(s) ?? ''));
+      // The learner's voiding statements too: they rarely name the course, and the LRS leaves the statements they void
+      // out of every query (xAPI), so which course a void belongs to cannot be read back. The badge issuer revokes on
+      // the ones that void an earning statement (CXM-BDG-024); a void carries only the id of what it voids.
+      const statements = (await client.getStatements({ agent })).filter((s) => isForCourse(s, courseId) || isVoiding(s));
       return { official: true, statements, complete: true, note: 'The course author\'s learning record store holds your official record.' };
     },
 

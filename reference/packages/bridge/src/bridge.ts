@@ -4,6 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   actorKey,
+  ADL_VERBS,
   CMI5,
   DEFAULTS,
   SPEC_VERSION,
@@ -181,6 +182,24 @@ const html = (body: string, status: number, headers: Record<string, string> = {}
     },
   });
 
+/**
+ * The authority on the first `launched` the LRS stored for this session: the LMS's, because the LMS sends it before
+ * it hands out the launch URL. By `stored` when the LRS gives it, otherwise by the LRS's own order (newest stored
+ * first, xAPI's default). Undefined when the read fails or the LRS records no authority: the launch still starts.
+ */
+async function launchedAuthority(lrs: LrsClient, k: { actor: XapiAgent; registration: string; activityId: string; sessionId: string }): Promise<Record<string, unknown> | undefined> {
+  try {
+    const list = await lrs.getStatements({ agent: k.actor, registration: k.registration, verb: ADL_VERBS.launched, activity: k.activityId });
+    const ours = list.filter((s) => s.context?.extensions?.[CMI5.extSessionId] === k.sessionId);
+    const storedAt = (s: XapiStatement) => (s as XapiStatement & { stored?: string }).stored;
+    const first = ours.length > 0 && ours.every((s) => storedAt(s)) ? [...ours].sort((a, b) => Date.parse(storedAt(a)!) - Date.parse(storedAt(b)!))[0] : ours.at(-1);
+    const authority = (first as (XapiStatement & { authority?: unknown }) | undefined)?.authority;
+    return authority && typeof authority === 'object' && !Array.isArray(authority) ? structuredClone(authority as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function createBridge(o: BridgeOptions): Bridge {
   const now = o.now ?? Date.now;
   const uuid = o.uuid ?? randomUUID;
@@ -252,6 +271,7 @@ export function createBridge(o: BridgeOptions): Bridge {
       const data = parseLaunchData(state?.body, target.auId);
       // Read for cmi5 conformance (§11); the course has one language, so nothing here changes what is sent.
       await lrs.getAgentProfile(actor, 'cmi5LearnerPreferences');
+      const lmsAuthority = await launchedAuthority(lrs, { actor, registration, activityId, sessionId: data.sessionId });
 
       const initializedAt = Math.max(now(), tokenFetchedAt);
       const ctx: LaunchContext = {
@@ -268,6 +288,7 @@ export function createBridge(o: BridgeOptions): Bridge {
         initializedAt: iso(initializedAt),
         pairingCode: await uniquePairingCode(),
         pairingExpiresAt: iso(initializedAt + DEFAULTS.pairingTtlMs),
+        ...(lmsAuthority ? { lmsAuthority } : {}),
       };
       const initialized = buildDefined(statementContext(ctx), 'initialized', { au: { publisherId: ctx.auId, activityId: ctx.activityId } }, { id: uuid(), timestamp: ctx.initializedAt });
       await lrs.putStatement(initialized);
