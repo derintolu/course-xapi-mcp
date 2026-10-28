@@ -168,6 +168,10 @@ function refusedByRecordHolder(err: unknown): LaunchRefused {
     return new LaunchRefused(403, 'This lesson could not start', `${why} Go back to your learning platform and launch the lesson again.`, err.message);
   }
   if (err instanceof LaunchRefused) return err;
+  // The course server's own store refused it (too many open launches), not the LMS.
+  if (err instanceof StoreError && !(err instanceof LrsError)) {
+    return new LaunchRefused(503, 'This lesson could not start', 'This course is busy right now. Try launching the lesson again in a few minutes.');
+  }
   const detail = err instanceof LrsError ? err.message : undefined;
   return new LaunchRefused(502, 'This lesson could not start', 'Your learning platform did not answer as expected. Try launching the lesson again in a minute.', detail);
 }

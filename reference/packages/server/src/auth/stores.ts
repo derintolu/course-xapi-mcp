@@ -62,6 +62,7 @@ export interface AuthStore {
   putClient(c: ClientRecord): Promise<void>;
   getClient(clientId: string): Promise<ClientRecord | undefined>;
 
+  /** Throws CapacityError when too many requests are pending to take a new one. */
   putRequest(r: AuthRequest): Promise<void>;
   getRequest(id: string): Promise<AuthRequest | undefined>;
   deleteRequest(id: string): Promise<void>;
@@ -98,7 +99,40 @@ export interface AuthStore {
   spendPairingCode(launchId: string): Promise<boolean>;
 }
 
-/** In-memory AuthStore. Everything is lost on restart. */
+/** The store is full right now: answered as "try again later" (HTTP 503), never by dropping someone else's entry. */
+export class CapacityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CapacityError';
+  }
+}
+
+/** Pending authorization requests held at once (each lives 10 min); over it, `putRequest` throws CapacityError. */
+export const MAX_PENDING_REQUESTS = 10_000;
+/** Dynamically registered clients held at once; over it, the oldest registration is forgotten (it can register again). */
+export const MAX_REGISTERED_CLIENTS = 10_000;
+/** An expired authorization code is kept this much longer, so a late replay is still recognised and revokes its tokens. */
+export const CODE_REPLAY_GRACE_MS = 600_000;
+
+export interface MemoryAuthStoreOptions {
+  /** Milliseconds since the epoch, for sweeping expired entries. Default `Date.now`. */
+  now?: () => number;
+  /** Default MAX_PENDING_REQUESTS. */
+  maxRequests?: number;
+  /** Default MAX_REGISTERED_CLIENTS. */
+  maxClients?: number;
+}
+
+/** Drops the entries `expired` says are past their time. */
+function sweep<V>(map: Map<string, V>, expired: (v: V) => boolean) {
+  for (const [k, v] of map) if (expired(v)) map.delete(k);
+}
+
+/**
+ * In-memory AuthStore. Everything is lost on restart. Expired requests, codes, refresh tokens and sessions are swept
+ * whenever a new one is put, and pending requests and registered clients are capped, so unauthenticated traffic
+ * cannot grow it without bound.
+ */
 export class MemoryAuthStore implements AuthStore {
   readonly #clients = new Map<string, ClientRecord>();
   readonly #requests = new Map<string, AuthRequest>();
@@ -109,8 +143,20 @@ export class MemoryAuthStore implements AuthStore {
   readonly #accounts = new Map<string, AccountRecord>();
   readonly #attempts = new Map<string, number[]>();
   readonly #spentPairing = new Set<string>();
+  readonly #now: () => number;
+  readonly #maxRequests: number;
+  readonly #maxClients: number;
+
+  constructor(o: MemoryAuthStoreOptions = {}) {
+    this.#now = o.now ?? Date.now;
+    this.#maxRequests = o.maxRequests ?? MAX_PENDING_REQUESTS;
+    this.#maxClients = o.maxClients ?? MAX_REGISTERED_CLIENTS;
+  }
 
   async putClient(c: ClientRecord) {
+    this.#clients.delete(c.clientId);
+    // Oldest registration first (a Map keeps insertion order).
+    while (this.#clients.size >= this.#maxClients) this.#clients.delete(this.#clients.keys().next().value!);
     this.#clients.set(c.clientId, structuredClone(c));
   }
   async getClient(clientId: string) {
@@ -119,6 +165,9 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async putRequest(r: AuthRequest) {
+    const now = this.#now();
+    sweep(this.#requests, (x) => x.expiresAt <= now);
+    if (!this.#requests.has(r.id) && this.#requests.size >= this.#maxRequests) throw new CapacityError('too many sign-ins are in progress');
     this.#requests.set(r.id, structuredClone(r));
   }
   async getRequest(id: string) {
@@ -135,6 +184,8 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async putCode(hash: string, c: CodeRecord) {
+    const now = this.#now();
+    sweep(this.#codes, (x) => x.expiresAt + CODE_REPLAY_GRACE_MS <= now);
     this.#codes.set(hash, { ...structuredClone(c), used: false });
   }
   async redeemCode(hash: string) {
@@ -151,6 +202,8 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async putRefresh(hash: string, r: RefreshRecord) {
+    const now = this.#now();
+    sweep(this.#refresh, (x) => x.expiresAt <= now);
     this.#refresh.set(hash, { ...structuredClone(r), used: false });
   }
   async rotateRefresh(hash: string) {
@@ -167,6 +220,8 @@ export class MemoryAuthStore implements AuthStore {
   }
 
   async putSession(hash: string, s: SessionRecord) {
+    const now = this.#now();
+    sweep(this.#sessions, (x) => x.expiresAt <= now);
     this.#sessions.set(hash, structuredClone(s));
   }
   async getSession(hash: string) {

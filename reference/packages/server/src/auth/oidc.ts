@@ -6,6 +6,7 @@
 import * as oidc from 'openid-client';
 import { isLoopbackHost } from './clients.ts';
 import type { FederationHooks } from './auth-server.ts';
+import { CapacityError } from './stores.ts';
 
 export interface OidcFederationOptions {
   issuer: string;
@@ -17,10 +18,14 @@ export interface OidcFederationOptions {
   scopes?: string[];
   /** Replaces the global fetch for discovery, JWKS and token requests (tests). */
   fetch?: typeof fetch;
+  /** Sign-ins waiting at the provider at once (default MAX_PENDING_SIGNINS); over it, `begin` throws CapacityError. */
+  maxPending?: number;
 }
 
 /** A sign-in started at the provider lives this long, like the pending authorization request it serves. */
 const PENDING_TTL_MS = 600_000;
+/** Sign-ins started at the provider and not yet back, held at once. */
+export const MAX_PENDING_SIGNINS = 10_000;
 
 interface Pending {
   requestState: string;
@@ -49,6 +54,7 @@ export async function createOidcFederation(o: OidcFederationOptions): Promise<Fe
     async begin(requestState) {
       const at = Date.now();
       for (const [k, p] of pending) if (p.expiresAt <= at) pending.delete(k);
+      if (pending.size >= (o.maxPending ?? MAX_PENDING_SIGNINS)) throw new CapacityError('too many sign-ins are waiting at the identity provider');
       const state = oidc.randomState();
       const verifier = oidc.randomPKCECodeVerifier();
       const nonce = oidc.randomNonce();

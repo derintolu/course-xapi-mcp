@@ -26,7 +26,7 @@ const course = {
 /** The LMS's hosts resolve to a public address in tests, unless a test says otherwise. */
 const publicHost = async () => ['93.184.216.34'];
 
-function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; authority?: boolean; resolveHost?: BridgeOptions['resolveHost']; lmsOrigins?: string[] } = {}) {
+function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; authority?: boolean; resolveHost?: BridgeOptions['resolveHost']; lmsOrigins?: string[]; maxLaunches?: number } = {}) {
   const lrs = createTestLrs({ authority: o.authority });
   const sim = createLmsSim({
     lrs,
@@ -46,7 +46,7 @@ function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; author
   // A fixed clock a second ahead of the simulator's wall-clock statements, advanced by hand.
   let t = Date.now() + 1000;
   const clock = { now: () => t, advance: (ms: number) => (t += ms) };
-  const launches = new MemoryLaunchStore();
+  const launches = new MemoryLaunchStore({ now: clock.now, max: o.maxLaunches });
   const bridge = createBridge({ course, mcpUrl: MCP_URL, launches, now: clock.now, fetch: f, onSent: o.onSent, resolveHost: o.resolveHost ?? publicHost, lmsOrigins: o.lmsOrigins });
   const fetchPosts = () => calls.filter((c) => c.method === 'POST' && c.url.includes('/cmi5/fetch/')).length;
   const launchIdOf = (res: Response) => /cxm_launch=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')![1];
@@ -526,6 +526,15 @@ describe('refused launches', () => {
     expect(refused.calls).toHaveLength(0);
     const listed = setup({ lmsOrigins: ['https://other-lms.example', new URL(LRS_URL).origin] });
     expect((await listed.bridge.fetch(new Request((await listed.sim.launch(LESSON_AU)).launchUrl)))!.status).toBe(200);
+  });
+
+  it('answers 503 when the launch store is full of open launches (R62)', async () => {
+    const { sim, bridge } = setup({ maxLaunches: 1 });
+    expect((await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!.status).toBe(200);
+    const res = (await bridge.fetch(new Request((await sim.launch(PLACEMENT_AU)).launchUrl)))!;
+    expect(res.status).toBe(503);
+    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(await res.text()).toMatch(/busy/);
   });
 
   it('a loopback bridge accepts a loopback fetch URL', async () => {

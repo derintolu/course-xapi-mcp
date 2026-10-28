@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT, importJWK, type JWK } from 'jose';
 import { DEFAULTS, MemoryLaunchStore, actorKey, type AuthServer, type CourseModel, type LaunchContext, type LearnerRef } from '@course-xapi-mcp/core';
 import { PAIRING_GUESS_BUDGET, createAuthServer } from '../src/auth/auth-server.ts';
-import { MemoryAuthStore } from '../src/auth/stores.ts';
+import { CapacityError, MemoryAuthStore } from '../src/auth/stores.ts';
 import { guardedLookup, isPublicAddress } from '../src/auth/clients.ts';
 
 const PUBLIC = 'https://course.example';
@@ -112,7 +112,7 @@ async function exchange(s: AuthServer, clientId: string, code: string, verifier:
 
 const bearer = (token: string) => new Request(RESOURCE, { method: 'POST', headers: { authorization: 'Bearer ' + token } });
 
-function accountsServer(store = new MemoryAuthStore()) {
+function accountsServer(store = new MemoryAuthStore({ now })) {
   return createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', store, now });
 }
 
@@ -440,7 +440,7 @@ describe('refresh tokens', () => {
 
 describe('accounts mode', () => {
   it('signs up, then signs in, and sets the browser session cookie', async () => {
-    const store = new MemoryAuthStore();
+    const store = new MemoryAuthStore({ now });
     const s = accountsServer(store);
     const { client, loginRes, code, verifier } = await fullAccountsFlow(s, 'ada.l', 'correct horse battery');
     const sid = cookie(loginRes, 'cxm_sid')!;
@@ -559,7 +559,7 @@ describe('launch-paired mode', () => {
     createHash('sha256').update(c.endpoint + '\n' + actorKey(c.actor) + '\n' + c.registration).digest('hex');
 
   async function setup(over: Partial<LaunchContext> = {}) {
-    const launches = new MemoryLaunchStore();
+    const launches = new MemoryLaunchStore({ now });
     const c = launch(over);
     await launches.put(c);
     const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'launch-paired', launches, now });
@@ -762,5 +762,75 @@ describe('pages', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(res.headers.get('content-security-policy')).toBe("default-src 'none'; style-src 'unsafe-inline'; form-action 'self'");
     expect(res.headers.get('x-frame-options')).toBe('DENY');
+  });
+});
+
+describe('bounded memory (R62)', () => {
+  const request = (id: string, expiresAt: number) => ({ id, clientId: 'c', redirectUri: REDIRECT, codeChallenge: 'x', expiresAt, browser: 'b' });
+
+  it('sweeps expired authorization requests, codes (after a replay grace) and sessions when new ones are put', async () => {
+    const store = new MemoryAuthStore({ now });
+    await store.putRequest(request('old', t + 1000));
+    await store.putCode('old-code', { subject: 's', clientId: 'c', redirectUri: REDIRECT, codeChallenge: 'x', expiresAt: t + 1000 });
+    await store.putSession('old-session', { subject: 's', expiresAt: t + 1000 });
+    await store.putRefresh('old-refresh', { subject: 's', clientId: 'c', familyId: 'f', expiresAt: t + 1000 });
+    t += 2000;
+    // Within the grace a replayed code is still recognised (so its family can be revoked).
+    await store.putCode('new-code', { subject: 's', clientId: 'c', redirectUri: REDIRECT, codeChallenge: 'x', expiresAt: t + 60_000 });
+    expect(await store.redeemCode('old-code')).toBeDefined();
+    t += 11 * 60_000;
+    await store.putRequest(request('new', t + 600_000));
+    await store.putCode('newer-code', { subject: 's', clientId: 'c', redirectUri: REDIRECT, codeChallenge: 'x', expiresAt: t + 60_000 });
+    await store.putSession('new-session', { subject: 's', expiresAt: t + 1000 });
+    await store.putRefresh('new-refresh', { subject: 's', clientId: 'c', familyId: 'g', expiresAt: t + 1000 });
+    expect(await store.getRequest('old')).toBeUndefined();
+    expect(await store.redeemCode('old-code')).toBeUndefined();
+    expect(await store.getSession('old-session')).toBeUndefined();
+    expect(await store.rotateRefresh('old-refresh')).toBeUndefined();
+    expect(await store.getRequest('new')).toBeDefined();
+    expect(await store.getSession('new-session')).toBeDefined();
+  });
+
+  it('caps pending authorization requests: over the cap, authorize answers 503 and keeps nothing', async () => {
+    const store = new MemoryAuthStore({ now, maxRequests: 2 });
+    const s = accountsServer(store);
+    const { body: client } = await register(s);
+    for (let i = 0; i < 2; i++) expect((await route(s, get(authorizeQuery(client.client_id, pkce().challenge)))).status).toBe(200);
+    const full = await route(s, get(authorizeQuery(client.client_id, pkce().challenge)));
+    expect(full.status).toBe(503);
+    expect(await full.text()).not.toContain('name="request_id"');
+    // Once the pending ones expire, sign-in works again.
+    t += 11 * 60_000;
+    expect((await route(s, get(authorizeQuery(client.client_id, pkce().challenge)))).status).toBe(200);
+  });
+
+  it('caps dynamic client registrations: the oldest registration makes way for a new one', async () => {
+    const store = new MemoryAuthStore({ now, maxClients: 2 });
+    const s = accountsServer(store);
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const { res, body } = await register(s);
+      expect(res.status).toBe(201);
+      ids.push(body.client_id);
+    }
+    expect(await store.getClient(ids[0]!)).toBeUndefined();
+    expect(await store.getClient(ids[1]!)).toBeDefined();
+    expect(await store.getClient(ids[2]!)).toBeDefined();
+  });
+
+  it('a federated sign-in the provider cannot take now (too many pending) answers 503 and keeps no request', async () => {
+    const store = new MemoryAuthStore({ now });
+    const federation = { begin: async () => Promise.reject(new CapacityError('too many sign-ins in progress')), complete: async () => ({ subject: 'x', state: 'y' }) };
+    const s = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'federated', federation, store, now });
+    const { body: client } = await register(s);
+    const res = await route(s, get(authorizeQuery(client.client_id, pkce().challenge)));
+    expect(res.status).toBe(503);
+    const store2 = new MemoryAuthStore({ now, maxRequests: 1 });
+    // The request was dropped, so it does not hold a place under the cap either.
+    const s2 = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'federated', federation, store: store2, now });
+    const { body: c2 } = await register(s2);
+    for (let i = 0; i < 2; i++) expect((await route(s2, get(authorizeQuery(c2.client_id, pkce().challenge)))).status).toBe(503);
+    await store2.putRequest(request('fits', t + 1000));
+    expect(await store2.getRequest('fits')).toBeDefined();
   });
 });

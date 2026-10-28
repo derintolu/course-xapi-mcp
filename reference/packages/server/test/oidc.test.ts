@@ -5,6 +5,7 @@ import type { JWK } from 'jose';
 import type { AuthServer, CourseModel, LearnerRef } from '@course-xapi-mcp/core';
 import { createAuthServer } from '../src/auth/auth-server.ts';
 import { createOidcFederation } from '../src/auth/oidc.ts';
+import { CapacityError } from '../src/auth/stores.ts';
 import { startFakeIdp, type FakeIdp } from './fake-idp.ts';
 
 const PUBLIC = 'https://course.example';
@@ -121,6 +122,13 @@ describe('OIDC federation', () => {
     await signInError(wrong, cookie);
     // The real return still works afterwards: a forged state does not spend the pending sign-in.
     expect((await callback(back, cookie)).status).toBe(200);
+  });
+
+  it('caps the sign-ins waiting at the provider (R62)', async () => {
+    const federation = await createOidcFederation({ issuer: idp.issuer, clientId: idp.clientId, clientSecret: idp.clientSecret, redirectUri: CALLBACK, maxPending: 2 });
+    await federation.begin('r1', CALLBACK);
+    await federation.begin('r2', CALLBACK);
+    await expect(federation.begin('r3', CALLBACK)).rejects.toBeInstanceOf(CapacityError);
   });
 
   it('uses each IdP state once', async () => {

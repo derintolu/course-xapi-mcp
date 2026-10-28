@@ -16,7 +16,8 @@ import {
 } from '../src/constants.ts';
 import { actorKey, type LaunchContext } from '../src/custody.ts';
 import { ISSUE_CATALOG, makeIssue } from '../src/issues.ts';
-import { MemoryLaunchStore } from '../src/launch-store.ts';
+import { LAUNCH_RETENTION_MS, MemoryLaunchStore } from '../src/launch-store.ts';
+import { StoreError } from '../src/errors.ts';
 import * as core from '../src/index.ts';
 
 const allIris = (): string[] => [
@@ -120,6 +121,30 @@ describe('launch contract', () => {
     got!.auKey = 'mutated';
     expect((await s.get('a1'))?.auKey).toBe('l1');
     await expect(s.update('missing', {})).rejects.toThrow();
+  });
+
+  it('MemoryLaunchStore forgets an ended launch a retention window after it ended, and caps how many it holds (R62)', async () => {
+    let t = Date.parse('2026-10-27T10:00:00.000Z');
+    const iso = (ms: number) => new Date(ms).toISOString();
+    const s = new MemoryLaunchStore({ now: () => t, max: 3 });
+    await s.put(ctx('ended'));
+    await s.update('ended', { terminatedAt: iso(t) });
+    await s.put(ctx('superseded'));
+    await s.update('superseded', { supersededAt: iso(t + 1000) });
+    await s.put(ctx('live'));
+    // Just inside the window: kept.
+    t += LAUNCH_RETENTION_MS - 1;
+    await s.put(ctx('live2')); // at the cap: the oldest ended launch makes way
+    expect(await s.get('ended')).toBeUndefined();
+    expect(await s.get('superseded')).toBeDefined();
+    // After the window: the superseded one is swept on the next put.
+    t += 2000;
+    await s.put(ctx('live3'));
+    expect(await s.get('superseded')).toBeUndefined();
+    expect((await s.get('live'))?.launchId).toBe('live');
+    // Full of live launches: a new one is refused.
+    await expect(s.put(ctx('one-too-many'))).rejects.toThrow(StoreError);
+    expect(await s.get('one-too-many')).toBeUndefined();
   });
 
   it('MemoryLaunchStore returns the newest launch for (endpoint, actor, registration[, AU])', async () => {

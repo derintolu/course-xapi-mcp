@@ -19,7 +19,7 @@ import { ClientError, createClientResolver, isLoopbackHost, readCapped, register
 import { PATHS, bearerChallenge, resourceMetadata, serverMetadata } from './metadata.ts';
 import { accountsPage, consentPage, errorPage, launchPage, redirectPage } from './pages.ts';
 import { isS256Challenge, verifyS256 } from './pkce.ts';
-import { MemoryAuthStore, type AuthRequest, type AuthStore, type Grant } from './stores.ts';
+import { CapacityError, MemoryAuthStore, type AuthRequest, type AuthStore, type Grant } from './stores.ts';
 import { SCOPE, createAccessTokens, newSecret, secretHash, type AccessTokens } from './tokens.ts';
 
 export interface FederationHooks {
@@ -56,6 +56,7 @@ const pairingRequestKey = (requestId: string) => 'pairing-request:' + requestId;
 const PAIRING_CODE = new RegExp(`^[${DEFAULTS.pairingAlphabet}]{${DEFAULTS.pairingCodeLength}}$`);
 const BEARER = /^Bearer ([A-Za-z0-9._~+/-]+=*)$/i;
 const ENDED = 'This sign-in request has ended or expired.';
+const BUSY = 'Too many people are signing in to this course right now. Wait a few minutes and try again.';
 
 type Params = { get(name: string): string | undefined; duplicated: boolean };
 
@@ -101,8 +102,8 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
   const publicUrl = base.origin;
   const resource = publicUrl + '/mcp';
   const secureCookies = !isLoopbackHost(base.hostname);
-  const store = o.store ?? new MemoryAuthStore();
   const now = o.now ?? Date.now;
+  const store = o.store ?? new MemoryAuthStore({ now });
   const resolveClient = createClientResolver({ store, fetch: o.fetch, resolveHost: o.resolveHost ?? resolveWithDns, now });
   if (o.mode === 'launch-paired' && !o.launches) throw new TypeError('launch-paired mode needs a LaunchStore');
   if (o.mode === 'federated' && !o.federation) throw new TypeError('federated mode needs FederationHooks');
@@ -192,13 +193,21 @@ export function createAuthServer(o: AuthServerOptions): AuthServer {
       expiresAt: now() + REQUEST_TTL_MS,
       browser: secretHash(browser),
     };
-    await store.putRequest(r);
     const res = await (async () => {
+      await store.putRequest(r);
       if (o.mode === 'accounts') return accountsPage(shown(r));
       if (o.mode === 'launch-paired') return launchPage({ ...shown(r), withLaunch: !!(await cookieLaunch(req)) });
-      const idp = await o.federation!.begin(r.id, publicUrl + PATHS.callback);
-      return new Response(null, { status: 302, headers: { location: idp, 'cache-control': 'no-store' } });
-    })();
+      try {
+        const idp = await o.federation!.begin(r.id, publicUrl + PATHS.callback);
+        return new Response(null, { status: 302, headers: { location: idp, 'cache-control': 'no-store' } });
+      } catch (e) {
+        await store.deleteRequest(r.id);
+        throw e;
+      }
+    })().catch((e: unknown) => {
+      if (e instanceof CapacityError) return errorPage(BUSY, 503);
+      throw e;
+    });
     if (browser !== known) res.headers.append('set-cookie', browserCookie(browser));
     return res;
   }

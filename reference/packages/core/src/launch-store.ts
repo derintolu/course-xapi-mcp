@@ -3,10 +3,42 @@
 import { actorKey, type LaunchContext, type LaunchStore } from './custody.ts';
 import { StoreError } from './errors.ts';
 
+/** An ended (terminated or superseded) launch is kept this long, so its record and badges stay reachable a while. */
+export const LAUNCH_RETENTION_MS = 24 * 3600_000;
+/** Launches held at once; at the cap the oldest ended one makes way, and with none ended a new launch is refused. */
+export const MAX_LAUNCHES = 100_000;
+
+const endedAt = (c: LaunchContext) => {
+  const at = c.terminatedAt ?? c.supersededAt;
+  return at === undefined ? undefined : Date.parse(at);
+};
+
 export class MemoryLaunchStore implements LaunchStore {
   readonly #launches = new Map<string, LaunchContext>();
+  readonly #now: () => number;
+  readonly #max: number;
+
+  /** `now`: milliseconds since the epoch (default `Date.now`); `max`: default MAX_LAUNCHES. */
+  constructor(o: { now?: () => number; max?: number } = {}) {
+    this.#now = o.now ?? Date.now;
+    this.#max = o.max ?? MAX_LAUNCHES;
+  }
 
   async put(c: LaunchContext): Promise<void> {
+    const now = this.#now();
+    for (const [id, x] of this.#launches) {
+      const at = endedAt(x);
+      if (at !== undefined && at + LAUNCH_RETENTION_MS <= now) this.#launches.delete(id);
+    }
+    if (!this.#launches.has(c.launchId) && this.#launches.size >= this.#max) {
+      let oldest: [string, number] | undefined;
+      for (const [id, x] of this.#launches) {
+        const at = endedAt(x);
+        if (at !== undefined && (!oldest || at < oldest[1])) oldest = [id, at];
+      }
+      if (!oldest) throw new StoreError('too many lessons are open on this course right now; try again later');
+      this.#launches.delete(oldest[0]);
+    }
     this.#launches.set(c.launchId, structuredClone(c));
   }
 

@@ -221,7 +221,7 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
       break;
     }
     case 'lms-launched': {
-      launches = new MemoryLaunchStore();
+      launches = new MemoryLaunchStore({ now });
       const lms = createLmsLaunchedCustody({ course, launches, recordHolderUrl: config.recordHolderUrl, fetch: o.lrsFetch, resolveHost: o.resolveHost });
       custody = lms;
       auth = authFor('launch-paired', { launches });
