@@ -272,6 +272,14 @@ describe('author-LRS custody', () => {
     });
   });
 
+  it('links() gives the configured record holder URL as the deletion link, and none otherwise', () => {
+    const { make, learner } = authorSetup();
+    expect(make().links(learner).delete).toBeUndefined();
+    const lrs = createTestLrs();
+    const custody = createAuthorLrsCustody({ course: COURSE, lrs: { endpoint: LRS_URL, key: 'a', secret: 'b' }, publicUrl: PUBLIC_URL, fetch: lrsFetch(lrs).f, recordHolderUrl: 'https://lrs.example/account/delete' });
+    expect(custody.links(learner)).toMatchObject({ holder: expect.any(String), view: PUBLIC_URL + '/record', delete: 'https://lrs.example/account/delete' });
+  });
+
   it('assignActor replaces the minted actor', async () => {
     const lrs = createTestLrs({ credentials: [{ key: 'author', secret: 'sekrit' }] });
     const { f, seen } = lrsFetch(lrs);
@@ -285,7 +293,7 @@ describe('author-LRS custody', () => {
 
 // LMS-launched (option 1)
 
-function lmsSetup() {
+function lmsSetup(o: { recordHolderUrl?: string } = {}) {
   const lrs = createTestLrs();
   const { f, seen } = lrsFetch(lrs);
   const sim = createLmsSim({
@@ -298,7 +306,7 @@ function lmsSetup() {
     ],
   });
   const launches = new MemoryLaunchStore();
-  const custody = createLmsLaunchedCustody({ course: COURSE, launches, fetch: f });
+  const custody = createLmsLaunchedCustody({ course: COURSE, launches, fetch: f, ...o });
 
   /** What the bridge does on a launch: fetch the token once, read LMS.LaunchData, keep the LaunchContext. */
   async function launch(auId: string, auKey: string, o: { registration?: string } = {}): Promise<LaunchContext> {
@@ -526,5 +534,50 @@ describe('LMS-launched custody', () => {
     expect(links.holder).toBe('your LMS');
     expect(JSON.stringify(links)).not.toContain(c.authToken);
     expect(JSON.stringify(links)).not.toContain(c.registration);
+  });
+
+  it('links() give the launch returnURL as the LMS link and the fallback deletion link, once the custody has seen the launch', async () => {
+    const { custody, launches, launch, learnerOf } = lmsSetup();
+    const c = await launch(AU1, 'l1');
+    await launches.update(c.launchId, { returnURL: 'https://lms.example/course/1' });
+    // links() is synchronous: before any call has read the launch, there is nothing to give.
+    expect(custody.links(learnerOf(c)).lms).toBeUndefined();
+    await custody.load(learnerOf(c));
+    expect(custody.links(learnerOf(c))).toEqual({ holder: 'your LMS', lms: 'https://lms.example/course/1', delete: 'https://lms.example/course/1' });
+    // Another launch has its own returnURL.
+    const d = await launch(AU2, 'l2', { registration: c.registration });
+    await launches.update(d.launchId, { returnURL: 'https://lms.example/course/2' });
+    await custody.record(learnerOf(d));
+    expect(custody.links(learnerOf(d)).lms).toBe('https://lms.example/course/2');
+    expect(custody.links(learnerOf(c)).lms).toBe('https://lms.example/course/1');
+  });
+
+  it('links() give no LMS link and no deletion link for a launch without a returnURL', async () => {
+    const { custody, launch, learnerOf } = lmsSetup();
+    const c = await launch(AU1, 'l1');
+    await custody.load(learnerOf(c));
+    expect(custody.links(learnerOf(c))).toEqual({ holder: 'your LMS' });
+  });
+
+  it('links() give the configured record holder URL as the deletion link ahead of the returnURL', async () => {
+    const { custody, launches, launch, learnerOf } = lmsSetup({ recordHolderUrl: 'https://lms.example/privacy/delete' });
+    const c = await launch(AU1, 'l1');
+    await launches.update(c.launchId, { returnURL: 'https://lms.example/course/1' });
+    expect(custody.links(learnerOf(c)).delete).toBe('https://lms.example/privacy/delete');
+    await custody.load(learnerOf(c));
+    expect(custody.links(learnerOf(c))).toMatchObject({ lms: 'https://lms.example/course/1', delete: 'https://lms.example/privacy/delete' });
+  });
+
+  it('recordSent puts statements the bridge sent into the receipt, once each, beside those the tools delivered', async () => {
+    const { custody, launch, learnerOf, ctxOf } = lmsSetup();
+    const c = await launch(AU1, 'l1');
+    const [init] = defined(ctxOf(c), AU1, ['initialized']);
+    await custody.recordSent(c, [init]);
+    await custody.recordSent(c, [init]);
+    const [done] = defined(ctxOf(c), AU1, ['completed']);
+    await custody.deliver(learnerOf(c), [done]);
+    const receipt = (await custody.record(learnerOf(c))).receipt!;
+    expect(receipt.map((r) => r.id)).toEqual([init.id, done.id]);
+    expect(receipt[0]).toMatchObject({ verb: 'initialized', object: init.object.id });
   });
 });

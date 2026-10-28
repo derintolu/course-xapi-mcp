@@ -33,8 +33,14 @@ const RECEIPT_TRIES = 3;
 export function createLmsLaunchedCustody(o: {
   course: CourseModel;
   launches: LaunchStore;
+  /** Where the learner asks the LMS to delete their record; given as the deletion link ahead of the launch's `returnURL`. */
+  recordHolderUrl?: string;
   fetch?: typeof fetch;
-}): Custody & { launchFor(l: LearnerRef, auKey?: string): Promise<LaunchContext | { error: string }> } {
+}): Custody & {
+  launchFor(l: LearnerRef, auKey?: string): Promise<LaunchContext | { error: string }>;
+  /** Puts statements the launch bridge sent itself (`initialized`, a sweeper's `terminated`) into the launch's receipt. */
+  recordSent(c: LaunchContext, statements: XapiStatement[]): Promise<void>;
+} {
   const courseId = o.course.id;
   /** The xAPI version each LMS endpoint speaks, learnt once; one entry per endpoint, not per launch. */
   const versions = new Map<string, XapiVersion>();
@@ -52,9 +58,19 @@ export function createLmsLaunchedCustody(o: {
     return client;
   }
 
+  /**
+   * Each launch's `returnURL`, learnt when a call reads the launch, because `links()` is synchronous and cannot read
+   * the launch store. Every tool that shows links reads the launch first.
+   */
+  const returnUrls = new Map<string, string>();
+  const remember = (c: LaunchContext) => {
+    if (c.returnURL !== undefined) returnUrls.set(c.launchId, c.returnURL);
+  };
+
   async function bound(l: LearnerRef): Promise<LaunchContext> {
     const c = l.launchId === undefined ? undefined : await o.launches.get(l.launchId);
     if (!c) throw new StoreError(NOT_LAUNCHED);
+    remember(c);
     return c;
   }
 
@@ -101,6 +117,11 @@ export function createLmsLaunchedCustody(o: {
   return {
     option: 'lms-launched',
     official: true,
+
+    async recordSent(c, statements) {
+      remember(c);
+      await addToReceipt(c, statements);
+    },
 
     async launchFor(l, auKey) {
       const c = l.launchId === undefined ? undefined : await o.launches.get(l.launchId);
@@ -164,8 +185,10 @@ export function createLmsLaunchedCustody(o: {
       return { official: true, statements, receipt, complete, note: NOTE };
     },
 
-    links() {
-      return { holder: 'your LMS' };
+    links(l) {
+      const lms = l.launchId === undefined ? undefined : returnUrls.get(l.launchId);
+      const del = o.recordHolderUrl ?? lms;
+      return { holder: 'your LMS', ...(lms ? { lms } : {}), ...(del ? { delete: del } : {}) };
     },
   };
 }

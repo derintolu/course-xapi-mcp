@@ -206,18 +206,29 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
       auth = authFor('accounts');
       break;
     case 'author-lrs': {
-      custody = createAuthorLrsCustody({ course, lrs: config.lrs!, publicUrl, fetch: o.lrsFetch });
+      custody = createAuthorLrsCustody({ course, lrs: config.lrs!, publicUrl, recordHolderUrl: config.recordHolderUrl, fetch: o.lrsFetch });
       const federation = await createOidcFederation({ ...config.oidc!, redirectUri: publicUrl + '/oauth/callback' });
       auth = authFor('federated', { federation });
       break;
     }
-    case 'lms-launched':
+    case 'lms-launched': {
       launches = new MemoryLaunchStore();
-      custody = createLmsLaunchedCustody({ course, launches, fetch: o.lrsFetch });
+      const lms = createLmsLaunchedCustody({ course, launches, recordHolderUrl: config.recordHolderUrl, fetch: o.lrsFetch });
+      custody = lms;
       auth = authFor('launch-paired', { launches });
-      bridge = createBridge({ course, mcpUrl: publicUrl + '/mcp', launches, now, fetch: o.lrsFetch, lock: (c, fn) => withLearnerLock(launchSubject(c), fn) });
+      // The bridge sends `initialized` and the sweeper's `terminated` itself; the custody lists them in the receipt.
+      bridge = createBridge({
+        course,
+        mcpUrl: publicUrl + '/mcp',
+        launches,
+        now,
+        fetch: o.lrsFetch,
+        lock: (c, fn) => withLearnerLock(launchSubject(c), fn),
+        onSent: (c, statements) => lms.recordSent(c, statements),
+      });
       stopSweeper = startSweeper(bridge, o.sweepEveryMs);
       break;
+    }
   }
 
   const badges = await o.badges?.({ config, course, publicUrl, custody, auth, launches, now });

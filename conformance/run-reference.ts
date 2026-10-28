@@ -15,17 +15,9 @@ const FIXTURE = ROOT + 'conformance/fixtures/course';
 const VITEST = ROOT + 'node_modules/vitest/vitest.mjs';
 /**
  * Checks the reference is known to fail (conformance/README.md, CXM_KNOWN_GAPS), each with the reason; they run as
- * skipped tests named with the reason. Each is an open item in the Task 27 report.
+ * skipped tests named with the reason. None are open now; add an entry here, with its reason, for a gap that opens.
  */
-const NO_DELETION_LINK = 'the reference has no record-holder deletion link to give in this option; what it should be is an open owner decision';
-const KNOWN_GAPS: Partial<Record<Custody, Record<string, string>>> = {
-  'author-lrs': { 'CXM-CUS-008 deletion link': NO_DELETION_LINK },
-  'lms-launched': {
-    'CXM-CUS-008 deletion link': NO_DELETION_LINK,
-    'CXM-CUS-010 LMS link': 'the reference get_record names "your LMS" but gives no LMS URL',
-    'CXM-CUS-010 launch statements': 'the reference bridge sends initialized and the sweeper terminated outside the custody, so neither is in the receipt',
-  },
-};
+const KNOWN_GAPS: Partial<Record<Custody, Record<string, string>>> = {};
 const PROFILES: { custody: Custody; classes: string[] }[] = [
   { custody: 'practice', classes: ['conformance/server'] },
   { custody: 'server-kept', classes: ['conformance/server'] },
@@ -70,6 +62,8 @@ async function runProfile(custody: Custody, classes: string[]): Promise<number> 
       closers.push(() => idp.close());
       Object.assign(vars, { CXM_LRS_ENDPOINT: lrsUrl, CXM_LRS_KEY: 'test', CXM_LRS_SECRET: 'test', CXM_OIDC_ISSUER: idp.issuer, CXM_OIDC_CLIENT_ID: idp.clientId, CXM_OIDC_CLIENT_SECRET: idp.clientSecret });
       env.CXM_LRS_URL = lrsUrl;
+      // Option 2 has no launch to fall back on: the author's LRS operator gives the deletion link.
+      vars.CXM_RECORD_HOLDER_URL = lrsUrl.replace(/\/xapi$/, '') + '/account/delete';
     }
     const config = loadConfig(vars);
     if ('errors' in config) throw new Error(config.errors.join('\n'));

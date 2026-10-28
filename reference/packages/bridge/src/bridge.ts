@@ -36,6 +36,12 @@ export interface BridgeOptions {
    * to the session. Default: no lock.
    */
   lock?: <T>(c: LaunchContext, fn: () => Promise<T>) => Promise<T>;
+  /**
+   * Called with the statements the bridge itself sent for a launch (`initialized` at launch, `terminated` when it ends a
+   * session), after the record holder took them, so the custody can list them in the receipt. A failure at launch is
+   * ignored; one at termination fails that attempt, and the next sweep resends the same `terminated` and reports again.
+   */
+  onSent?: (c: LaunchContext, statements: XapiStatement[]) => Promise<void>;
 }
 
 export interface Bridge {
@@ -188,7 +194,7 @@ export function createBridge(o: BridgeOptions): Bridge {
    * `terminated` statements built but not yet confirmed by the record holder. A failed send may still have been stored,
    * so the launch stays ended and the same statement (same id and timestamp) is retried; the LRS dedupes by id.
    */
-  const pending = new Map<string, { endpoint: string; token: string; statement: XapiStatement }>();
+  const pending = new Map<string, { launch: LaunchContext; endpoint: string; token: string; statement: XapiStatement }>();
 
   const iso = (ms: number) => new Date(ms).toISOString();
   const client = (endpoint: string, token: string): LrsClient => createLrsClient({ endpoint, auth: { type: 'token', value: token }, fetch: f });
@@ -269,6 +275,7 @@ export function createBridge(o: BridgeOptions): Bridge {
       const previous = await store.latestFor(ctx.endpoint, actorKey(actor), registration, key);
       await store.put(ctx);
       live.add(ctx.launchId);
+      await o.onSent?.(ctx, [initialized]).catch(() => undefined); // the launch itself succeeded
       if (previous && !previous.terminatedAt && !previous.supersededAt) {
         await store.update(previous.launchId, { supersededAt: ctx.initializedAt });
         live.delete(previous.launchId);
@@ -303,12 +310,13 @@ export function createBridge(o: BridgeOptions): Bridge {
           timestamp: terminatedAt,
           duration: isoDuration(Math.max(0, at - Date.parse(c.initializedAt))),
         });
-        p = { endpoint: c.endpoint, token: c.authToken, statement };
+        p = { launch: c, endpoint: c.endpoint, token: c.authToken, statement };
         pending.set(launchId, p);
         // Claim the end before sending, so the engine stops writing to this launch; it stays claimed if the send fails.
         await store.update(launchId, { terminatedAt });
       }
       await client(p.endpoint, p.token).putStatement(p.statement);
+      await o.onSent?.(p.launch, [p.statement]);
       pending.delete(launchId);
       live.delete(launchId);
       return true;

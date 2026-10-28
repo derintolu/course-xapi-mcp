@@ -182,6 +182,24 @@ describe('configuration', () => {
     expect(JSON.stringify(r)).not.toMatch(/hunter2|s3cret|admin|key:/);
   });
 
+  it('reads CXM_RECORD_HOLDER_URL as an http(s) URL, and leaves it unset by default', () => {
+    const none = loadConfig({});
+    if ('errors' in none) throw new Error(none.errors.join());
+    expect(none.recordHolderUrl).toBeUndefined();
+    const c = loadConfig({ CXM_RECORD_HOLDER_URL: ' https://lrs.example/account/delete?lang=en ' });
+    if ('errors' in c) throw new Error(c.errors.join());
+    expect(c.recordHolderUrl).toBe('https://lrs.example/account/delete?lang=en');
+  });
+
+  it('refuses a CXM_RECORD_HOLDER_URL that is not an http(s) URL, or carries credentials, without echoing them', () => {
+    for (const bad of ['not a url', 'ftp://key:s3cret@lrs.example/x', 'https://admin:hunter2@lrs.example/delete', 'javascript:alert(1)']) {
+      const r = loadConfig({ CXM_RECORD_HOLDER_URL: bad });
+      expect('errors' in r && r.errors, bad).toHaveLength(1);
+      expect('errors' in r && r.errors[0], bad).toMatch(/^CXM_RECORD_HOLDER_URL /);
+      expect(JSON.stringify(r)).not.toMatch(/hunter2|s3cret|admin|key:/);
+    }
+  });
+
   it('refuses bad values', () => {
     const r = loadConfig({ PORT: 'eighty', CXM_PUBLIC_URL: 'https://course.example/sub', CXM_SIGNING_KEY: '{"kty":"RSA"}', CXM_LRS_VERSION: '1.0', CXM_ALLOWED_ORIGINS: 'nope' });
     expect('errors' in r && r.errors.map((e) => e.split(' ')[0])).toEqual(['PORT', 'CXM_PUBLIC_URL', 'CXM_LRS_VERSION', 'CXM_SIGNING_KEY', 'CXM_ALLOWED_ORIGINS']);
@@ -385,6 +403,78 @@ describe('record erase and tool calls', () => {
     expect(revoked).toHaveLength(1);
     expect(await inner.getState(revoked[0]!)).toBeUndefined();
     expect(await inner.statements(revoked[0]!)).toEqual([]);
+  });
+});
+
+describe('record holder links and the option 1 receipt', () => {
+  /** An option 1 app over a test LRS, with a simulator launching the example's lessons and a clock the test advances. */
+  async function option1(env: Record<string, string> = {}, sweepEveryMs?: number) {
+    const lrs = createTestLrs();
+    const lrsFetch = ((input: RequestInfo | URL, init?: RequestInit) => lrs.fetch(new Request(input, init))) as typeof fetch;
+    const course = { ...(await loadExample()), custody: 'lms-launched' as const, allowPractice: false };
+    const sim = createLmsSim({ lrs, lrsUrl: LRS_URL, courseId: course.id, aus: [{ auId: course.placement.auId, url: course.placement.url, moveOn: 'NotApplicable' }] });
+    let offset = 1000;
+    const now = () => Date.now() + offset;
+    const app = await createAppFromConfig(config(env), { course, lrsFetch, now, sweepEveryMs });
+    apps.push(app);
+    const paired = async (returnURL?: string) => {
+      const l = await sim.launch(course.placement.auId, returnURL ? { returnURL } : {});
+      const launched = await app.fetch(req(new URL(l.launchUrl).pathname + new URL(l.launchUrl).search));
+      expect(launched.status).toBe(200);
+      const code = /class="code">([A-Z0-9]{6})</.exec(await launched.text())![1]!;
+      const browser = jar();
+      const s = await startSignIn(app, browser);
+      const token = await s.finish(await app.fetch(formPost('/oauth/authorize', { request_id: s.id, pairing_code: code }, browser)));
+      return mcp(app, '/mcp', token);
+    };
+    return { lrs, app, paired, advance: (ms: number) => (offset += ms) };
+  }
+
+  it('option 1: get_status gives the launch returnURL as the deletion link, and get_record gives it as the LMS link', async () => {
+    const { paired } = await option1();
+    const call = await paired('https://lms.example/course?x=1');
+    const status = (await call('get_status')).data;
+    expect(status.links).toMatchObject({ delete: 'https://lms.example/course?x=1', lms: 'https://lms.example/course?x=1' });
+    expect(status.deleteLink).toBeUndefined();
+    const record = (await call('get_record')).data;
+    expect(record.links.lms).toBe('https://lms.example/course?x=1');
+  });
+
+  it('option 1: CXM_RECORD_HOLDER_URL takes precedence over the returnURL for deletion', async () => {
+    const { paired } = await option1({ CXM_RECORD_HOLDER_URL: 'https://lms.example/privacy/delete' });
+    const call = await paired('https://lms.example/course');
+    expect((await call('get_status')).data.links).toMatchObject({ delete: 'https://lms.example/privacy/delete', lms: 'https://lms.example/course' });
+  });
+
+  it('option 1: with no configured URL and no returnURL, deleteLink is null and the note says to ask the record holder', async () => {
+    const { paired } = await option1();
+    const status = (await (await paired())('get_status')).data;
+    expect(status.links?.delete).toBeUndefined();
+    expect(status.deleteLink).toBeNull();
+    expect(status.deleteNote).toMatch(/ask your LMS/i);
+  });
+
+  it('option 1: the receipt lists the initialized the bridge sent at launch and the terminated the sweeper sent', async () => {
+    const { lrs, paired, advance } = await option1({}, 20);
+    const call = await paired('https://lms.example/course');
+    const initialized = lrs.statements().find((s) => s.verb.id.endsWith('/initialized'))!;
+    const first = (await call('get_record')).data.record.receipt as { id: string; verb: string }[];
+    expect(first.find((r) => r.id === initialized.id)?.verb).toBe('initialized');
+
+    advance(31 * 60_000);
+    let terminated: XapiStatement | undefined;
+    for (let i = 0; i < 100 && !terminated; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      terminated = lrs.statements().find((s) => s.verb.id.endsWith('/terminated'));
+    }
+    expect(terminated, 'the sweeper sent terminated').toBeDefined();
+    let ids: string[] = [];
+    for (let i = 0; i < 50 && !ids.includes(terminated!.id); i++) {
+      ids = ((await call('get_record')).data.record.receipt as { id: string }[]).map((r) => r.id);
+      if (!ids.includes(terminated!.id)) await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(ids).toContain(terminated!.id);
+    expect(ids).toContain(initialized.id);
   });
 });
 

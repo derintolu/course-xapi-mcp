@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ADL_VERBS, CMI5, DEFAULTS, MemoryLaunchStore, type CourseModel } from '@course-xapi-mcp/core';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
-import { createBridge, newPairingCode, startSweeper } from '../src/index.ts';
+import { createBridge, newPairingCode, startSweeper, type BridgeOptions } from '../src/index.ts';
 
 const LRS_URL = 'https://lrs.example/xapi';
 const COURSE_ID = 'https://example.org/course';
@@ -23,7 +23,7 @@ const course = {
   },
 } as unknown as CourseModel;
 
-function setup(o: { bridgeUrl?: string } = {}) {
+function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent'] } = {}) {
   const lrs = createTestLrs();
   const sim = createLmsSim({
     lrs,
@@ -44,7 +44,7 @@ function setup(o: { bridgeUrl?: string } = {}) {
   let t = Date.now() + 1000;
   const clock = { now: () => t, advance: (ms: number) => (t += ms) };
   const launches = new MemoryLaunchStore();
-  const bridge = createBridge({ course, mcpUrl: MCP_URL, launches, now: clock.now, fetch: f });
+  const bridge = createBridge({ course, mcpUrl: MCP_URL, launches, now: clock.now, fetch: f, onSent: o.onSent });
   const fetchPosts = () => calls.filter((c) => c.method === 'POST' && c.url.includes('/cmi5/fetch/')).length;
   const launchIdOf = (res: Response) => /cxm_launch=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')![1];
   return { lrs, sim, bridge, launches, clock, calls, fetchPosts, launchIdOf };
@@ -146,6 +146,56 @@ describe('launch', () => {
   it('answers undefined for other paths', async () => {
     const { bridge } = setup();
     expect(await bridge.fetch(new Request('https://course.example/mcp'))).toBeUndefined();
+  });
+});
+
+describe('onSent', () => {
+  type Sent = { launchId: string; ids: string[]; verbs: string[] };
+  const recorder = (fail?: () => boolean) => {
+    const sent: Sent[] = [];
+    const onSent: NonNullable<BridgeOptions['onSent']> = async (c, statements) => {
+      if (fail?.()) throw new Error('receipt store down');
+      sent.push({ launchId: c.launchId, ids: statements.map((s) => s.id), verbs: statements.map((s) => s.verb.id) });
+    };
+    return { sent, onSent };
+  };
+
+  it('reports the initialized it sent, with the stored launch, after the record holder took it', async () => {
+    const { sent, onSent } = recorder();
+    const { lrs, sim, bridge, launchIdOf } = setup({ onSent });
+    const res = (await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!;
+    expect(sent).toEqual([{ launchId: launchIdOf(res), ids: [lrs.statements()[1].id], verbs: [ADL_VERBS.initialized] }]);
+  });
+
+  it('still starts the launch when reporting fails', async () => {
+    const { onSent } = recorder(() => true);
+    const { sim, bridge } = setup({ onSent });
+    expect((await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!.status).toBe(200);
+  });
+
+  it('reports the terminated a sweep sent', async () => {
+    const { sent, onSent } = recorder();
+    const { lrs, sim, bridge, clock, launchIdOf } = setup({ onSent });
+    const res = (await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!;
+    clock.advance(31 * MIN);
+    expect(await bridge.sweep()).toBe(1);
+    const terminated = lrs.statements().find((s) => s.verb.id === ADL_VERBS.terminated)!;
+    expect(sent.at(-1)).toEqual({ launchId: launchIdOf(res), ids: [terminated.id], verbs: [ADL_VERBS.terminated] });
+  });
+
+  it('retries a report that failed on the next sweep, resending the same terminated', async () => {
+    let down = true;
+    const { sent, onSent } = recorder(() => down);
+    const { lrs, sim, bridge, clock } = setup({ onSent });
+    await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl));
+    sent.length = 0;
+    clock.advance(31 * MIN);
+    expect(await bridge.sweep()).toBe(0);
+    down = false;
+    expect(await bridge.sweep()).toBe(1);
+    const sentIds = lrs.statements().filter((s) => s.verb.id === ADL_VERBS.terminated).map((s) => s.id);
+    expect(sentIds).toHaveLength(1);
+    expect(sent.map((s) => s.ids)).toEqual([sentIds]);
   });
 });
 

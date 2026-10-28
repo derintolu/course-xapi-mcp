@@ -35,6 +35,8 @@ export interface AppConfig {
   allowedOrigins: string[];
   /** The text of `/record/policy`. */
   retention: string;
+  /** `CXM_RECORD_HOLDER_URL`: where the learner asks the record holder (the LMS, the author's LRS) to delete their record (options 1 and 2). */
+  recordHolderUrl?: string;
   /** Which of the author-lrs variables are not set (custody is only known once the package is read). */
   unset: string[];
   /** Things the operator should know, such as a signing key generated for this process only. */
@@ -66,6 +68,26 @@ function originOf(raw: string, name: string, errors: string[]): string | undefin
     return undefined;
   }
   return u.origin;
+}
+
+/** An http(s) URL with no user name or password: it is shown to learners and agents. */
+function recordHolderUrlOf(raw: string, errors: string[]): string | undefined {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    errors.push(`CXM_RECORD_HOLDER_URL is not a URL: ${redact(raw)}`);
+    return undefined;
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') {
+    errors.push(`CXM_RECORD_HOLDER_URL must be an http(s) URL: ${redact(raw)}`);
+    return undefined;
+  }
+  if (u.username || u.password) {
+    errors.push(`CXM_RECORD_HOLDER_URL must not contain credentials: ${redact(raw)}`);
+    return undefined;
+  }
+  return u.href;
 }
 
 function signingKeyOf(raw: string, errors: string[]): JWK | undefined {
@@ -154,6 +176,9 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
   const badgeRaw = set(env.CXM_BADGE_KEY);
   const badgeKey = badgeRaw === undefined ? undefined : badgeKeyOf(badgeRaw, errors);
 
+  const holderRaw = set(env.CXM_RECORD_HOLDER_URL);
+  const recordHolderUrl = holderRaw === undefined ? undefined : recordHolderUrlOf(holderRaw, errors);
+
   const allowedOrigins: string[] = [];
   for (const raw of (env.CXM_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
     const origin = originOf(raw, 'CXM_ALLOWED_ORIGINS', errors);
@@ -173,6 +198,7 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
     ...(set(env.CXM_BADGE_ISSUER_NAME) ? { badgeIssuerName: set(env.CXM_BADGE_ISSUER_NAME) } : {}),
     allowedOrigins,
     retention: set(env.CXM_RETENTION) ?? DEFAULT_RETENTION,
+    ...(recordHolderUrl ? { recordHolderUrl } : {}),
     unset: AUTHOR_LRS_VARS.filter((n) => set(env[n]) === undefined),
     warnings,
   };

@@ -18,6 +18,8 @@ export interface RecordLinks {
   export?: string;
   delete?: string;
   policy?: string;
+  /** Option 1: the LMS page the launch returns to. */
+  lms?: string;
 }
 
 export interface RecordView {
