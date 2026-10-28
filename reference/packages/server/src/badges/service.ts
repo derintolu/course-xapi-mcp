@@ -6,6 +6,7 @@
 import { join } from 'node:path';
 import {
   ADL_VERBS,
+  CMI5,
   DEFAULTS,
   RULES_VERSION,
   actorKey,
@@ -140,20 +141,36 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
   }
 
   /**
+   * Option 1: the LMS's authority, as the LRS records it, anchored to the course server's own launch: the first
+   * `launched` stored for that launch's session. The LMS sends it before it hands out the launch URL, so no other
+   * writer can store one ahead of it; a copy stored later (anyone can write a `launched`) never counts. Undefined
+   * when the launch is unknown or the LRS records no authority.
+   */
+  async function lmsAuthority(l: LearnerRef, statements: XapiStatement[]): Promise<string | undefined> {
+    const mine = l.launchId === undefined ? undefined : await o.launches!.get(l.launchId);
+    if (!mine) return undefined;
+    const ours = statements.filter((s) => s.verb.id === ADL_VERBS.launched && s.context?.extensions?.[CMI5.extSessionId] === mine.sessionId);
+    const storedAt = (s: XapiStatement) => (s as XapiStatement & { stored?: string }).stored;
+    // By `stored` when the LRS gives it; otherwise by the LRS's own order, newest stored first (xAPI's default).
+    const first = ours.length > 0 && ours.every((s) => storedAt(s)) ? [...ours].sort((a, b) => Date.parse(storedAt(a)!) - Date.parse(storedAt(b)!))[0] : ours.at(-1);
+    return first && authorityKey(first);
+  }
+
+  /**
    * Option 1: path and course badges from the `satisfied` statements the LMS wrote for this registration. Only the
-   * LMS's own count (CXM-BDG-006): the authority the LRS recorded on a `satisfied` must be the one on the LMS's
-   * `launched` statements. Statements without an authority give no way to tell who wrote them, so they never count.
+   * LMS's own count (CXM-BDG-006): the authority the LRS recorded on a `satisfied` must be the LMS's (`lmsAuthority`).
+   * Statements without an authority give no way to tell who wrote them, so they never count.
    */
   async function fromLmsSatisfied(l: LearnerRef, statements: XapiStatement[]): Promise<void> {
     const events: SatisfactionEvent[] = [];
     const blocks = Object.values(course.paths).filter((p) => p.status === 'live' && p.blockId);
-    const lmsAuthorities = new Set(statements.filter((s) => s.verb.id === ADL_VERBS.launched).flatMap((s) => authorityKey(s) ?? []));
+    const lms = await lmsAuthority(l, statements);
     // Oldest first: an any-path badge takes the first block satisfied.
     const ordered = [...statements].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
     for (const s of ordered) {
       if (s.verb.id !== ADL_VERBS.satisfied) continue;
       const by = authorityKey(s);
-      if (by === undefined || !lmsAuthorities.has(by)) continue;
+      if (by === undefined || by !== lms) continue;
       const block = blocks.find((p) => p.blockId === s.object.id);
       if (block) events.push({ type: 'block', pathKey: block.key, statementId: s.id });
       else if (s.object.id === course.id) events.push({ type: 'course', statementId: s.id });

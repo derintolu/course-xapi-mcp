@@ -246,6 +246,9 @@ async function statusList(url: string, didDoc: any): Promise<StatusList> {
 // ---- statements
 
 const hex = (alg: 'sha1' | 'sha256', s: string) => createHash(alg).update(s).digest('hex');
+/** How many bytes a salt string holds: hex, else base64 or base64url. */
+const saltBytes = (salt: string) => (/^[0-9a-f]+$/i.test(salt) && salt.length % 2 === 0 ? salt.length / 2 : Buffer.from(salt, 'base64').length);
+const EMAIL = 'cxm.conformance.learner@example.org';
 const isStatement = (v: any): v is XapiStatement => v && typeof v === 'object' && typeof v.id === 'string' && v.verb?.id && v.actor && v.object;
 /** Every statement inside a value (for example the issuer record in a get_record result), once per id. */
 function statementsIn(v: unknown, out = new Map<string, XapiStatement>()): XapiStatement[] {
@@ -258,6 +261,10 @@ function statementsIn(v: unknown, out = new Map<string, XapiStatement>()): XapiS
 const earnedFor = (list: XapiStatement[], credentialId: string) =>
   list.filter((s) => s.verb.id === OB_XAPI.earned && [s.result?.extensions?.[OB_XAPI.badgeAssertion]].flatMap((x: any) => [x, x?.['@id']]).includes(credentialId));
 const withAuthority = (s: XapiStatement) => s as XapiStatement & { authority?: XapiAgent };
+const withoutAuthority = (s: XapiStatement): XapiStatement => {
+  const { authority: _authority, ...rest } = withAuthority(s);
+  return rest;
+};
 
 /** A `satisfied` for the block or the course, shaped as the LMS writes it (cmi5 9.3.9). */
 function satisfiedFor(objectId: string, actor: XapiAgent, registration: string, sessionId?: string): XapiStatement {
@@ -357,6 +364,10 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
   let fixSession: string | undefined;
   let lmsSatisfied: XapiStatement[] = [];
   let forged: XapiStatement[] = [];
+  /** Option 1: copies of the LMS's launched statements, written with the other credential. */
+  let forgedLaunched: XapiStatement[] = [];
+  /** A claim with an 8-byte salt: what it gave, if anything. */
+  let shortSalt: { salt: string; credential: any; page: Page };
   let didDoc: any;
   let before: StatusList;
   let after: StatusList;
@@ -428,11 +439,16 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
     await list('done');
 
     if (OPTION1) {
-      // Satisfied statements shaped exactly as the LMS's, but written with another credential of the LMS's LRS.
+      // Satisfied statements shaped exactly as the LMS's, but written with another credential of the LMS's LRS. That
+      // writer first copies the LMS's launched of every session, so its authority is on a launched as well.
       const other = btoa(`learner-${randomUUID()}:x`);
       lms!.lrs.addToken(other);
+      forgedLaunched = lms!.lrs
+        .statements()
+        .filter((s) => s.verb.id === ADL_VERBS.launched && s.context?.registration === registration)
+        .map((s) => ({ ...withoutAuthority(s), id: randomUUID(), timestamp: stamp() }));
       forged = [satisfiedFor(BLOCK_ID, actor, registration, fixSession), satisfiedFor(COURSE_ID, actor, registration, fixSession)];
-      for (const s of forged) {
+      for (const s of [...forgedLaunched, ...forged]) {
         const res = await lms!.lrs.fetch(
           new Request(lms!.lrsUrl + '/statements', { method: 'POST', headers: { authorization: 'Basic ' + other, 'x-experience-api-version': '1.0.3', 'content-type': 'application/json' }, body: JSON.stringify(s) }),
         );
@@ -468,7 +484,16 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
       claimableAfter: claimable(await go(browser, claimPageUrl())),
     };
 
-    await claim(B.types, { email: 'cxm.conformance.learner@example.org', salt: randomBytes(16).toString('hex') });
+    // An email with a salt of 8 bytes: no credential, unless the issuer salted it with 16 bytes of its own.
+    const coursePage = await go(browser, claimPageUrl());
+    const courseForm = formFor(coursePage, B.course);
+    if (!courseForm) throw new Error(`the claim page offers no form for ${B.course}`);
+    const short = randomBytes(8).toString('hex');
+    const shortPage = await go(browser, courseForm.action, filled(courseForm, { email: EMAIL, salt: short }));
+    shortSalt = { salt: short, credential: await credentialOn(browser, shortPage), page: shortPage };
+    if (shortSalt.credential) claims.set(B.course, { credential: shortSalt.credential, recipient: { email: EMAIL, salt: short }, page: shortPage });
+
+    await claim(B.types, { email: EMAIL, salt: randomBytes(16).toString('hex') });
     // The same badge claimed twice at once, then again.
     const fixPage = await go(browser, claimPageUrl());
     const fixForm = formFor(fixPage, B.fix)!;
@@ -477,7 +502,7 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
     const got = await Promise.all([...twice, third].map((p) => credentialOn(browser, p)));
     doubleClaims = got.map((c) => c?.id);
     claims.set(B.fix, { credential: got[0], recipient: { did: 'did:example:cxm-conformance-fix' }, page: twice[0]! });
-    for (const [i, id] of PATH_LEVEL.entries()) await claim(id, { did: `did:example:cxm-conformance-path-${i}` });
+    for (const [i, id] of PATH_LEVEL.entries()) if (!claims.has(id)) await claim(id, { did: `did:example:cxm-conformance-path-${i}` });
 
     pagesAfter = [(await go(browser, claimPageUrl())).text, ...[...claims.values()].map((c) => c.page.text)];
     getRecord = await l.call('get_record');
@@ -726,8 +751,9 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
     expect(earnedFor(inLms, credentialOf(B.intro).id)).toHaveLength(1);
     expect(inLms[0]!.context?.extensions?.[CMI5.extSessionId]).toBe(fixSession);
     expect(inLms[0]!.context?.contextActivities?.category?.map((a) => a.id)).toContain(PROFILE_VERSION_IRI);
-    // Nothing after a terminated, nothing out of cmi5 order.
-    expect(lms!.sim.problems()).toEqual([]);
+    // Nothing after a terminated, nothing out of cmi5 order (leaving out the launched copies this suite forged).
+    const copies = new Set(forgedLaunched.map((s) => s.id));
+    expect(lms!.sim.problems().filter((p) => !copies.has(p.statementId))).toEqual([]);
   });
 
   it.skipIf(!OPTION2)('[CXM-BDG-021] option 2 with badgeIssuer.signer "course-server": the course server signs, and earned goes to the author\'s LRS', () => {
@@ -799,12 +825,18 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
       if (!('email' in recipient)) throw new Error('every claim names a recipient');
       expect(subject.id).toBeUndefined();
       const [identity] = [subject.identifier].flat();
-      expect(identity).toMatchObject({ type: 'IdentityObject', identityType: 'emailAddress', hashed: true, salt: recipient.salt });
-      expect(identity.salt).toMatch(/^[0-9a-f]{32}$/);
-      expect(identity.identityHash).toBe('sha256$' + hex('sha256', recipient.email + recipient.salt));
+      expect(identity).toMatchObject({ type: 'IdentityObject', identityType: 'emailAddress', hashed: true });
+      // The salt is 16 random bytes (hex or base64), and the hash recomputes from the credential's own salt.
+      expect(saltBytes(String(identity.salt))).toBe(16);
+      expect(identity.identityHash).toBe('sha256$' + hex('sha256', recipient.email + identity.salt));
       // The issuer keeps only the hash and the salt: the address is nowhere it shows.
       for (const text of [JSON.stringify(credential), ...pagesAfter, JSON.stringify(record), ...transcript.map((t) => t.plain)]) expect(text).not.toContain(recipient.email);
     }
+  });
+
+  it('[CXM-SEC-010] an email claim with an 8-byte salt issues nothing salted with it', () => {
+    if (shortSalt.credential) expect([shortSalt.credential.credentialSubject.identifier].flat()[0].salt).not.toBe(shortSalt.salt);
+    else expect(shortSalt.page.text).not.toContain('OpenBadgeCredential');
   });
 
   it('[CXM-SEC-011] a claim without a recipient issues nothing', () => {

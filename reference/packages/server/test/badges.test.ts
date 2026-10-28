@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { CMI5, OB_XAPI, type BadgeDecl, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
+import { ADL_VERBS, CMI5, OB_XAPI, type BadgeDecl, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
 import { didWeb, generateKey, verifyCredential, type SigningKey } from '@course-xapi-mcp/badges';
 import { checkCmi5Order } from '@course-xapi-mcp/core/xapi';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
@@ -631,8 +631,15 @@ describe('badges in option 1 (lms-launched)', () => {
       timestamp: new Date(Date.now() + 5000).toISOString(),
     };
     const forged = { ...satisfied, id: '5a715f1e-0000-4000-8000-000000000002' };
-    const posted = await o.lrs.fetch(new Request(LRS_URL + '/statements', { method: 'POST', headers: { authorization: 'Basic ' + btoa('test:test'), 'x-experience-api-version': '1.0.3', 'content-type': 'application/json' }, body: JSON.stringify(forged) }));
-    expect(posted.status).toBe(200);
+    // The other writer first copies the LMS's launched of every session, so its own authority is on a launched too.
+    const launchedCopies = o.lrs
+      .statements()
+      .filter((s) => s.verb.id === ADL_VERBS.launched)
+      .map(({ authority: _a, ...s }: XapiStatement & { authority?: unknown }, i) => ({ ...s, id: randomUUID(), timestamp: new Date(Date.now() + 4000 + i).toISOString() }));
+    for (const s of [...launchedCopies, forged]) {
+      const posted = await o.lrs.fetch(new Request(LRS_URL + '/statements', { method: 'POST', headers: { authorization: 'Basic ' + btoa('test:test'), 'x-experience-api-version': '1.0.3', 'content-type': 'application/json' }, body: JSON.stringify(s) }));
+      expect(posted.status).toBe(200);
+    }
     expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
     // The LMS records the block as satisfied: now the path badge is earned, with that statement as evidence.
     await o.sim.send(satisfied);

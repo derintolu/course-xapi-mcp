@@ -30,13 +30,8 @@ const PROFILES: { custody: Custody; classes: string[] }[] = [
 ];
 /** The badge issuer class runs in every option; in option 4 it checks that practice earns nothing. */
 const BADGE_PROFILES: Custody[] = ['practice', 'server-kept', 'author-lrs', 'lms-launched'];
-/** Badge checks the reference is known to fail, with the reason (the Task 29 report). */
-const BADGE_KNOWN_GAPS: Partial<Record<Custody, Record<string, string>>> = {
-  'author-lrs': {
-    'CXM-BDG-024 voided':
-      "the reference author-LRS custody reads only statements whose context names the course (isForCourse in custody/author-lrs.ts), so the issuer never sees a voiding statement that does not, and the credential stays valid",
-  },
-};
+/** Badge checks the reference is known to fail, with the reason. None are open now; add an entry for a gap that opens. */
+const BADGE_KNOWN_GAPS: Partial<Record<Custody, Record<string, string>>> = {};
 
 /** The accounts page (option 3): the "Create an account" form. */
 const signUp: FormFill = (forms) => {

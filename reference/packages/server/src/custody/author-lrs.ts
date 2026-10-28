@@ -30,6 +30,9 @@ function decode(etag: string | undefined): Tag | undefined {
 
 const isForCourse = (s: XapiStatement, courseId: string) =>
   s.object.id === courseId || (s.context?.contextActivities?.grouping ?? []).some((a) => a.id === courseId);
+/** The id of the statement a voiding statement voids, if `s` is one. */
+const voidedBy = (s: XapiStatement): string | undefined =>
+  s.verb.id === 'http://adlnet.gov/expapi/verbs/voided' && (s.object as { objectType?: string }).objectType === 'StatementRef' ? s.object.id : undefined;
 
 export function createAuthorLrsCustody(o: {
   course: CourseModel;
@@ -115,7 +118,11 @@ export function createAuthorLrsCustody(o: {
 
     async record(l) {
       const agent = await actorFor(l);
-      const statements = (await client.getStatements({ agent })).filter((s) => isForCourse(s, courseId));
+      const all = await client.getStatements({ agent });
+      const course = new Set(all.filter((s) => isForCourse(s, courseId)).map((s) => s.id));
+      // A voiding statement rarely names the course; it belongs to the record when it voids one of its statements
+      // (the badge issuer revokes on it, CXM-BDG-024).
+      const statements = all.filter((s) => course.has(s.id) || course.has(voidedBy(s) ?? ''));
       return { official: true, statements, complete: true, note: 'The course author\'s learning record store holds your official record.' };
     },
 

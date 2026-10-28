@@ -272,6 +272,27 @@ describe('author-LRS custody', () => {
     });
   });
 
+  it('record() keeps a voiding statement of one of the course\'s statements, even with no course in its context (badge revocation)', async () => {
+    const { lrs, make, learner, actor } = authorSetup();
+    const custody = make();
+    const [mine] = defined(cmi5Context(actor, randomUUID(), randomUUID(), 'author-lrs'), AU1, ['initialized']);
+    const [other] = defined({ ...cmi5Context(actor, randomUUID(), randomUUID(), 'author-lrs'), courseId: 'https://example.org/other-course' }, AU1, ['initialized']);
+    await custody.deliver(learner, [mine!, other!]);
+    // A minimal voiding statement: no context, so no course in it (cast, the core type wants a cmi5 context).
+    const voids = (target: string): XapiStatement => ({
+      id: randomUUID(),
+      actor,
+      verb: { id: 'http://adlnet.gov/expapi/verbs/voided', display: { 'en-US': 'voided' } },
+      object: { objectType: 'StatementRef', id: target } as never,
+      timestamp: stamp(),
+    }) as unknown as XapiStatement;
+    const ofMine = voids(mine!.id);
+    const ofOther = voids(other!.id);
+    await custody.deliver(learner, [ofMine, ofOther]);
+    expect(lrs.statements()).toHaveLength(4);
+    expect((await custody.record(learner)).statements.map((s) => s.id).sort()).toEqual([mine!.id, ofMine.id].sort());
+  });
+
   it('links() gives the configured record holder URL as the deletion link, and none otherwise', () => {
     const { make, learner } = authorSetup();
     expect(make().links(learner).delete).toBeUndefined();
