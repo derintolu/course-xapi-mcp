@@ -233,6 +233,7 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
         now,
         fetch: o.lrsFetch,
         resolveHost: o.resolveHost,
+        lmsOrigins: config.lmsOrigins,
         lock: (c, fn) => withLearnerLock(launchSubject(c), fn),
         onSent: (c, statements) => lms.recordSent(c, statements),
       });

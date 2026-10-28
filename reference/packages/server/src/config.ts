@@ -37,6 +37,12 @@ export interface AppConfig {
   retention: string;
   /** `CXM_RECORD_HOLDER_URL`: where the learner asks the record holder (the LMS, the author's LRS) to delete their record (options 1 and 2). */
   recordHolderUrl?: string;
+  /**
+   * `CXM_LMS_ORIGINS` (option 1): the origins of the LMS LRS endpoints this course takes launches from. When set, the
+   * bridge refuses every other LMS, and the course server signs path and course badges from a listed LMS's
+   * `satisfied`; unset, any LMS may launch, and no path or course badge is signed.
+   */
+  lmsOrigins?: string[];
   /** Which of the author-lrs variables are not set (custody is only known once the package is read). */
   unset: string[];
   /** Things the operator should know, such as a signing key generated for this process only. */
@@ -185,6 +191,13 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
     if (origin) allowedOrigins.push(origin);
   }
 
+  const lmsRaw = set(env.CXM_LMS_ORIGINS);
+  const lmsOrigins: string[] = [];
+  for (const raw of (lmsRaw ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
+    const origin = originOf(raw, 'CXM_LMS_ORIGINS', errors);
+    if (origin) lmsOrigins.push(origin);
+  }
+
   if (errors.length || !publicUrl || !signingKey) return { errors };
   const config: AppConfig = {
     packagePath,
@@ -199,6 +212,7 @@ export function loadConfig(env: Env, o: { custody?: CustodyOption } = {}): AppCo
     allowedOrigins,
     retention: set(env.CXM_RETENTION) ?? DEFAULT_RETENTION,
     ...(recordHolderUrl ? { recordHolderUrl } : {}),
+    ...(lmsOrigins.length ? { lmsOrigins } : {}),
     unset: AUTHOR_LRS_VARS.filter((n) => set(env[n]) === undefined),
     warnings,
   };

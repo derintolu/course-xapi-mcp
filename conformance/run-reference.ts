@@ -7,6 +7,7 @@
 import { spawn } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createServer, type AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { createAppFromConfig, loadConfig, loadCourse, type App } from '../reference/packages/server/src/index.ts';
 import { badgesFromConfig } from '../reference/packages/server/src/badges/service.ts';
@@ -43,6 +44,17 @@ const allow: FormFill = (forms) => {
   const form = forms.find((f) => f.inputs.some((i) => i.name === 'action' && i.value === 'allow'));
   return form && { form, values: {} };
 };
+
+/** A loopback port nothing listens on right now. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const s = createServer().listen(0, '127.0.0.1', () => {
+      const { port } = s.address() as AddressInfo;
+      s.close(() => resolve(port));
+    });
+    s.on('error', reject);
+  });
+}
 
 function runVitest(files: string[], env: Record<string, string>): Promise<number> {
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('CXM_')));
@@ -120,6 +132,12 @@ async function runBadgeProfile(custody: Custody): Promise<number> {
     closers.push(() => http.close());
     const vars: Record<string, string> = { CXM_PUBLIC_URL: http.url, PORT: new URL(http.url).port, CXM_PACKAGE: pkg };
     const env: Record<string, string> = { CXM_URL: http.url + '/mcp', CXM_CUSTODY: custody, CXM_ISSUER_URL: http.url, CXM_KNOWN_GAPS: JSON.stringify(BADGE_KNOWN_GAPS[custody] ?? {}) };
+    if (custody === 'lms-launched') {
+      // Path and course badges need the LMS on CXM_LMS_ORIGINS: the suite's LMS listens on a port chosen here.
+      const port = await freePort();
+      env.CXM_LMS_PORT = String(port);
+      vars.CXM_LMS_ORIGINS = `http://127.0.0.1:${port}`;
+    }
     if (custody === 'author-lrs') {
       const lrs = createTestLrs({ credentials: [{ key: 'test', secret: 'test' }, { key: 'learner', secret: 'learner' }], authority: true });
       const lrsUrl = (await lrs.listen()) + '/xapi';

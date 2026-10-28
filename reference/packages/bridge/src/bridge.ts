@@ -48,6 +48,8 @@ export interface BridgeOptions {
    * checked again when the socket connects, and never follows a redirect.
    */
   resolveHost?: ResolveHost;
+  /** `CXM_LMS_ORIGINS`: when set, only launches whose LRS endpoint is on one of these origins are taken. */
+  lmsOrigins?: string[];
   /**
    * Runs `fn` while no tool call for this launch's learner is in flight (the course server's per-learner lock).
    * `sweep` checks and terminates a launch inside it, so it never sends `terminated` while a call is still writing
@@ -282,6 +284,9 @@ export function createBridge(o: BridgeOptions): Bridge {
     const onLoopback = isLoopbackHost(url.hostname);
     const endpoint = safeUrl(q.get('endpoint'), onLoopback);
     if (!endpoint) throw bad('The record store address in this link is not allowed.');
+    if (o.lmsOrigins && !o.lmsOrigins.includes(endpoint.origin)) {
+      throw new LaunchRefused(403, 'This lesson could not start', 'This course does not accept launches from your learning platform. Ask the course provider to add it.');
+    }
     const fetchUrl = safeUrl(q.get('fetch'), onLoopback);
     if (!fetchUrl) throw bad('The token address in this link is not allowed.');
     const actor = parseActor(q.get('actor'));

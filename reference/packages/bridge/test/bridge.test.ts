@@ -26,7 +26,7 @@ const course = {
 /** The LMS's hosts resolve to a public address in tests, unless a test says otherwise. */
 const publicHost = async () => ['93.184.216.34'];
 
-function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; authority?: boolean; resolveHost?: BridgeOptions['resolveHost'] } = {}) {
+function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; authority?: boolean; resolveHost?: BridgeOptions['resolveHost']; lmsOrigins?: string[] } = {}) {
   const lrs = createTestLrs({ authority: o.authority });
   const sim = createLmsSim({
     lrs,
@@ -47,7 +47,7 @@ function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; author
   let t = Date.now() + 1000;
   const clock = { now: () => t, advance: (ms: number) => (t += ms) };
   const launches = new MemoryLaunchStore();
-  const bridge = createBridge({ course, mcpUrl: MCP_URL, launches, now: clock.now, fetch: f, onSent: o.onSent, resolveHost: o.resolveHost ?? publicHost });
+  const bridge = createBridge({ course, mcpUrl: MCP_URL, launches, now: clock.now, fetch: f, onSent: o.onSent, resolveHost: o.resolveHost ?? publicHost, lmsOrigins: o.lmsOrigins });
   const fetchPosts = () => calls.filter((c) => c.method === 'POST' && c.url.includes('/cmi5/fetch/')).length;
   const launchIdOf = (res: Response) => /cxm_launch=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')![1];
   return { lrs, sim, bridge, launches, clock, calls, fetchPosts, launchIdOf };
@@ -516,6 +516,16 @@ describe('refused launches', () => {
     await bridge.terminate(id);
     expect(calls.length).toBeGreaterThanOrEqual(5);
     for (const c of calls) expect(c.redirect, `${c.method} ${c.url}`).toBe('error');
+  });
+
+  it('with CXM_LMS_ORIGINS set, takes launches only from an LMS whose record store is on a listed origin', async () => {
+    const refused = setup({ lmsOrigins: ['https://other-lms.example'] });
+    const res = (await refused.bridge.fetch(new Request((await refused.sim.launch(LESSON_AU)).launchUrl)))!;
+    expect(res.status).toBe(403);
+    expect(await res.text()).toMatch(/does not accept launches from your learning platform/);
+    expect(refused.calls).toHaveLength(0);
+    const listed = setup({ lmsOrigins: ['https://other-lms.example', new URL(LRS_URL).origin] });
+    expect((await listed.bridge.fetch(new Request((await listed.sim.launch(LESSON_AU)).launchUrl)))!.status).toBe(200);
   });
 
   it('a loopback bridge accepts a loopback fetch URL', async () => {

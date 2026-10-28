@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { ADL_VERBS, CMI5, OB_XAPI, type BadgeDecl, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
+import { ADL_VERBS, CMI5, OB_XAPI, type BadgeDecl, type CourseModel, type Custody, type LaunchContext, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
 import { didWeb, generateKey, verifyCredential, type SigningKey } from '@course-xapi-mcp/badges';
 import { checkCmi5Order } from '@course-xapi-mcp/core/xapi';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
@@ -18,6 +18,7 @@ import {
   createAuthServer,
   createPracticeCustody,
   createServerKeptCustody,
+  launchSubject,
   loadConfig,
   type App,
   type AppConfig,
@@ -533,7 +534,8 @@ describe('configuration', () => {
 describe('badges in option 1 (lms-launched)', () => {
   const firstBadge = (base: BadgeDecl): BadgeDecl => ({ ...base, id: FIRST_LESSON_BADGE, name: 'What JSON is', for: 'what-is-json' });
 
-  async function optionOne() {
+  /** `lmsOrigins`: CXM_LMS_ORIGINS (default: the simulated LMS's own origin); `null` leaves it unset. */
+  async function optionOne(o: { lmsOrigins?: string | null } = {}) {
     // The LRS records who wrote each statement, so the issuer can tell the LMS's satisfied from anyone else's.
     const lrs = createTestLrs({ authority: true });
     const lrsFetch = ((input: RequestInfo | URL, init?: RequestInit) => lrs.fetch(new Request(input, init))) as typeof fetch;
@@ -550,13 +552,15 @@ describe('badges in option 1 (lms-launched)', () => {
     const now = () => Date.now() + 1000;
     const issuer = new MemoryIssuerStore();
     const key = await generateKey(DID);
-    const c = loadConfig({ CXM_PUBLIC_URL: PUBLIC });
+    const origins = o.lmsOrigins === undefined ? new URL(LRS_URL).origin : o.lmsOrigins;
+    const c = loadConfig({ CXM_PUBLIC_URL: PUBLIC, ...(origins !== null ? { CXM_LMS_ORIGINS: origins } : {}) });
     if ('errors' in c) throw new Error(c.errors.join());
     const app = await createAppFromConfig(c, {
       course,
       lrsFetch,
       now,
-      badges: (p) => createBadgeService({ course: p.course, publicUrl: p.publicUrl, issuerName: 'JSON basics', key, store: issuer, custody: p.custody, auth: p.auth!, launches: p.launches, now: () => new Date(now()).toISOString() }),
+      badges: (p) =>
+        createBadgeService({ course: p.course, publicUrl: p.publicUrl, issuerName: 'JSON basics', key, store: issuer, custody: p.custody, auth: p.auth!, launches: p.launches, lmsOrigins: p.config.lmsOrigins, now: () => new Date(now()).toISOString() }),
     });
     apps.push(app);
 
@@ -654,8 +658,34 @@ describe('badges in option 1 (lms-launched)', () => {
     const [id] = credentialLinks(await (await claim(o.app, lesson.browser, PATH_BADGE, { did: 'did:example:wallet' })).text());
     const vc = await credential(o.app, lesson.browser, id!);
     expect(vc.evidence[0].id).toBe('urn:uuid:' + satisfied.id);
-    expect(vc.credentialSubject.achievement.criteria.narrative).toMatch(/LMS/);
+    // The criteria name the LMS that vouched for it: its record store's origin (CXM-BDG-018).
+    expect(vc.credentialSubject.achievement.criteria.narrative).toContain(`LMS (record store at ${new URL(LRS_URL).origin})`);
     expect(await verifyCredential(vc, await didDocs(o.app))).toEqual({ verified: true, errors: [] });
+  });
+
+  it('without CXM_LMS_ORIGINS, signs lesson badges naming the LMS, but no path or course badge from any LMS\'s satisfied (R60)', async () => {
+    const o = await optionOne({ lmsOrigins: null });
+    const { registration } = await firstLesson(o);
+    const lesson = await secondLesson(o, registration);
+    await o.sim.send({
+      id: '5a715f1e-0000-4000-8000-000000000003',
+      actor: o.lrs.statements()[0]!.actor,
+      verb: { id: 'https://w3id.org/xapi/adl/verbs/satisfied', display: { 'en-US': 'satisfied' } },
+      object: { objectType: 'Activity', id: o.course.paths.json!.blockId!, definition: { type: 'https://w3id.org/xapi/cmi5/activitytype/block' } } as never,
+      context: { registration, contextActivities: { grouping: [{ objectType: 'Activity', id: o.course.id }], category: [{ objectType: 'Activity', id: 'https://w3id.org/xapi/cmi5/context/categories/cmi5' }] }, extensions: { 'https://w3id.org/xapi/cmi5/context/extensions/sessionid': lesson.sessionId } },
+      timestamp: new Date(Date.now() + 5000).toISOString(),
+    });
+    expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+    expect(claimable(await claimPage(o.app, lesson.browser))).not.toContain(PATH_BADGE);
+    // A path award an earlier configuration recorded (the issuer store may be on disk) is not signed either.
+    const subject = launchSubject({ endpoint: LRS_URL, actor: o.lrs.statements()[0]!.actor, registration } as LaunchContext);
+    expect(await o.issuer.addAward({ subject, badgeId: PATH_BADGE, registration, earningStatementId: '5a715f1e-0000-4000-8000-000000000003', testedOut: 0, earnedAt: new Date().toISOString(), confirmed: true })).toBe(true);
+    expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+    expect(claimable(await claimPage(o.app, lesson.browser))).not.toContain(PATH_BADGE);
+    expect(credentialLinks(await (await claim(o.app, lesson.browser, PATH_BADGE, { did: 'did:example:wallet' })).text())).toEqual([]);
+    const [id] = credentialLinks(await (await claim(o.app, lesson.browser, LESSON_BADGE, { did: 'did:example:wallet' })).text());
+    const vc = await credential(o.app, lesson.browser, id!);
+    expect(vc.credentialSubject.achievement.criteria.narrative).toContain(`LMS (record store at ${new URL(LRS_URL).origin})`);
   });
 
   it('writes earned to the LMS only while a session for the registration is open, and keeps it in the issuer record either way', async () => {

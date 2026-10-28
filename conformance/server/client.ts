@@ -236,8 +236,8 @@ export function parseForms(html: string, base: string): Form[] {
 }
 export const visibleInputs = (f: Form) => f.inputs.filter((i) => i.name && i.type !== 'hidden' && i.type !== 'submit');
 
-/** Serves a fetch handler on 127.0.0.1; `log` sees every request first. */
-export async function serve(handler: (req: Request) => Promise<Response>, log?: (req: Request) => void): Promise<{ url: string; close(): Promise<void> }> {
+/** Serves a fetch handler on 127.0.0.1 (on `port`, default any free one); `log` sees every request first. */
+export async function serve(handler: (req: Request) => Promise<Response>, log?: (req: Request) => void, port = 0): Promise<{ url: string; close(): Promise<void> }> {
   const server: Server = createServer((msg, out) => {
     void (async () => {
       const headers = new Headers();
@@ -257,7 +257,7 @@ export async function serve(handler: (req: Request) => Promise<Response>, log?: 
       out.end(String(e));
     });
   });
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     close: () =>
@@ -455,14 +455,21 @@ export interface Lms {
   close(): Promise<void>;
 }
 
-/** `authority`: the LMS's LRS records who wrote each statement (the badge class needs it, lib/test-lrs.ts). */
-export async function startLms(o: { authority?: boolean } = {}): Promise<Lms> {
+/**
+ * `authority`: the LMS's LRS records who wrote each statement (the badge class needs it, lib/test-lrs.ts). `port`: the
+ * loopback port it listens on, so the server under test can list its origin (default: any free port).
+ */
+export async function startLms(o: { authority?: boolean; port?: number } = {}): Promise<Lms> {
   const lrs = createTestLrs({ authority: o.authority });
   const requests: LrsRequest[] = [];
-  const served = await serve(lrs.fetch, (req) => {
-    const u = new URL(req.url);
-    requests.push({ method: req.method, path: u.pathname, query: u.searchParams, authorization: req.headers.get('authorization') });
-  });
+  const served = await serve(
+    lrs.fetch,
+    (req) => {
+      const u = new URL(req.url);
+      requests.push({ method: req.method, path: u.pathname, query: u.searchParams, authorization: req.headers.get('authorization') });
+    },
+    o.port,
+  );
   const lrsUrl = served.url + '/xapi';
   const sim = createLmsSim({
     lrs,

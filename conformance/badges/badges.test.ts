@@ -50,6 +50,8 @@ import {
 
 requireEnv();
 const ISSUER_URL = process.env.CXM_ISSUER_URL || undefined;
+/** Option 1: the loopback port the suite's LMS listens on, so the server under test can list its origin. */
+const LMS_PORT = process.env.CXM_LMS_PORT ? Number(process.env.CXM_LMS_PORT) : undefined;
 const BROWSER_URL = process.env.CXM_BROWSER_URL || undefined;
 if (OFFICIAL && !ISSUER_URL) throw new Error('Set CXM_ISSUER_URL (the badge issuer the course server uses); see conformance/README.md.');
 if ((CUSTODY === 'server-kept' || CUSTODY === 'author-lrs') && !BROWSER_URL) throw new Error("Set CXM_BROWSER_URL (the issuer as the learner's signed-in browser sees it); see conformance/README.md.");
@@ -396,7 +398,7 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
   }
 
   beforeAll(async () => {
-    if (OPTION1) lms = await startLms({ authority: true });
+    if (OPTION1) lms = await startLms({ authority: true, port: LMS_PORT });
     l = await newLearner(lms);
     browser = OPTION1 ? { base: issuerOrigin(), jar: lms!.launches[0]!.browser } : { base: BROWSER_URL!, jar: jar() };
     status = ok(await l.call('get_status'));
@@ -731,7 +733,9 @@ describe.skipIf(!OFFICIAL)(`badge issuer, custody ${CUSTODY}`, () => {
     const held = new Set(lms!.lrs.statements().map((s) => 'urn:uuid:' + s.id));
     for (const c of credentials()) {
       expect(held.has(c.evidence[0].id)).toBe(true);
+      // Naming the LMS: at least the origin of the LRS endpoint the launch gave, so a verifier can see who vouched.
       expect(String(c.credentialSubject.achievement.criteria.narrative)).toMatch(/\bLMS\b/);
+      expect(String(c.credentialSubject.achievement.criteria.narrative)).toContain(new URL(lms!.lrsUrl).origin);
       // The course server signs: its did:web.
       expect(didDoc.id).toBe('did:web:' + new URL(MCP_URL).host.replace(':', '%3A'));
     }

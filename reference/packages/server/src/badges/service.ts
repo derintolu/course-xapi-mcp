@@ -43,8 +43,12 @@ import { DirectoryIssuerStore, MemoryIssuerStore, type AwardRecord, type Credent
 import { CLAIM_PATH, STATUS_LIST_PATH, createBadgeRoutes } from './routes.ts';
 
 const VOIDED = 'http://adlnet.gov/expapi/verbs/voided';
-/** Added to the criteria in option 1, where the LMS holds the record the badge was earned in. */
-const LMS_CRITERIA = "The learner's LMS launched each lesson and holds the official record; this course server issued the badge from the statements that LMS accepted.";
+/**
+ * Added to the criteria in option 1, where the LMS holds the record the badge was earned in: it names the LMS by its
+ * record store's origin (the launch's LRS endpoint), so a verifier can see who vouched (CXM-BDG-018).
+ */
+const lmsCriteria = (origin: string) =>
+  `The learner's LMS (record store at ${origin}) launched each lesson and holds the official record; this course server issued the badge from the statements that LMS accepted.`;
 const NOT_EARNED = 'That badge is not earned yet, or its record is not readable right now.';
 
 /** An authority as the LRS recorded it, in a form that compares by value; undefined when there is none. */
@@ -76,6 +80,11 @@ export interface BadgeServiceOptions {
   auth: AuthServer;
   /** Option 1: the bridge's launches, to find an open session for the registration. */
   launches?: LaunchStore;
+  /**
+   * Option 1 (`CXM_LMS_ORIGINS`): the LMS endpoint origins trusted to vouch for path and course badges with their
+   * `satisfied`. Unset: none is, because anyone can run an LMS that launches the course.
+   */
+  lmsOrigins?: string[];
   /** ISO 8601 clock and id source, for tests. */
   now?: () => string;
   uuid?: () => string;
@@ -149,12 +158,25 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     return authorityKey(mine?.lmsAuthority);
   }
 
+  /** Option 1: the origin of the LMS endpoint the learner's launch named; undefined without a launch. */
+  async function lmsOrigin(l: LearnerRef): Promise<string | undefined> {
+    const mine = l.launchId === undefined ? undefined : await o.launches!.get(l.launchId);
+    return mine && new URL(mine.endpoint).origin;
+  }
+
+  /** Option 1: the learner's LMS is on CXM_LMS_ORIGINS, so its `satisfied` may earn path and course badges (R60). */
+  async function trustedLms(l: LearnerRef): Promise<boolean> {
+    const origin = await lmsOrigin(l);
+    return origin !== undefined && (o.lmsOrigins ?? []).includes(origin);
+  }
+
   /**
    * Option 1: path and course badges from the `satisfied` statements the LMS wrote for this registration. Only the
    * LMS's own count (CXM-BDG-006): the authority the LRS recorded on a `satisfied` must be the LMS's (`lmsAuthority`),
    * and a voided one never counts. Statements without an authority give no way to tell who wrote them.
    */
   async function fromLmsSatisfied(l: LearnerRef, statements: XapiStatement[], voided: Set<string>): Promise<void> {
+    if (!(await trustedLms(l))) return;
     const events: SatisfactionEvent[] = [];
     const blocks = Object.values(course.paths).filter((p) => p.status === 'live' && p.blockId);
     const lms = await lmsAuthority(l);
@@ -239,7 +261,10 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     // share an earning statement (a block's satisfied earns its block-satisfied and any-path badges).
     const spentKey = (badgeId: string, statementId: string) => `${badgeId}\n${statementId}`;
     const spent = new Set(all.map((c) => spentKey(c.badgeId, c.earningStatementId)));
-    const unclaimed = awards.filter((a) => !live.has(a.badgeId) && !spent.has(spentKey(a.badgeId, a.earningStatementId)) && a.confirmed);
+    // Option 1 path and course badges are signed only while the learner's LMS is on CXM_LMS_ORIGINS (R60), even when
+    // an earlier configuration recorded the award.
+    const signable = option !== 'lms-launched' || (await trustedLms(l)) ? () => true : (a: AwardRecord) => badges.get(a.badgeId)?.awardOn === 'au-moveon';
+    const unclaimed = awards.filter((a) => !live.has(a.badgeId) && !spent.has(spentKey(a.badgeId, a.earningStatementId)) && a.confirmed && signable(a));
     return { reading, awards, all, live, unclaimed };
   }
 
@@ -262,7 +287,9 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     const credentialId = 'urn:uuid:' + id;
     const statusIndex = await store.allocateIndex();
     const issuedAt = now();
-    const shown = option === 'lms-launched' ? { ...badge, criteria: { narrative: `${badge.criteria.narrative} ${LMS_CRITERIA}` } } : badge;
+    const origin = option === 'lms-launched' ? await lmsOrigin(l) : undefined;
+    if (option === 'lms-launched' && !origin) throw new TypeError('an option 1 badge needs the learner\'s launch');
+    const shown = origin ? { ...badge, criteria: { narrative: `${badge.criteria.narrative} ${lmsCriteria(origin)}` } } : badge;
     const earning = reading?.statements.find((s) => s.id === a.earningStatementId);
     const unsigned = buildCredential({
       badge: shown,
@@ -443,6 +470,7 @@ export async function badgesFromConfig(p: BadgeParts, warn: (message: string) =>
     custody: p.custody,
     auth: p.auth,
     launches: p.launches,
+    lmsOrigins: p.config.lmsOrigins,
     ...(now ? { now: () => new Date(now()).toISOString() } : {}),
   });
 }

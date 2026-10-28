@@ -191,6 +191,21 @@ describe('configuration', () => {
     expect(c.recordHolderUrl).toBe('https://lrs.example/account/delete?lang=en');
   });
 
+  it('reads CXM_LMS_ORIGINS as a list of http(s) origins, unset by default, and refuses anything else without echoing credentials', () => {
+    const none = loadConfig({});
+    if ('errors' in none) throw new Error(none.errors.join());
+    expect(none.lmsOrigins).toBeUndefined();
+    const c = loadConfig({ CXM_LMS_ORIGINS: ' https://lms.example/ , http://127.0.0.1:9 ' });
+    if ('errors' in c) throw new Error(c.errors.join());
+    expect(c.lmsOrigins).toEqual(['https://lms.example', 'http://127.0.0.1:9']);
+    for (const bad of ['ftp://lms.example', 'https://admin:hunter2@lms.example', 'https://lms.example/xapi', 'not a url']) {
+      const r = loadConfig({ CXM_LMS_ORIGINS: `https://ok.example,${bad}` });
+      expect('errors' in r && r.errors, bad).toHaveLength(1);
+      expect('errors' in r && r.errors[0], bad).toMatch(/^CXM_LMS_ORIGINS /);
+      expect(JSON.stringify(r)).not.toMatch(/hunter2|admin/);
+    }
+  });
+
   it('refuses a CXM_RECORD_HOLDER_URL that is not an http(s) URL, or carries credentials, without echoing them', () => {
     for (const bad of ['not a url', 'ftp://key:s3cret@lrs.example/x', 'https://admin:hunter2@lrs.example/delete', 'javascript:alert(1)']) {
       const r = loadConfig({ CXM_RECORD_HOLDER_URL: bad });
