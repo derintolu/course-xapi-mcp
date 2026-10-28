@@ -47,6 +47,15 @@ const VOIDED = 'http://adlnet.gov/expapi/verbs/voided';
 const LMS_CRITERIA = "The learner's LMS launched each lesson and holds the official record; this course server issued the badge from the statements that LMS accepted.";
 const NOT_EARNED = 'That badge is not earned yet, or its record is not readable right now.';
 
+/** The authority the LRS recorded on a statement, in a form that compares by value; undefined when it has none. */
+function authorityKey(s: XapiStatement): string | undefined {
+  const authority = (s as XapiStatement & { authority?: unknown }).authority;
+  if (authority === undefined || authority === null) return undefined;
+  const sorted = (v: unknown): unknown =>
+    Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, x]) => [k, sorted(x)])) : v;
+  return JSON.stringify(sorted(authority));
+}
+
 /** The issuer record `get_record` appends in option 1: the `earned` statements and the credential ids. */
 export interface IssuerRecordView {
   statements: XapiStatement[];
@@ -130,14 +139,21 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     return n;
   }
 
-  /** Option 1: path and course badges from the `satisfied` statements the LMS wrote for this registration. */
+  /**
+   * Option 1: path and course badges from the `satisfied` statements the LMS wrote for this registration. Only the
+   * LMS's own count (CXM-BDG-006): the authority the LRS recorded on a `satisfied` must be the one on the LMS's
+   * `launched` statements. Statements without an authority give no way to tell who wrote them, so they never count.
+   */
   async function fromLmsSatisfied(l: LearnerRef, statements: XapiStatement[]): Promise<void> {
     const events: SatisfactionEvent[] = [];
     const blocks = Object.values(course.paths).filter((p) => p.status === 'live' && p.blockId);
+    const lmsAuthorities = new Set(statements.filter((s) => s.verb.id === ADL_VERBS.launched).flatMap((s) => authorityKey(s) ?? []));
     // Oldest first: an any-path badge takes the first block satisfied.
     const ordered = [...statements].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
     for (const s of ordered) {
       if (s.verb.id !== ADL_VERBS.satisfied) continue;
+      const by = authorityKey(s);
+      if (by === undefined || !lmsAuthorities.has(by)) continue;
       const block = blocks.find((p) => p.blockId === s.object.id);
       if (block) events.push({ type: 'block', pathKey: block.key, statementId: s.id });
       else if (s.object.id === course.id) events.push({ type: 'course', statementId: s.id });
@@ -209,9 +225,11 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
       await store.setConfirmed(l.subject, a.badgeId, a.earningStatementId, true);
       a.confirmed = true;
     }
-    // A revoked credential's earning (voided) is never claimed again; a new earning is.
-    const spent = new Set(all.map((c) => c.earningStatementId));
-    const unclaimed = awards.filter((a) => !live.has(a.badgeId) && !spent.has(a.earningStatementId) && a.confirmed);
+    // A revoked credential's earning (voided) is never claimed again for that badge; a new earning is. Two badges can
+    // share an earning statement (a block's satisfied earns its block-satisfied and any-path badges).
+    const spentKey = (badgeId: string, statementId: string) => `${badgeId}\n${statementId}`;
+    const spent = new Set(all.map((c) => spentKey(c.badgeId, c.earningStatementId)));
+    const unclaimed = awards.filter((a) => !live.has(a.badgeId) && !spent.has(spentKey(a.badgeId, a.earningStatementId)) && a.confirmed);
     return { reading, awards, all, live, unclaimed };
   }
 

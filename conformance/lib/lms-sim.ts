@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// A cmi5 LMS for tests: writes LMS.LaunchData, sends `launched`, serves the fetch URL and can abandon a session.
+// A cmi5 LMS for tests: writes LMS.LaunchData, sends `launched`, serves the fetch URL, can abandon a session and
+// sends any other statement of its own (`satisfied`, `voided`) with its credential.
 import { randomUUID } from 'node:crypto';
 import { activityIds, ADL_VERBS, CMI5, type XapiAgent, type XapiStatement } from '@course-xapi-mcp/core';
 import { checkCmi5Order, isoDuration, type Cmi5Problem } from '@course-xapi-mcp/core/xapi';
@@ -32,6 +33,8 @@ export interface LmsSim {
   launch(auId: string, o?: { launchMode?: LaunchMode; returnURL?: string; registration?: string }): Promise<LaunchResult>;
   /** Sends `abandoned` for the most recent launch, with the time since that launch as its duration. */
   abandonLatest(): Promise<void>;
+  /** Sends a statement of the LMS's own (for example `satisfied` or `voided`) with the LMS's credential. */
+  send(statement: XapiStatement): Promise<void>;
   /** cmi5 order problems across every statement the LRS holds. */
   problems(): Cmi5Problem[];
 }
@@ -138,6 +141,10 @@ export function createLmsSim(o: LmsSimOptions): LmsSim {
       if (!l) throw new Error('no launch to abandon');
       const s = lmsStatement(l, 'abandoned', (now) => ({ duration: isoDuration(Math.max(0, now - l.at)) }));
       await call('statements', { method: 'POST', body: JSON.stringify(s) });
+    },
+
+    async send(statement) {
+      await call('statements', { method: 'POST', body: JSON.stringify(statement) });
     },
 
     problems: () => checkCmi5Order(o.lrs.statements()),

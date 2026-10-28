@@ -455,8 +455,9 @@ export interface Lms {
   close(): Promise<void>;
 }
 
-export async function startLms(): Promise<Lms> {
-  const lrs = createTestLrs();
+/** `authority`: the LMS's LRS records who wrote each statement (the badge class needs it, lib/test-lrs.ts). */
+export async function startLms(o: { authority?: boolean } = {}): Promise<Lms> {
+  const lrs = createTestLrs({ authority: o.authority });
   const requests: LrsRequest[] = [];
   const served = await serve(lrs.fetch, (req) => {
     const u = new URL(req.url);

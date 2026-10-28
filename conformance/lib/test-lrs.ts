@@ -14,6 +14,12 @@ export interface TestLrsOptions {
   versions?: XapiVersion[];
   /** Basic credentials the LRS accepts. Default one pair, `test` / `test`. */
   credentials?: { key: string; secret: string }[];
+  /**
+   * Sets `authority` on every statement it stores, from the credential that sent it (xAPI: the LRS sets the
+   * authority), so a reader can tell who wrote what. The Agent's account name is a hash of the credential, never the
+   * credential. Default false: the statements come back exactly as they were sent.
+   */
+  authority?: boolean;
 }
 
 export interface TestLrs {
@@ -58,6 +64,21 @@ const text = (status: number, message: string) => new Response(message, { status
 
 const canonical = (v: unknown): string =>
   JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * What `validateStatement` checks: it takes Activity objects only (the statements a course server writes), so a
+ * statement about a statement (a `voided`, object StatementRef) is checked with that object as an Activity by its
+ * urn:uuid, or refused when the reference is not a UUID.
+ */
+function asChecked(s: XapiStatement): XapiStatement {
+  const o = (s as { object?: { objectType?: string; id?: unknown } } | null)?.object;
+  if (o?.objectType !== 'StatementRef') return s;
+  const ref = typeof o.id === 'string' && UUID.test(o.id) ? 'urn:uuid:' + o.id : 'not a statement id';
+  return { ...s, object: { objectType: 'Activity', id: ref } };
+}
+/** The account home page of the authorities the LRS sets (option `authority`). */
+const AUTHORITY_HOME = 'https://test-lrs.cxm.invalid/credentials';
+const withoutAuthority = ({ authority: _authority, ...rest }: XapiStatement & { authority?: unknown }) => rest;
 const etagOf = (body: string) => `"${createHash('sha1').update(body).digest('hex')}"`;
 const unquote = (s: string) => s.trim().replace(/^W\//, '').replace(/^"|"$/g, '');
 
@@ -151,17 +172,23 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
     return page(url, q, 0);
   }
 
-  function accept(list: unknown[]): Response | string[] {
+  /** The authority the LRS records for the credential a request carries. */
+  function authorityOf(req: Request): XapiAgent {
+    const credential = /^Basic\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')?.[1] ?? '';
+    return { objectType: 'Agent', account: { homePage: AUTHORITY_HOME, name: 'credential-' + createHash('sha256').update(credential).digest('hex').slice(0, 16) } };
+  }
+
+  function accept(list: unknown[], authority: XapiAgent | undefined): Response | string[] {
     const ids: string[] = [];
     const fresh = new Map<string, XapiStatement>();
     for (const raw of list) {
       const s = raw as XapiStatement;
       if (s && typeof s === 'object' && !Array.isArray(s) && s.id === undefined) s.id = randomUUID();
-      const problems = validateStatement(s);
+      const problems = validateStatement(asChecked(s));
       if (problems.length) return text(400, `invalid statement: ${problems.join('; ')}`);
       const had = byId.get(s.id) ?? fresh.get(s.id);
-      if (had && canonical(had) !== canonical(s)) return text(409, `statement ${s.id} exists with different content`);
-      if (!had) fresh.set(s.id, s);
+      if (had && canonical(withoutAuthority(had)) !== canonical(s)) return text(409, `statement ${s.id} exists with different content`);
+      if (!had) fresh.set(s.id, authority ? (Object.assign({}, s, { authority: structuredClone(authority) }) as XapiStatement) : s);
       ids.push(s.id);
     }
     for (const [id, s] of fresh) {
@@ -173,6 +200,7 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
 
   async function statements(req: Request, url: URL): Promise<Response> {
     if (req.method === 'GET') return getStatements(url);
+    const authority = o.authority ? authorityOf(req) : undefined;
     let body: unknown;
     try {
       body = JSON.parse(await req.text());
@@ -186,11 +214,11 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
       const s = body as XapiStatement;
       if (s.id !== undefined && s.id !== id) return text(400, 'statement id does not match statementId');
       s.id = id;
-      const r = accept([s]);
+      const r = accept([s], authority);
       return Array.isArray(r) ? new Response(null, { status: 204 }) : r;
     }
     if (req.method === 'POST') {
-      const r = accept(Array.isArray(body) ? body : [body]);
+      const r = accept(Array.isArray(body) ? body : [body], authority);
       return Array.isArray(r) ? json(r) : r;
     }
     return text(405, 'method not allowed');

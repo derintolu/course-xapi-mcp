@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-// Runs the course server class (one profile per custody option) and the launch bridge class against the reference
-// server, in-process: `npm run conformance:reference`. For each option it starts the reference app on a loopback port
-// with the conformance course, obtains a bearer token through the app's own sign-in pages (options 2 and 3), and runs
-// the classes in a vitest child process with the CXM_* environment the suite reads (conformance/README.md).
-// This is the only conformance file that may import the reference server.
+// Runs the course server class (one profile per custody option), the launch bridge class and the badge issuer class
+// against the reference server, in-process: `npm run conformance:reference`. For each option it starts the reference
+// app on a loopback port with the conformance course, obtains a bearer token through the app's own sign-in pages
+// (options 2 and 3), and runs the classes in a vitest child process with the CXM_* environment the suite reads
+// (conformance/README.md). This is the only conformance file that may import the reference server.
 import { spawn } from 'node:child_process';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createAppFromConfig, loadConfig, loadCourse, type App } from '../reference/packages/server/src/index.ts';
+import { badgesFromConfig } from '../reference/packages/server/src/badges/service.ts';
 import { startFakeIdp } from '../reference/packages/server/test/fake-idp.ts';
 import { createTestLrs } from './lib/index.ts';
 import { authorize, jar, serve, type Custody, type FormFill } from './server/client.ts';
@@ -24,6 +28,15 @@ const PROFILES: { custody: Custody; classes: string[] }[] = [
   { custody: 'author-lrs', classes: ['conformance/server'] },
   { custody: 'lms-launched', classes: ['conformance/server', 'conformance/bridge'] },
 ];
+/** The badge issuer class runs in every option; in option 4 it checks that practice earns nothing. */
+const BADGE_PROFILES: Custody[] = ['practice', 'server-kept', 'author-lrs', 'lms-launched'];
+/** Badge checks the reference is known to fail, with the reason (the Task 29 report). */
+const BADGE_KNOWN_GAPS: Partial<Record<Custody, Record<string, string>>> = {
+  'author-lrs': {
+    'CXM-BDG-024 voided':
+      "the reference author-LRS custody reads only statements whose context names the course (isForCourse in custody/author-lrs.ts), so the issuer never sees a voiding statement that does not, and the credential stays valid",
+  },
+};
 
 /** The accounts page (option 3): the "Create an account" form. */
 const signUp: FormFill = (forms) => {
@@ -89,10 +102,82 @@ async function runProfile(custody: Custody, classes: string[]): Promise<number> 
   }
 }
 
-// `npm run conformance:reference -- server-kept` runs one profile.
+/**
+ * The badge issuer class: the conformance course with the badges of `badges/fixtures/badges.json`, served by the
+ * reference with its badge issuer on. CXM_ISSUER_URL is the app's origin; in options 2 and 3 CXM_BROWSER_URL is a
+ * loopback relay that forwards every request to the app with the signed-in browser's session (the claim page, the
+ * credentials and the deletion link). Option 2's test LRS records authorities and accepts a second credential,
+ * `learner` / `learner`, that the server does not use.
+ */
+async function runBadgeProfile(custody: Custody): Promise<number> {
+  const closers: (() => Promise<unknown>)[] = [];
+  const pkg = mkdtempSync(join(tmpdir(), 'cxm-badge-course-'));
+  closers.push(async () => rmSync(pkg, { recursive: true, force: true }));
+  try {
+    cpSync(FIXTURE, pkg, { recursive: true });
+    const courseJson = join(pkg, 'cxm/course.json');
+    const declared = JSON.parse(readFileSync(ROOT + 'conformance/badges/fixtures/badges.json', 'utf8'));
+    writeFileSync(courseJson, JSON.stringify({ ...JSON.parse(readFileSync(courseJson, 'utf8')), ...declared }, null, 2));
+
+    let app: App | undefined;
+    const http = await serve((req) => app!.fetch(req));
+    closers.push(() => http.close());
+    const vars: Record<string, string> = { CXM_PUBLIC_URL: http.url, PORT: new URL(http.url).port, CXM_PACKAGE: pkg };
+    const env: Record<string, string> = { CXM_URL: http.url + '/mcp', CXM_CUSTODY: custody, CXM_ISSUER_URL: http.url, CXM_KNOWN_GAPS: JSON.stringify(BADGE_KNOWN_GAPS[custody] ?? {}) };
+    if (custody === 'author-lrs') {
+      const lrs = createTestLrs({ credentials: [{ key: 'test', secret: 'test' }, { key: 'learner', secret: 'learner' }], authority: true });
+      const lrsUrl = (await lrs.listen()) + '/xapi';
+      closers.push(() => lrs.close());
+      const idp = await startFakeIdp();
+      closers.push(() => idp.close());
+      Object.assign(vars, { CXM_LRS_ENDPOINT: lrsUrl, CXM_LRS_KEY: 'test', CXM_LRS_SECRET: 'test', CXM_OIDC_ISSUER: idp.issuer, CXM_OIDC_CLIENT_ID: idp.clientId, CXM_OIDC_CLIENT_SECRET: idp.clientSecret });
+      env.CXM_LRS_URL = lrsUrl;
+    }
+    const config = loadConfig(vars);
+    if ('errors' in config) throw new Error(config.errors.join('\n'));
+    const base = await loadCourse(pkg);
+    const built = await createAppFromConfig(config, {
+      course: { ...base, custody, allowPractice: custody !== 'practice' },
+      // A signing key for this run only; the warning about it is expected here.
+      badges: (parts) => badgesFromConfig(parts, () => undefined),
+    });
+    app = built;
+    closers.unshift(() => built.close());
+
+    if (custody === 'server-kept' || custody === 'author-lrs') {
+      const browser = jar();
+      const { accessToken } = await authorize({ browser, fill: custody === 'server-kept' ? signUp : allow, mcpUrl: env.CXM_URL });
+      env.CXM_TOKEN = accessToken;
+      const exported = await serve(() => fetch(http.url + '/record/export.json', { headers: { cookie: browser.header() } }));
+      closers.push(() => exported.close());
+      env.CXM_EXPORT_URL = exported.url + '/record/export.json';
+      // The signed-in browser, for the claim page and the deletion link: the suite's own cookies plus the session.
+      const relay = await serve(async (req) => {
+        const u = new URL(req.url);
+        const headers = new Headers(req.headers);
+        headers.delete('host');
+        headers.set('cookie', [req.headers.get('cookie'), browser.header()].filter(Boolean).join('; '));
+        const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer();
+        return fetch(http.url + u.pathname + u.search, { method: req.method, headers, body, redirect: 'manual' });
+      });
+      closers.push(() => relay.close());
+      env.CXM_BROWSER_URL = relay.url;
+    }
+
+    console.log(`\n== course-xapi-mcp conformance: reference server, custody ${custody} (conformance/badges)\n`);
+    return await runVitest(['conformance/badges'], env);
+  } finally {
+    for (const close of closers) await close().catch(() => undefined);
+  }
+}
+
+// `npm run conformance:reference -- server-kept` runs that option's profiles; `-- badges` the badge issuer class
+// alone, `-- badges:server-kept` one of its profiles.
 const only = process.argv.slice(2);
-const results: { custody: Custody; code: number }[] = [];
-for (const p of PROFILES.filter((x) => !only.length || only.includes(x.custody))) results.push({ custody: p.custody, code: await runProfile(p.custody, p.classes) });
+const pick = (name: string, custody: Custody) => !only.length || only.includes(custody) || only.includes(name) || (name.startsWith('badges:') && only.includes('badges'));
+const results: { name: string; code: number }[] = [];
+for (const p of PROFILES.filter((x) => pick(x.custody, x.custody))) results.push({ name: p.custody, code: await runProfile(p.custody, p.classes) });
+for (const custody of BADGE_PROFILES.filter((c) => pick('badges:' + c, c))) results.push({ name: 'badges:' + custody, code: await runBadgeProfile(custody) });
 console.log('\n== summary');
-for (const r of results) console.log(`  ${r.custody.padEnd(13)} ${r.code === 0 ? 'PASS' : 'FAIL'}`);
+for (const r of results) console.log(`  ${r.name.padEnd(22)} ${r.code === 0 ? 'PASS' : 'FAIL'}`);
 process.exit(results.every((r) => r.code === 0) ? 0 : 1);

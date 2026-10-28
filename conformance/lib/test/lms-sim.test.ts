@@ -146,4 +146,23 @@ describe('cmi5 LMS simulator', () => {
     expect(abandoned.result?.duration).toMatch(/^PT/);
     expect(sim.problems()).toEqual([]);
   });
+
+  it('send writes a statement of the LMS with its own credential (the authority of its launched)', async () => {
+    const lrs = createTestLrs({ authority: true });
+    const sim = createLmsSim({ lrs, lrsUrl: LRS_URL, courseId: COURSE, aus: [{ auId: AU, url: 'https://au.example/index.html', moveOn: 'CompletedOrPassed' }] });
+    const l = await sim.launch(AU);
+    const [launched] = lrs.statements() as (XapiStatement & { authority?: unknown })[];
+    const satisfied: XapiStatement = {
+      id: randomUUID(),
+      actor: launched!.actor,
+      verb: { id: 'https://w3id.org/xapi/adl/verbs/satisfied', display: { 'en-US': 'satisfied' } },
+      object: { objectType: 'Activity', id: COURSE },
+      context: { registration: l.registration, contextActivities: { category: [{ objectType: 'Activity', id: CMI5.categoryCmi5 }] }, extensions: { [CMI5.extSessionId]: l.sessionId } },
+      timestamp: new Date().toISOString(),
+    };
+    await sim.send(satisfied);
+    const sent = lrs.statements()[1] as XapiStatement & { authority?: unknown };
+    expect(sent.id).toBe(satisfied.id);
+    expect(sent.authority).toEqual(launched!.authority);
+  });
 });

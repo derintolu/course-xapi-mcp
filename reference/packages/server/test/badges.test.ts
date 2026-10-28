@@ -256,6 +256,20 @@ describe('badges in option 3 (server-kept)', () => {
     expect(claimable(await claimPage(app, browser))).toEqual([PATH_BADGE]);
   });
 
+  it('two badges earned by the same statement (block-satisfied and any-path) are both claimable', async () => {
+    const base = await loadExample();
+    const anyPath: BadgeDecl = { ...base.badges.find((b) => b.id === PATH_BADGE)!, id: PATH_BADGE + '-any', name: 'Any path', awardOn: 'any-path' };
+    delete (anyPath as { for?: string }).for;
+    const { app, browser, call } = await optionThree({ course: { ...base, badges: [...base.badges, anyPath] } });
+    await finishCourse(call);
+    const [path] = credentialLinks(await (await claim(app, browser, PATH_BADGE, { did: 'did:example:wallet-1' })).text());
+    expect(claimable(await claimPage(app, browser))).toContain(anyPath.id);
+    const [any] = credentialLinks(await (await claim(app, browser, anyPath.id, { did: 'did:example:wallet-1' })).text());
+    expect(any).toBeDefined();
+    expect(any).not.toBe(path);
+    expect((await credential(app, browser, any!)).evidence[0].id).toBe((await credential(app, browser, path!)).evidence[0].id);
+  });
+
   it('claiming twice issues one credential', async () => {
     const { app, browser, call, issuer, subjects } = await optionThree();
     await finishCourse(call);
@@ -520,7 +534,8 @@ describe('badges in option 1 (lms-launched)', () => {
   const firstBadge = (base: BadgeDecl): BadgeDecl => ({ ...base, id: FIRST_LESSON_BADGE, name: 'What JSON is', for: 'what-is-json' });
 
   async function optionOne() {
-    const lrs = createTestLrs();
+    // The LRS records who wrote each statement, so the issuer can tell the LMS's satisfied from anyone else's.
+    const lrs = createTestLrs({ authority: true });
     const lrsFetch = ((input: RequestInfo | URL, init?: RequestInit) => lrs.fetch(new Request(input, init))) as typeof fetch;
     const base = await loadExample();
     const course: CourseModel = { ...base, custody: 'lms-launched', allowPractice: false, badges: [...base.badges, firstBadge(base.badges[0]!)] };
@@ -606,7 +621,7 @@ describe('badges in option 1 (lms-launched)', () => {
     expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
     expect(claimable(await claimPage(o.app, lesson.browser)).sort()).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
 
-    // The LMS records the block as satisfied: now the path badge is earned, with that statement as evidence.
+    // The block recorded as satisfied, but with a credential that is not the LMS's: no path badge (CXM-BDG-006).
     const satisfied: XapiStatement = {
       id: '5a715f1e-0000-4000-8000-000000000001',
       actor: o.lrs.statements()[0]!.actor,
@@ -615,8 +630,12 @@ describe('badges in option 1 (lms-launched)', () => {
       context: { registration, contextActivities: { grouping: [{ objectType: 'Activity', id: o.course.id }], category: [{ objectType: 'Activity', id: 'https://w3id.org/xapi/cmi5/context/categories/cmi5' }] }, extensions: { 'https://w3id.org/xapi/cmi5/context/extensions/sessionid': lesson.sessionId } },
       timestamp: new Date(Date.now() + 5000).toISOString(),
     };
-    const posted = await o.lrs.fetch(new Request(LRS_URL + '/statements', { method: 'POST', headers: { authorization: 'Basic ' + btoa('test:test'), 'x-experience-api-version': '1.0.3', 'content-type': 'application/json' }, body: JSON.stringify(satisfied) }));
+    const forged = { ...satisfied, id: '5a715f1e-0000-4000-8000-000000000002' };
+    const posted = await o.lrs.fetch(new Request(LRS_URL + '/statements', { method: 'POST', headers: { authorization: 'Basic ' + btoa('test:test'), 'x-experience-api-version': '1.0.3', 'content-type': 'application/json' }, body: JSON.stringify(forged) }));
     expect(posted.status).toBe(200);
+    expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+    // The LMS records the block as satisfied: now the path badge is earned, with that statement as evidence.
+    await o.sim.send(satisfied);
     expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE, PATH_BADGE].sort());
     const [id] = credentialLinks(await (await claim(o.app, lesson.browser, PATH_BADGE, { did: 'did:example:wallet' })).text());
     const vc = await credential(o.app, lesson.browser, id!);
@@ -658,8 +677,10 @@ describe('badges in option 1 (lms-launched)', () => {
     expect(record.issuerRecord.credentials.sort()).toEqual(['urn:uuid:' + firstId, 'urn:uuid:' + secondId].sort());
     const kept = earnedIn(record.issuerRecord.statements);
     expect(kept).toHaveLength(2);
-    // The copy sent inside the session is the very statement the issuer record keeps (R51): one id, one content.
-    const sent = earnedIn(o.lrs.statements())[0]!;
+    // The copy sent inside the session is the very statement the issuer record keeps (R51): one id, one content
+    // (the authority is the LRS's, added when it stored the statement).
+    const { authority, ...sent } = earnedIn(o.lrs.statements())[0]! as XapiStatement & { authority?: unknown };
+    expect(authority).toBeDefined();
     expect(kept.find((s) => s.id === sent.id)).toEqual(sent);
     // The one claimed after terminated belongs to no session.
     const after = kept.find((s) => s.id !== sent.id)!;

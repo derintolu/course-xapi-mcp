@@ -681,127 +681,152 @@
   class: badges
   text: "An issuer MUST issue a badge only on its declared cmi5 event: AU `moveOn` met (`au-moveon`), block satisfied (`block-satisfied`), course satisfied (`course-satisfied`), or the first block satisfied (`any-path`)."
   source: spec/draft/badges.md#when-a-badge-is-earned
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-002
   class: badges
   text: "An issuer MUST issue at most one badge per achievement per registration."
   source: spec/draft/badges.md#when-a-badge-is-earned
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-003
   class: badges
   text: "A practice run MUST NOT earn a badge."
   source: spec/draft/badges.md#when-a-badge-is-earned
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-004
   class: badges
   text: "A waived lesson MUST NOT earn a lesson badge unless the badge sets `countWaived`, and MUST count towards path and course satisfaction."
   source: spec/draft/badges.md#when-a-badge-is-earned
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-005
   class: badges
   text: "A carried-over lesson MUST NOT earn a lesson badge, even with `countWaived`, and MUST count as not done for a path or course badge."
   source: spec/draft/badges.md#when-a-badge-is-earned
-  status: pending
+  status: excluded
+  exclusion: "It needs a learner whose earlier record version satisfied lessons, so the server under test would have to load a new version of the course package between two calls of one learner; the suite runs against one fixed conformance course (as for CXM-BRG-010)."
 - id: CXM-BDG-006
   class: badges
   text: "An issuer MUST compute the earning event only from statements written by the course server's or the LMS's credentials, never from anything the learner or the agent can write."
   source: spec/draft/badges.md#trust
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-007
   class: badges
   text: "A course server MUST give an issuer other than itself the distribution package on publish and whenever the content changes."
   source: spec/draft/badges.md#trust
-  status: pending
+  status: excluded
+  exclusion: "It constrains what a course server gives another system (an issuer other than itself) when it publishes or changes content; the class tests an issuer through the badges it issues, and no published wire contract carries the package hand-over."
 - id: CXM-BDG-008
   class: badges
   text: "A badge MUST be an OpenBadgeCredential under the W3C Verifiable Credentials Data Model 2.0, with an `eddsa-rdfc-2022` proof over an Ed25519 key and a `did:web` issuer."
   source: spec/draft/badges.md#credential-contents
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-009
   class: badges
   text: "A badge MUST carry `credentialStatus` as a `BitstringStatusListEntry`."
   source: spec/draft/badges.md#credential-contents
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-010
   class: badges
   text: "A badge MUST carry exactly one evidence entry, with `id` `urn:uuid:<earning statement id>`, a narrative and `genre` `xAPI statement`; the earning statement is the `satisfied` statement for a block or course, or the defined statement that met `moveOn` for an AU."
   source: spec/draft/badges.md#credential-contents
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-011
   class: badges
   text: "A badge MUST NOT use custom JSON-LD terms."
   source: spec/draft/badges.md#credential-contents
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-012
   class: badges
   text: "The criteria narrative MUST say how the learning was assessed: deterministic checks, or the learner's AI agent judging free text against an authored rubric."
   source: spec/draft/badges.md#credential-contents
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-013
   class: badges
   text: "When waived lessons counted towards a path or course badge, the evidence narrative MUST state how many."
   source: spec/draft/badges.md#credential-contents
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-014
   class: badges
   text: "`get_badges` MUST return badge metadata and the course's `claimPage`, and MUST NOT return a bearer claim link."
   source: spec/draft/badges.md#claiming
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-015
   class: badges
   text: "The claim page MUST identify the learner before the issuer mints a claim link."
   source: spec/draft/badges.md#claiming
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-016
   class: badges
   text: "An MCP tool MUST NOT sign anything, and a signing key MUST NOT be reachable by the agent."
   source: spec/draft/badges.md#claiming
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-017
   class: badges
   text: "After issuing, the issuer MUST write `earned` (`http://specification.openbadges.org/xapi/verbs/earned`, with the `badgeassertion` result extension holding the credential id) with `context.statement` referring to the earning statement; in options 2 and 3 it goes to the official record."
   source: spec/draft/badges.md#after-issuing
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-018
   class: badges
   text: "In option 1, the LMS side signs if it implements these badge rules; otherwise the course server MUST sign lesson badges only from the defined statements it sent and the LMS accepted, and path and course badges only if it can read the LMS's `satisfied` statement with the session token, naming itself as issuer and the LMS in the criteria."
   source: spec/draft/badges.md#who-signs
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-019
   class: badges
   text: "In option 1, a course server that signs MUST keep its own issuer record holding the `earned` statement and the credential, authoritative for the badges it signed and read by `get_badges` and `get_record`."
   source: spec/draft/badges.md#who-signs
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-020
   class: badges
   text: "In option 1, if a session for the same registration is open when the badge is issued, the course server MUST also send `earned` to the LMS's LRS inside that session with the cxm profile category, and MUST NOT write to the LMS after a session's `terminated`."
   source: spec/draft/badges.md#who-signs
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-021
   class: badges
   text: "In option 2, the record holder MUST sign, unless the course declares `badgeIssuer.signer: \"course-server\"`, in which case the course server signs as in option 3."
   source: spec/draft/badges.md#who-signs
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-022
   class: badges
   text: "In option 3, the course server MUST sign, from its own store."
   source: spec/draft/badges.md#who-signs
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-023
   class: badges
   text: "An issuer MUST revoke by flipping a bit in a signed status list of at least 131 072 entries, at a random index."
   source: spec/draft/badges.md#revocation
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-024
   class: badges
   text: "An issuer MUST revoke a badge when its earning statement is voided and when the record holder erases the learner's statements on request; it MAY revoke for issuer error or misconduct."
   source: spec/draft/badges.md#revocation
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-BDG-025
   class: badges
   text: "Re-issuing after a key rotation MUST keep the credential id with a newer `validFrom`, and old keys MUST stay in the DID document."
   source: spec/draft/badges.md#revocation
-  status: pending
+  status: excluded
+  exclusion: "It needs the issuer's operator to rotate the signing key and re-issue during a run; a black-box run cannot make the issuer rotate. The DID document the suite fetches is checked under CXM-BDG-008 and CXM-BDG-016."
 - id: CXM-SEC-001
   class: security
   text: "A server MUST wrap learner text in `<learner_input>` and neutralise any wrapper tags inside it."
@@ -848,19 +873,23 @@
   class: security
   text: "A badge MUST NOT carry the xAPI actor id, hashed or plain."
   source: spec/draft/security-privacy.md#badge-privacy
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-SEC-009
   class: security
   text: "A badge MUST NOT embed statements, and MUST carry scores only if the author opts in."
   source: spec/draft/security-privacy.md#badge-privacy
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-SEC-010
   class: security
   text: "Recipient binding MUST happen at claim time, to a wallet DID or to an email hashed with a random 16-byte salt, and the issuer MUST store only the hash and salt."
   source: spec/draft/security-privacy.md#badge-privacy
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts
 - id: CXM-SEC-011
   class: security
   text: "A badge MUST NOT be issued without a recipient."
   source: spec/draft/security-privacy.md#badge-privacy
-  status: pending
+  status: tested
+  test: conformance/badges/badges.test.ts

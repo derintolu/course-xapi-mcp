@@ -185,4 +185,36 @@ describe('test LRS', () => {
     expect(lrs.statements()).toHaveLength(1);
     expect((await fetch(`${url}/about`)).status).toBe(401);
   });
+
+  it('with authority, sets each stored statement\'s authority from the credential that sent it, never the credential itself', async () => {
+    const lrs = createTestLrs({ credentials: [{ key: 'test', secret: 'test' }, { key: 'learner', secret: 'learner' }], authority: true });
+    const a = statement();
+    const b = statement();
+    expect((await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(a) })).status).toBe(200);
+    expect((await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(b), auth: 'Basic ' + btoa('learner:learner') })).status).toBe(200);
+    const page = (await (await send(lrs, '/statements?ascending=true')).json()) as { statements: { authority?: { account?: { name: string } } }[] };
+    const [ra, rb] = page.statements.map((s) => s.authority);
+    expect(ra?.account?.name).toMatch(/^credential-[0-9a-f]{16}$/);
+    expect(rb?.account?.name).toMatch(/^credential-[0-9a-f]{16}$/);
+    expect(ra).not.toEqual(rb);
+    expect(JSON.stringify(page)).not.toMatch(/learner:learner|test:test|bGVhcm5lcjpsZWFybmVy|dGVzdDp0ZXN0/);
+    // Sending the same statement again is not a conflict: the authority is the LRS's, not part of the content.
+    expect((await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(a) })).status).toBe(200);
+    expect(lrs.statements()).toHaveLength(2);
+    // Without the option the statement comes back as it was sent.
+    const plain = createTestLrs();
+    await send(plain, '/statements', { method: 'POST', body: JSON.stringify(a) });
+    expect(plain.statements()[0]).toEqual(a);
+  });
+
+  it('accepts a voiding statement (object StatementRef) and refuses a reference that is not a statement id', async () => {
+    const lrs = createTestLrs();
+    const target = statement();
+    await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(target) });
+    const voided = statement({ verb: { id: 'http://adlnet.gov/expapi/verbs/voided', display: { 'en-US': 'voided' } }, object: { objectType: 'StatementRef', id: target.id } });
+    expect((await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(voided) })).status).toBe(200);
+    expect(lrs.statements()[1]).toEqual(voided);
+    const bad = statement({ object: { objectType: 'StatementRef', id: 'https://example.org/not-a-statement' } });
+    expect((await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(bad) })).status).toBe(400);
+  });
 });

@@ -73,6 +73,13 @@ describe('buildCredential', () => {
     expect(build({ testedOut: 0 }).evidence[0].narrative).not.toContain('tested out');
   });
 
+  it('the criteria narrative keeps the author\'s text and says how learning was assessed (CXM-BDG-012)', () => {
+    const narrative = (assessed: 'checks' | 'agent-rubric' | 'mixed') => build({ assessed }).credentialSubject.achievement.criteria.narrative as string;
+    expect(narrative('checks')).toBe('Finish the work. Learning was assessed by deterministic checks.');
+    expect(narrative('agent-rubric')).toBe("Finish the work. Learning was assessed by the learner's AI agent judging against an authored rubric.");
+    expect(narrative('mixed')).toBe("Finish the work. Learning was assessed by deterministic checks and the learner's AI agent judging against an authored rubric.");
+  });
+
   it('binds an email recipient by a salted hash that recomputes from the salt', () => {
     const salt = 'c2FsdHNhbHRzYWx0c2FsdA';
     const c = build({ recipient: { email: 'learner@example.com', salt } });

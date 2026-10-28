@@ -1,0 +1,61 @@
+{
+  "badges": [
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/conformance/course/badges/intro",
+      "name": "Conformance: quotes make strings",
+      "description": "Finished the intro lesson of the conformance course.",
+      "criteria": { "narrative": "Awarded for finishing the intro lesson of the conformance course." },
+      "achievementType": "Achievement",
+      "awardOn": "au-moveon",
+      "for": "intro"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/conformance/course/badges/types",
+      "name": "Conformance: booleans are not strings",
+      "description": "Finished or tested out of the types lesson of the conformance course.",
+      "criteria": { "narrative": "Awarded for finishing the types lesson of the conformance course, or for testing out of it." },
+      "achievementType": "Achievement",
+      "awardOn": "au-moveon",
+      "for": "types",
+      "countWaived": true
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/conformance/course/badges/fix",
+      "name": "Conformance: fix the config",
+      "description": "Finished the fix lesson of the conformance course.",
+      "criteria": { "narrative": "Awarded for finishing the fix lesson of the conformance course." },
+      "achievementType": "Achievement",
+      "awardOn": "au-moveon",
+      "for": "fix"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/conformance/course/badges/basics",
+      "name": "Conformance: JSON value types",
+      "description": "Satisfied the basics path of the conformance course.",
+      "criteria": { "narrative": "Awarded when the basics path of the conformance course is satisfied." },
+      "achievementType": "Achievement",
+      "awardOn": "block-satisfied",
+      "for": "basics"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/conformance/course/badges/course",
+      "name": "Conformance: the whole course",
+      "description": "Satisfied the conformance course.",
+      "criteria": { "narrative": "Awarded when the conformance course is satisfied." },
+      "achievementType": "Achievement",
+      "awardOn": "course-satisfied"
+    },
+    {
+      "id": "https://course-xapi-mcp.sqwrlz.com/conformance/course/badges/any-path",
+      "name": "Conformance: a first path",
+      "description": "Satisfied a first path of the conformance course.",
+      "criteria": { "narrative": "Awarded when the first path of the conformance course is satisfied." },
+      "achievementType": "Achievement",
+      "awardOn": "any-path"
+    }
+  ],
+  "badgeIssuer": {
+    "signer": "course-server",
+    "claimPage": "http://127.0.0.1:8787/badges/claim"
+  }
+}

@@ -40,7 +40,8 @@ export function buildCredential(o: {
     type: ['Achievement'],
     name: b.name,
     description: b.description,
-    criteria: { narrative: b.criteria.narrative },
+    // The criteria say how the learning was assessed, whatever the author wrote (CXM-BDG-012).
+    criteria: { narrative: `${b.criteria.narrative} Learning was assessed by ${ASSESSED[o.assessed]}.` },
     achievementType: b.achievementType,
     ...(b.image ? { image: { id: b.image, type: 'Image' } } : {}),
     ...(b.alignment?.length ? { alignment: b.alignment.map((a) => ({ type: ['Alignment'], ...a })) } : {}),
