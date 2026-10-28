@@ -82,7 +82,7 @@ export function badgeIssuing(course: CourseModel): boolean {
 /** What the official record says right now, as far as badges are concerned; undefined when it cannot be read. */
 interface Reading {
   statements: XapiStatement[];
-  /** Ids of statements in the record that are not voided. */
+  /** Ids of statements the record holder accepted (in the record, or on its delivery receipt) and that are not voided. */
   present: Set<string>;
 }
 
@@ -153,7 +153,8 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     const held = new Set((await store.awards(l.subject)).map((a) => a.badgeId));
     for (const a of awardsFor(course, { ...state, awards: [] }, events)) {
       if (badges.get(a.badgeId)?.awardOn === 'au-moveon' || held.has(a.badgeId)) continue;
-      await store.addAward({ subject: l.subject, ...a, earnedAt: now() });
+      // Read from the LMS's own statements: confirmed at once.
+      await store.addAward({ subject: l.subject, ...a, earnedAt: now(), confirmed: true });
     }
   }
 
@@ -163,16 +164,22 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
    */
   async function read(l: LearnerRef): Promise<Reading | undefined> {
     let statements: XapiStatement[];
+    let receipt: string[];
     try {
-      statements = (await custody.record(l)).statements;
+      const r = await custody.record(l);
+      statements = r.statements;
+      receipt = (r.receipt ?? []).map((x) => x.id);
     } catch {
       return undefined;
     }
     const voided = new Set(
       statements.filter((s) => s.verb.id === VOIDED && (s.object as { objectType?: string }).objectType === 'StatementRef').map((s) => s.object.id),
     );
-    if (voided.size > 0) await revokeWhere(l.subject, (c) => voided.has(c.earningStatementId));
-    const present = new Set(statements.filter((s) => !voided.has(s.id)).map((s) => s.id));
+    if (voided.size > 0) {
+      await revokeWhere(l.subject, (c) => voided.has(c.earningStatementId));
+      for (const a of await store.awards(l.subject)) if (voided.has(a.earningStatementId)) await store.setConfirmed(l.subject, a.badgeId, a.earningStatementId, false);
+    }
+    const present = new Set([...statements.map((s) => s.id), ...receipt].filter((id) => !voided.has(id)));
     if (option === 'lms-launched') await fromLmsSatisfied(l, statements);
     else {
       for (const c of await store.credentials(l.subject)) {
@@ -188,14 +195,23 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     return { statements, present };
   }
 
-  /** Awards the learner holds now: claimed and live, or unclaimed with the earning statement in the record. */
+  /**
+   * Awards the learner holds now: claimed and live, or unclaimed and confirmed. An award is confirmed once the record
+   * holder is seen to have accepted its earning statement, and stays so without a live read (option 1: the issuer
+   * record keeps it when the LMS token no longer reads), until the statement is found voided.
+   */
   async function held(l: LearnerRef) {
     const reading = await read(l);
     const { all, live } = await credentialsOf(l.subject);
     const awards = await store.awards(l.subject);
+    for (const a of awards) {
+      if (a.confirmed || !reading?.present.has(a.earningStatementId)) continue;
+      await store.setConfirmed(l.subject, a.badgeId, a.earningStatementId, true);
+      a.confirmed = true;
+    }
     // A revoked credential's earning (voided) is never claimed again; a new earning is.
     const spent = new Set(all.map((c) => c.earningStatementId));
-    const unclaimed = awards.filter((a) => !live.has(a.badgeId) && !spent.has(a.earningStatementId) && reading?.present.has(a.earningStatementId));
+    const unclaimed = awards.filter((a) => !live.has(a.badgeId) && !spent.has(a.earningStatementId) && a.confirmed);
     return { reading, awards, all, live, unclaimed };
   }
 
@@ -212,14 +228,14 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
   }
 
   /** Signs and stores the credential, then writes `earned`; `fresh` is false when another claim stored one first. */
-  async function issue(l: LearnerRef, a: AwardRecord, badge: BadgeDecl, recipient: Recipient, reading: Reading): Promise<{ stored: CredentialRecord; fresh: boolean }> {
+  async function issue(l: LearnerRef, a: AwardRecord, badge: BadgeDecl, recipient: Recipient, reading: Reading | undefined): Promise<{ stored: CredentialRecord; fresh: boolean }> {
     const open = option === 'lms-launched' ? await openSession(l, a.registration) : undefined;
     const id = uuid();
     const credentialId = 'urn:uuid:' + id;
     const statusIndex = await store.allocateIndex();
     const issuedAt = now();
     const shown = option === 'lms-launched' ? { ...badge, criteria: { narrative: `${badge.criteria.narrative} ${LMS_CRITERIA}` } } : badge;
-    const earning = reading.statements.find((s) => s.id === a.earningStatementId);
+    const earning = reading?.statements.find((s) => s.id === a.earningStatementId);
     const unsigned = buildCredential({
       badge: shown,
       issuer: { id: did, name: o.issuerName },
@@ -237,14 +253,14 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
       {
         actor,
         registration: a.registration,
-        // Inside the open LMS session in option 1; otherwise in a session of its own (no AU session is involved).
-        sessionId: open ? open.sessionId : uuid(),
         courseId: course.id,
         language: course.language,
         rulesVersion: RULES_VERSION,
         custody: option,
         practice: false,
-        ...(open ? { contextTemplate: open.contextTemplate } : {}),
+        // The cmi5 session (and its contextTemplate) only inside an open LMS session in option 1; otherwise `earned`
+        // is the issuer's statement and belongs to no AU session (R50).
+        ...(open ? { sessionId: open.sessionId, contextTemplate: open.contextTemplate } : {}),
       },
       { id: badge.id, name: badge.name },
       credentialId,
@@ -316,7 +332,7 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
         const had = h.live.get(badgeId);
         if (had) return { credentialId: had.id, name: badge.name, again: true };
         const a = h.unclaimed.find((x) => x.badgeId === badgeId);
-        if (!a || !h.reading) return { error: NOT_EARNED };
+        if (!a) return { error: NOT_EARNED };
         const { stored, fresh } = await issue(l, a, badge, recipient, h.reading);
         return { credentialId: stored.id, name: badge.name, again: !fresh };
       });
@@ -355,10 +371,8 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     },
 
     async revokeLearner(subject) {
-      // Called inside the record erase's learner lock: it must not take the lock itself.
-      const n = await revokeWhere(subject, () => true);
-      await store.deleteAwards(subject);
-      return n;
+      // Called inside the record erase's learner lock: it must not take the lock itself. Only the status bits stay.
+      return store.eraseLearner(subject);
     },
 
     async records(l) {

@@ -61,7 +61,10 @@ function addUnique(list: ActivityRef[], more: ActivityRef[] | undefined): Activi
   return list;
 }
 
-function baseContext(c: Cmi5Context, grouping: string[], category: string[], parent?: string): XapiContext {
+/** The context of an `earned` statement: its session id only when it is sent inside an open AU session. */
+export type EarnedContext = Omit<Cmi5Context, 'sessionId'> & { sessionId?: string };
+
+function baseContext(c: EarnedContext, grouping: string[], category: string[], parent?: string): XapiContext {
   const t = c.contextTemplate;
   const tSession = t?.extensions?.[CMI5.extSessionId];
   if (tSession !== undefined && tSession !== c.sessionId) {
@@ -82,7 +85,7 @@ function baseContext(c: Cmi5Context, grouping: string[], category: string[], par
     contextActivities: ca,
     extensions: {
       ...t?.extensions,
-      [CMI5.extSessionId]: c.sessionId,
+      ...(c.sessionId !== undefined ? { [CMI5.extSessionId]: c.sessionId } : {}),
       [CXM_EXT['rules-version']]: c.rulesVersion,
       [CXM_EXT.custody]: c.custody,
     },
@@ -91,7 +94,7 @@ function baseContext(c: Cmi5Context, grouping: string[], category: string[], par
   return ctx;
 }
 
-function statement(c: Cmi5Context, verb: DefinedVerb | AllowedVerb, object: Activity | ActivityRef, context: XapiContext, o: { id: string; timestamp: string }, result?: XapiResult): XapiStatement {
+function statement(c: EarnedContext, verb: DefinedVerb | AllowedVerb, object: Activity | ActivityRef, context: XapiContext, o: { id: string; timestamp: string }, result?: XapiResult): XapiStatement {
   const s: XapiStatement = {
     id: o.id,
     actor: structuredClone(c.actor),
@@ -171,9 +174,13 @@ export function buildAllowed(
   return stripCmi5Categories(statement(c, verb, activity, context, o, o.result));
 }
 
-/** The Open Badges `earned` statement, pointing at the statement that earned the badge and at the credential. */
+/**
+ * The Open Badges `earned` statement, pointing at the statement that earned the badge and at the credential.
+ * `earned` is the issuer's statement, not the AU's: it carries the cmi5 session id (and the session's contextTemplate)
+ * only when `c.sessionId` is given, for an `earned` sent inside an open AU session.
+ */
 export function buildEarned(
-  c: Cmi5Context,
+  c: EarnedContext,
   achievement: { id: string; name: string },
   credentialId: string,
   earningStatementId: string,

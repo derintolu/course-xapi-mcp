@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { OB_XAPI, type BadgeDecl, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
+import { CMI5, OB_XAPI, type BadgeDecl, type CourseModel, type Custody, type LearnerRef, type XapiStatement } from '@course-xapi-mcp/core';
 import { didWeb, generateKey, verifyCredential, type SigningKey } from '@course-xapi-mcp/badges';
+import { checkCmi5Order } from '@course-xapi-mcp/core/xapi';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
 import type { JWK } from 'jose';
 import {
@@ -244,6 +245,9 @@ describe('badges in option 3 (server-kept)', () => {
     expect(earned[0]!.result!.extensions![OB_XAPI.badgeAssertion]).toEqual({ '@id': vc.id });
     expect(earned[0]!.object.id).toBe(LESSON_BADGE);
     expect(earned[0]!.context!.registration).toBe(registration);
+    // earned is the issuer's statement, in no AU session (R50): no cmi5 session id, and the record stays in cmi5 order.
+    expect(earned[0]!.context!.extensions).not.toHaveProperty([CMI5.extSessionId]);
+    expect(checkCmi5Order(statements)).toEqual([]);
 
     const listed = (await call('get_badges')).data.badges as { badgeId: string; claimed: boolean }[];
     expect(listed.find((b) => b.badgeId === LESSON_BADGE)!.claimed).toBe(true);
@@ -287,20 +291,45 @@ describe('badges in option 3 (server-kept)', () => {
     expect((await app.fetch(req('/badges/credentials/not-a-uuid', { cookies: browser }))).status).toBe(404);
   });
 
-  it('deleting the record revokes every credential (status bit set) and forgets unclaimed awards', async () => {
-    const { app, browser, call } = await optionThree();
-    await finishCourse(call);
-    const [id] = credentialLinks(await (await claim(app, browser, LESSON_BADGE, { email: 'ada@example.com', salt: SALT })).text());
-    const vc = await credential(app, browser, id!);
-    const index = Number(vc.credentialStatus.statusListIndex);
-    expect(vc.credentialStatus).toMatchObject({ type: 'BitstringStatusListEntry', statusPurpose: 'revocation', statusListCredential: PUBLIC + '/badges/status/1' });
-    expect(await revokedBit(app, index)).toBe(false);
+  it.each(['memory', 'directory'] as const)('deleting the record revokes every credential (status bit set) and leaves nothing of the learner in the %s issuer store', async (kind) => {
+    const dir = kind === 'directory' ? await mkdtemp(join(tmpdir(), 'cxm-issuer-')) : undefined;
+    try {
+      const issuer = dir ? new DirectoryIssuerStore(dir) : new MemoryIssuerStore();
+      const { app, browser, call, subjects } = await optionThree({ issuer });
+      await finishCourse(call);
+      const [id] = credentialLinks(await (await claim(app, browser, LESSON_BADGE, { email: 'ada@example.com', salt: SALT })).text());
+      const [other] = credentialLinks(await (await claim(app, browser, PATH_BADGE, { did: 'did:example:wallet-erase' })).text());
+      const vc = await credential(app, browser, id!);
+      const index = Number(vc.credentialStatus.statusListIndex);
+      const otherIndex = Number((await credential(app, browser, other!)).credentialStatus.statusListIndex);
+      expect(vc.credentialStatus).toMatchObject({ type: 'BitstringStatusListEntry', statusPurpose: 'revocation', statusListCredential: PUBLIC + '/badges/status/1' });
+      expect(await revokedBit(app, index)).toBe(false);
+      const [subject] = [...subjects];
+      const traces = [subject!, vc.credentialSubject.identifier[0].identityHash as string, SALT, 'did:example:wallet-erase', id!, other!];
+      if (dir) {
+        const before = await readFile(join(dir, 'issuer.json'), 'utf8');
+        for (const t of traces) expect(before).toContain(t);
+      }
 
-    const view = await (await app.fetch(req('/record', { cookies: browser }))).text();
-    expect((await app.fetch(formPost('/record', { action: 'delete', csrf: csrfOf(view)! }, browser))).status).toBe(200);
-    expect(await revokedBit(app, index)).toBe(true);
-    expect((await call('get_badges')).data.badges).toEqual([]);
-    expect(claimable(await claimPage(app, browser))).toEqual([]);
+      const view = await (await app.fetch(req('/record', { cookies: browser }))).text();
+      expect((await app.fetch(formPost('/record', { action: 'delete', csrf: csrfOf(view)! }, browser))).status).toBe(200);
+      expect(await revokedBit(app, index)).toBe(true);
+      expect(await revokedBit(app, otherIndex)).toBe(true);
+      expect(await issuer.awards(subject!)).toEqual([]);
+      expect(await issuer.credentials(subject!)).toEqual([]);
+      expect(await issuer.credential(id!)).toBeUndefined();
+      expect((await issuer.revokedIndexes()).sort()).toEqual([index, otherIndex].sort());
+      if (dir) {
+        const after = await readFile(join(dir, 'issuer.json'), 'utf8');
+        for (const t of traces) expect(after).not.toContain(t);
+        expect(after).not.toMatch(/"(subject|actor|registration|credentialSubject)"/);
+      }
+      expect((await app.fetch(req('/badges/credentials/' + id, { cookies: browser }))).status).toBe(404);
+      expect((await call('get_badges')).data.badges).toEqual([]);
+      expect(claimable(await claimPage(app, browser))).toEqual([]);
+    } finally {
+      if (dir) await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('a voided earning statement found on read revokes the credential', async () => {
@@ -625,6 +654,31 @@ describe('badges in option 1 (lms-launched)', () => {
     // get_record appends the issuer record: both earned statements and both credential ids.
     const record = (await second.call('get_record')).data;
     expect(record.issuerRecord.credentials.sort()).toEqual(['urn:uuid:' + firstId, 'urn:uuid:' + secondId].sort());
-    expect(earnedIn(record.issuerRecord.statements)).toHaveLength(2);
+    const kept = earnedIn(record.issuerRecord.statements);
+    expect(kept).toHaveLength(2);
+    // The copy sent inside the session is the very statement the issuer record keeps (R51): one id, one content.
+    const sent = earnedIn(o.lrs.statements())[0]!;
+    expect(kept.find((s) => s.id === sent.id)).toEqual(sent);
+    // The one claimed after terminated belongs to no session.
+    const after = kept.find((s) => s.id !== sent.id)!;
+    expect(after.context!.extensions).not.toHaveProperty([CMI5.extSessionId]);
+  });
+
+  it('a confirmed lesson badge stays listed and claimable when the LMS can no longer be read (R52)', async () => {
+    const o = await optionOne();
+    const { registration } = await firstLesson(o);
+    const lesson = await secondLesson(o, registration);
+    // Read once while the LMS answers: both lesson badges are confirmed in the issuer record.
+    expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+    // The LMS token stops working: every LMS request is refused.
+    o.lrs.failNext(1000, 401);
+    try {
+      expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+      expect(claimable(await claimPage(o.app, lesson.browser)).sort()).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+      const [id] = credentialLinks(await (await claim(o.app, lesson.browser, LESSON_BADGE, { did: 'did:example:wallet' })).text());
+      expect(await verifyCredential(await credential(o.app, lesson.browser, id!), await didDocs(o.app))).toEqual({ verified: true, errors: [] });
+    } finally {
+      o.lrs.failNext(0, 200);
+    }
   });
 });

@@ -297,10 +297,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -360,6 +356,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -393,10 +393,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -456,6 +452,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -489,10 +489,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -552,6 +548,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -596,10 +596,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -659,6 +655,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -703,10 +703,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -766,6 +762,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -810,10 +810,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -873,6 +869,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -910,10 +910,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -973,6 +969,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1010,10 +1010,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1073,6 +1069,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1129,10 +1129,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1192,6 +1188,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1226,10 +1226,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1289,6 +1285,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1323,10 +1323,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1386,6 +1382,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1439,10 +1439,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1502,6 +1498,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1544,10 +1544,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1607,6 +1603,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1656,10 +1656,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1719,6 +1715,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1768,10 +1768,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1831,6 +1827,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1880,10 +1880,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -1943,6 +1939,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -1996,10 +1996,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -2059,6 +2055,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -2113,10 +2113,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -2176,6 +2172,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -2225,10 +2225,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -2288,6 +2284,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -2337,10 +2337,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -2400,6 +2396,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -2449,10 +2449,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -2512,6 +2508,10 @@
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
           }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "included"
         },
         {
           "location": "$.context.contextActivities.category[*].id",
@@ -2554,10 +2554,6 @@
           "presence": "included"
         },
         {
-          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
-          "presence": "included"
-        },
-        {
           "location": "$.context.extensions['https://course-xapi-mcp.sqwrlz.com/xapi/extensions/rules-version']",
           "presence": "included"
         },
@@ -2616,6 +2612,13 @@
           "presence": "excluded",
           "scopeNote": {
             "en": "Applies to actors the course server mints. In LMS-launched custody the actor is the LMS-supplied agent, copied verbatim."
+          }
+        },
+        {
+          "location": "$.context.extensions['https://w3id.org/xapi/cmi5/context/extensions/sessionid']",
+          "presence": "recommended",
+          "scopeNote": {
+            "en": "Present only when earned is sent inside an open AU session (an LMS copy in LMS-launched custody); otherwise absent, since earned is the issuer's statement, not the AU's."
           }
         },
         {

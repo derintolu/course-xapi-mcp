@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe, expect, it } from 'vitest';
 import { ADL_VERBS, CMI5, CXM_ACTIVITY_TYPES, CXM_EXT, OB_XAPI, PRACTICE_CATEGORY, PROFILE_VERSION_IRI } from '../src/constants.ts';
-import { buildAllowed, buildDefined, buildEarned, checkProfile, isoDuration, validateStatement, type XapiStatement } from '../src/xapi/index.ts';
+import { buildAllowed, buildDefined, buildEarned, checkCmi5Order, checkProfile, isoDuration, validateStatement, type XapiStatement } from '../src/xapi/index.ts';
 import { AU, AU_REF, COURSE, REG, SESSION, clock, ctx } from './xapi-fixtures.ts';
 
 const cats = (s: XapiStatement) => (s.context.contextActivities?.category ?? []).map((a) => a.id);
@@ -169,5 +169,23 @@ describe('buildEarned', () => {
     expect(s.context.statement).toEqual({ objectType: 'StatementRef', id: earning });
     expect(cats(s)).toEqual([PROFILE_VERSION_IRI]);
     clean(s);
+  });
+
+  it('carries the cmi5 session id only when given one (sent inside an open AU session)', () => {
+    const badge = { id: 'https://example.org/badges/fix', name: 'Fixer' };
+    const credential = 'urn:uuid:11111111-1111-4111-8111-111111111111';
+    const { sessionId: _, ...outside } = ctx();
+    const alone = buildEarned(outside, badge, credential, '00000000-0000-4000-8000-0000000000aa', next());
+    expect(alone.context.extensions).not.toHaveProperty([CMI5.extSessionId]);
+    clean(alone);
+    expect(checkCmi5Order([alone])).toEqual([]);
+    const inside = buildEarned(ctx(), badge, credential, '00000000-0000-4000-8000-0000000000aa', next());
+    expect(inside.context.extensions![CMI5.extSessionId]).toBe(SESSION);
+    // A session's contextTemplate needs that session.
+    expect(() => buildEarned({ ...outside, contextTemplate: { extensions: { [CMI5.extSessionId]: SESSION } } }, badge, credential, 'x', next())).toThrow(/session id/);
+    // Any other statement without a session id still fails the profile.
+    const unsessioned = buildAllowed(ctx(), 'experienced', { id: AU + '/beats/intro', kind: 'beat', name: 'Intro' }, AU_REF, next());
+    delete unsessioned.context.extensions![CMI5.extSessionId];
+    expect(checkProfile(unsessioned)).toContain('the cmi5 sessionid context extension is required');
   });
 });

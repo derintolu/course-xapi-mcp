@@ -41,7 +41,10 @@ export function checkProfile(s: XapiStatement, o: { lmsActor?: boolean } = {}): 
 
   if (!s.context?.registration) e.push('context.registration is required');
   const ext = s.context?.extensions ?? {};
-  if (typeof ext[CMI5.extSessionId] !== 'string' || !ext[CMI5.extSessionId]) e.push('the cmi5 sessionid context extension is required');
+  // `earned` is the issuer's statement: it carries the session id only when sent inside an open AU session.
+  const earned = s.verb?.id === OB_XAPI.earned && !cats.includes(CMI5.categoryCmi5);
+  const session = ext[CMI5.extSessionId];
+  if (earned ? session !== undefined && (typeof session !== 'string' || !session) : typeof session !== 'string' || !session) e.push('the cmi5 sessionid context extension is required');
   if (typeof ext[CXM_EXT['rules-version']] !== 'string') e.push('the rules-version context extension is required');
   if (!CUSTODY_OPTIONS.includes(ext[CXM_EXT.custody] as never)) e.push(`the custody context extension must be one of ${CUSTODY_OPTIONS.join(', ')}`);
   if (!grouping.length) e.push('context.contextActivities.grouping must hold the publisher id and the course');

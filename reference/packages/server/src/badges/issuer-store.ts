@@ -15,6 +15,8 @@ export interface AwardRecord {
   earningStatementId: string;
   testedOut: number;
   earnedAt: string;
+  /** The record holder accepted the earning statement (it was read back, or is on the delivery receipt). */
+  confirmed?: boolean;
 }
 
 /** A signed credential. One per learner subject and badge. */
@@ -41,8 +43,13 @@ export interface IssuerStore {
   addAward(a: AwardRecord): Promise<boolean>;
   /** Replaces the subject's award for `a.badgeId` (it must exist). */
   replaceAward(a: AwardRecord): Promise<void>;
-  /** Forgets every award of the subject (credentials stay, for their status). */
-  deleteAwards(subject: string): Promise<void>;
+  /** Sets `confirmed` on the subject's award for the badge, if it still has this earning statement. */
+  setConfirmed(subject: string, badgeId: string, earningStatementId: string, confirmed: boolean): Promise<void>;
+  /**
+   * The learner's record was erased: sets the status bit of each of the subject's credentials, then removes the
+   * subject's awards and credentials. Only the status bits stay. Returns how many credentials were not revoked before.
+   */
+  eraseLearner(subject: string): Promise<number>;
   credentials(subject: string): Promise<CredentialRecord[]>;
   credential(id: string): Promise<CredentialRecord | undefined>;
   /** Stores `c` unless the subject already has a credential for this badge; returns the one stored. */
@@ -94,9 +101,24 @@ abstract class BaseIssuerStore implements IssuerStore {
     });
   }
 
-  deleteAwards(subject: string) {
+  setConfirmed(subject: string, badgeId: string, earningStatementId: string, confirmed: boolean) {
     return this.tx(true, (d) => {
+      const a = d.awards.find((x) => x.subject === subject && x.badgeId === badgeId && x.earningStatementId === earningStatementId);
+      if (a) a.confirmed = confirmed;
+    });
+  }
+
+  eraseLearner(subject: string) {
+    return this.tx(true, (d) => {
+      let n = 0;
+      for (const c of d.credentials) {
+        if (c.subject !== subject) continue;
+        if (!c.revoked) n++;
+        if (!d.revoked.includes(c.statusIndex)) d.revoked.push(c.statusIndex);
+      }
+      d.credentials = d.credentials.filter((c) => c.subject !== subject);
       d.awards = d.awards.filter((a) => a.subject !== subject);
+      return n;
     });
   }
 

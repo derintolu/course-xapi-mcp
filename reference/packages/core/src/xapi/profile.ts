@@ -68,7 +68,6 @@ const minted = en('Applies to actors the course server mints. In LMS-launched cu
 
 const common = [
   { location: '$.context.registration', presence: 'included' },
-  extRule('context', CMI5.extSessionId),
   extRule('context', CXM_EXT['rules-version']),
   extRule('context', CXM_EXT.custody, { presence: 'included', any: [...CUSTODY_OPTIONS] }),
   { location: '$.context.contextActivities.grouping[*].id', presence: 'included', scopeNote: en('The publisher id of the AU (from the cmi5 contextTemplate) and the course id.') },
@@ -87,6 +86,11 @@ function name(t: Template): string {
 
 function rules(t: Template): object[] {
   const r: object[] = [];
+  r.push(
+    t.kind === 'badge'
+      ? extRule('context', CMI5.extSessionId, { presence: 'recommended', scopeNote: en('Present only when earned is sent inside an open AU session (an LMS copy in LMS-launched custody); otherwise absent, since earned is the issuer\'s statement, not the AU\'s.') })
+      : extRule('context', CMI5.extSessionId),
+  );
   if (t.kind === 'defined') {
     r.push({ location: cat, presence: 'included', any: [CMI5.categoryCmi5] });
     const outcome = ['completed', 'passed', 'failed', 'waived'].includes(t.verb);
