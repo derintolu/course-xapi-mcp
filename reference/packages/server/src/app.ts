@@ -88,7 +88,7 @@ export function createApp(o: AppOptions): App {
   const option = custody.option;
   if (option !== 'practice' && !o.auth) throw new TypeError(`custody ${option} needs the authorization server`);
   if (option === 'lms-launched' && !o.bridge) throw new TypeError('custody lms-launched needs the launch bridge');
-  const server = createCourseServer({ course, custody, practice: o.practice, authenticate: o.auth?.authenticate, badges: o.badges, publicUrl, now: o.now });
+  const server = createCourseServer({ course, custody, practice: o.practice, authenticate: o.auth?.authenticate, hasLearner: o.auth?.hasLearner, badges: o.badges, publicUrl, now: o.now });
   const records = o.auth
     ? createRecordPages({ course, custody, auth: o.auth, serverStore: o.serverStore, revokeLearner: o.badges?.revokeLearner, retention: o.retention ?? DEFAULT_RETENTION })
     : async () => undefined;

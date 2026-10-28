@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT, importJWK, type JWK } from 'jose';
 import { DEFAULTS, MemoryLaunchStore, actorKey, type AuthServer, type CourseModel, type LaunchContext, type LearnerRef } from '@course-xapi-mcp/core';
 import { PAIRING_GUESS_BUDGET, createAuthServer } from '../src/auth/auth-server.ts';
-import { CapacityError, MemoryAuthStore } from '../src/auth/stores.ts';
+import { DirectoryAuthStore } from '../src/auth/directory-store.ts';
+import { CapacityError, MemoryAuthStore, type AuthStore } from '../src/auth/stores.ts';
 import { guardedLookup, isPublicAddress } from '../src/auth/clients.ts';
 
 const PUBLIC = 'https://course.example';
@@ -112,7 +116,7 @@ async function exchange(s: AuthServer, clientId: string, code: string, verifier:
 
 const bearer = (token: string) => new Request(RESOURCE, { method: 'POST', headers: { authorization: 'Bearer ' + token } });
 
-function accountsServer(store = new MemoryAuthStore({ now })) {
+function accountsServer(store: AuthStore = new MemoryAuthStore({ now })) {
   return createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts', store, now });
 }
 
@@ -486,6 +490,57 @@ describe('accounts mode', () => {
     expect(refreshed.status).toBe(400);
     expect((await accountsLogin(s, client.client_id, pkce().challenge, 'signin', 'ada.l', 'correct horse battery')).status).toBe(400);
     expect(await s.authenticate(bearer(otherTokens.access_token))).not.toBeInstanceOf(Response);
+  });
+
+  it.each(['refresh_token', 'authorization_code'] as const)('a %s grant an erase overtakes issues nothing, and leaves nothing of the learner on disk', async (grant) => {
+    const dir = await mkdtemp(join(tmpdir(), 'cxm-auth-'));
+    try {
+      const inner = await DirectoryAuthStore.open(join(dir, 'auth'), { now });
+      // The grant stalls right after the store step that precedes issuing (the rotation, or recording the code's family).
+      const stalled = grant === 'refresh_token' ? 'rotateRefresh' : 'setCodeFamily';
+      let hold: Promise<void> | undefined;
+      let release!: () => void;
+      let entered!: () => void;
+      const inStep = new Promise<void>((r) => (entered = r));
+      const store = new Proxy(inner, {
+        get(target, p) {
+          const v = Reflect.get(target, p) as unknown;
+          if (typeof v !== 'function') return v;
+          if (p !== stalled) return v.bind(target);
+          return async (...args: unknown[]) => {
+            const out = await (v as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+            if (hold) {
+              entered();
+              await hold;
+            }
+            return out;
+          };
+        },
+      }) as AuthStore;
+      const s = accountsServer(store);
+      const { client, code, verifier } = await fullAccountsFlow(s);
+      const subject = (await inner.getAccount('ada.l'))!.id;
+      let body: Record<string, string>;
+      if (grant === 'refresh_token') {
+        const { body: tokens } = await exchange(s, client.client_id, code, verifier);
+        body = { grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: client.client_id };
+      } else {
+        body = { grant_type: 'authorization_code', code, client_id: client.client_id, redirect_uri: REDIRECT, code_verifier: verifier, resource: RESOURCE };
+      }
+      hold = new Promise<void>((r) => (release = r));
+      const pending = route(s, tokenReq(body));
+      await inStep;
+      await s.eraseLearner(subject);
+      release();
+      const res = await pending;
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as Record<string, string>).error).toBe('invalid_grant');
+      for (const e of await readdir(join(dir, 'auth'), { withFileTypes: true, recursive: true })) {
+        if (e.isFile()) expect(await readFile(join(e.parentPath, e.name), 'utf8')).not.toContain(subject);
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('validates usernames and passwords and refuses a taken username', async () => {

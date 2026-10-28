@@ -539,6 +539,57 @@ describe('record erase and tool calls', () => {
   });
 });
 
+describe('record erase and a call authenticated before it (R68)', () => {
+  it('a tool call signed in before the erase, reaching the lock after it, writes nothing and says why', async () => {
+    const course = await loadExample();
+    const store = new MemoryServerStore();
+    const signingKey = generateKeyPairSync('ed25519').privateKey.export({ format: 'jwk' }) as JWK;
+    const auth = createAuthServer({ publicUrl: PUBLIC, course, signingKey, mode: 'accounts' });
+    // Authentication stalls once it has the learner, while the erase runs.
+    let gate: Promise<void> | undefined;
+    let open!: () => void;
+    let authenticated!: () => void;
+    const signedIn = new Promise<void>((r) => (authenticated = r));
+    const stalling = {
+      ...auth,
+      authenticate: async (r: Request) => {
+        const learner = await auth.authenticate(r);
+        if (gate) {
+          authenticated();
+          await gate;
+        }
+        return learner;
+      },
+    };
+    const app = createApp({
+      course,
+      publicUrl: PUBLIC,
+      custody: createServerKeptCustody({ store, publicUrl: PUBLIC, courseTitle: course.title }),
+      practice: createPracticeCustody({ courseId: course.id }),
+      auth: stalling,
+      serverStore: store,
+    });
+    apps.push(app);
+    const browser = jar();
+    const token = await signUp(app, browser);
+    const subject = (JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString()) as { sub: string }).sub;
+    const call = await mcp(app, '/mcp', token);
+    const csrf = csrfOf(await (await app.fetch(req('/record', { cookies: browser }))).text())!;
+
+    gate = new Promise<void>((r) => (open = r));
+    const inFlight = call('start_placement');
+    await signedIn;
+    gate = undefined;
+    expect((await app.fetch(formPost('/record', { action: 'delete', csrf }, browser))).status).toBe(200);
+    open();
+    const result = await inFlight;
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.raw.content)).toMatch(/account was deleted/);
+    expect(await store.getState(subject)).toBeUndefined();
+    expect(await store.statements(subject)).toEqual([]);
+  });
+});
+
 describe('record holder links and the option 1 receipt', () => {
   /** An option 1 app over a test LRS, with a simulator launching the example's lessons and a clock the test advances. */
   async function option1(env: Record<string, string> = {}, sweepEveryMs?: number) {

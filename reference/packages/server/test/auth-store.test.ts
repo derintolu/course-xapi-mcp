@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DirectoryAuthStore } from '../src/auth/directory-store.ts';
+import { DirectoryAuthStore, highestSeq } from '../src/auth/directory-store.ts';
 import { CapacityError, MemoryAuthStore, type AuthRequest, type AuthStore, type MemoryAuthStoreOptions } from '../src/auth/stores.ts';
 
 const T0 = Date.parse('2026-10-27T10:00:00Z');
@@ -99,6 +99,17 @@ describe.each(kinds)('AuthStore contract: %s', (_name, make) => {
     await s.putRefresh('new', refresh('s', 'other'));
     expect(await s.rotateRefresh('old')).toBeUndefined();
     expect(await s.rotateRefresh('new')).toMatchObject({ used: false, token: { subject: 's', familyId: 'other' } });
+  });
+
+  it('putRefresh says whether it kept the token: not for a revoked family, nor (when asked) for a subject with no account', async () => {
+    const s = await make();
+    await s.createAccount(account('sub-1', 'ada.l'));
+    expect(await s.putRefresh('kept', refresh('sub-1', 'fam'), { requireAccount: true })).toBe(true);
+    expect(await s.putRefresh('nobody', refresh('sub-x', 'fam-x'), { requireAccount: true })).toBe(false);
+    expect(await s.rotateRefresh('nobody')).toBeUndefined();
+    expect(await s.putRefresh('any', refresh('sub-x', 'fam-x'))).toBe(true);
+    await s.revokeFamily('fam', 'sub-1');
+    expect(await s.putRefresh('late', refresh('sub-1', 'fam'), { requireAccount: true })).toBe(false);
   });
 
   it('keeps sessions until they expire', async () => {
@@ -241,6 +252,13 @@ describe('DirectoryAuthStore', () => {
     expect(await again.getClient('a')).toEqual(held);
     expect(await again.rotateRefresh('h')).toMatchObject({ used: true });
     expect((await files(dir)).filter((f) => f.path.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('finds the last write of a table of any size (a refresh table can pass 100 000 files)', () => {
+    const entries = Array.from({ length: 300_000 }, (_, i) => ({ seq: (i * 7919) % 300_000 }));
+    expect(highestSeq(0, entries)).toBe(299_999);
+    expect(highestSeq(400_000, entries)).toBe(400_000);
+    expect(highestSeq(5, [])).toBe(5);
   });
 
   it('expired refresh tokens and revoked families are dropped from disk', async () => {

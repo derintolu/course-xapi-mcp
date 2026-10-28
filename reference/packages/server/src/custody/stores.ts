@@ -3,11 +3,13 @@
 // Every write takes the etag the caller read; a mismatch throws StoreConflictError. Writing with no etag
 // means "this is new" and conflicts when something is already there.
 // Directory stores name files by the SHA-256 of the handle or subject, so a folder listing reveals neither.
+// The server-kept store's folders are 0700 and its files 0600, each written atomically (R68).
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DEFAULTS, StoreConflictError, type LearnerState, type XapiStatement } from '@course-xapi-mcp/core';
 import type { PracticeRecord } from '@course-xapi-mcp/core/practice';
+import { privateDir, writeFileAtomic } from '../private-files.ts';
 import { createKeyedMutex } from './mutex.ts';
 
 export interface PracticeStore {
@@ -222,6 +224,13 @@ export class DirectoryServerStore implements ServerStore {
     return join(this.#dir, sha256(subject));
   }
 
+  /** Writes one of the learner's files: folders 0700, the file 0600, through a synced temporary file and a rename. */
+  async #write(folder: string, name: string, value: unknown) {
+    await privateDir(this.#dir);
+    await privateDir(folder);
+    await writeFileAtomic(join(folder, name), JSON.stringify(value));
+  }
+
   async getState(subject: string) {
     return readJson<{ state: LearnerState; etag: string }>(join(this.#folder(subject), 'state.json'));
   }
@@ -230,9 +239,8 @@ export class DirectoryServerStore implements ServerStore {
     const folder = this.#folder(subject);
     return this.#lock(folder, async () => {
       checkEtag((await this.getState(subject))?.etag, etag);
-      await mkdir(folder, { recursive: true });
       const next = randomUUID();
-      await writeJson(join(folder, 'state.json'), { state, etag: next });
+      await this.#write(folder, 'state.json', { state, etag: next });
       return { etag: next };
     });
   }
@@ -240,8 +248,7 @@ export class DirectoryServerStore implements ServerStore {
   async append(subject: string, statements: XapiStatement[]) {
     const folder = this.#folder(subject);
     await this.#lock(folder, async () => {
-      await mkdir(folder, { recursive: true });
-      await writeJson(join(folder, 'statements.json'), appendNew(await this.statements(subject), statements));
+      await this.#write(folder, 'statements.json', appendNew(await this.statements(subject), statements));
     });
   }
 

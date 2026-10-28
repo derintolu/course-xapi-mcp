@@ -53,6 +53,8 @@ export interface ToolDeps {
   /** Set on a practice endpoint (the same object as `custody`). */
   practice?: PracticeCustody;
   badges?: BadgeService;
+  /** Official endpoint: false when the learner's account was erased; checked inside the learner's lock before a write. */
+  hasLearner?: (subject: string) => Promise<boolean>;
   /** The practice endpoint's URL, on an official endpoint of a course that allows practice. */
   practiceUrl?: string;
   now: () => string;
@@ -71,6 +73,8 @@ const NO_STATE = 'this learner has no placement in this course yet; call start_p
 const NOT_HANDLE = 'that is not a practice handle; call start_placement to begin a practice run, or resume_practice to continue a practice copy';
 const NO_COPY = 'there is no practice run for this handle (practice runs are kept for 30 days); call start_placement to begin a new one, or resume_practice with your exported copy';
 const NO_PRACTICE_BADGES = 'practice runs cannot earn badges; this run is not an official record';
+const ERASED =
+  "this learner's account was deleted with their record, so nothing was written; ask the learner to sign in again through you (as a new learner) to start over";
 
 /**
  * A statement as the agent may see it: without `authority` and `stored`, which the record holder adds when it stores
@@ -218,6 +222,9 @@ export function createTools(d: ToolDeps) {
       const b = await bind(caller, args, { mint: o.fresh && !official });
       if ('error' in b) return err(b.error);
       const l = b.learner;
+      // Signed in before an erase that ran while this call waited for the lock: writing now would recreate a record
+      // nobody can reach or delete (R68).
+      if (official && d.hasLearner && !(await d.hasLearner(l.subject))) return err(ERASED);
       const env = envOf(b, caller);
       const loaded = await guarded(() => custody.load(l));
       let { state, etag } = loaded;

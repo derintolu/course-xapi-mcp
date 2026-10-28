@@ -33,6 +33,8 @@ export interface FederationHooks {
 export interface LearnerAuthServer extends AuthServer {
   /** Forgets everything kept to sign this learner subject in: account, refresh tokens, codes, sessions. Takes no learner lock. */
   eraseLearner(subject: string): Promise<void>;
+  /** False once the learner's account was erased (accounts mode); always true in the other modes. */
+  hasLearner(subject: string): Promise<boolean>;
 }
 
 export interface AuthServerOptions {
@@ -310,7 +312,13 @@ export function createAuthServer(o: AuthServerOptions): LearnerAuthServer {
 
   async function issueTokens(grant: Grant, clientId: string, familyId: string): Promise<Response> {
     const refresh = newSecret();
-    await store.putRefresh(secretHash(refresh), { ...grant, clientId, familyId, expiresAt: now() + DEFAULTS.refreshTokenTtlS * 1000 });
+    // In accounts mode nothing is issued for an account that is gone, even one erased while this grant ran.
+    const kept = await store.putRefresh(
+      secretHash(refresh),
+      { ...grant, clientId, familyId, expiresAt: now() + DEFAULTS.refreshTokenTtlS * 1000 },
+      { requireAccount: o.mode === 'accounts' },
+    );
+    if (!kept) return oauthError('invalid_grant', 'this sign-in is no longer valid; sign in again');
     const accessToken = await (await accessTokens()).sign(grant);
     return json(
       { access_token: accessToken, token_type: 'Bearer', expires_in: DEFAULTS.accessTokenTtlS, refresh_token: refresh, scope: SCOPE },
@@ -452,5 +460,6 @@ export function createAuthServer(o: AuthServerOptions): LearnerAuthServer {
     },
 
     eraseLearner: (subject) => store.eraseLearner(subject),
+    hasLearner: async (subject) => o.mode !== 'accounts' || store.hasAccount(subject),
   };
 }

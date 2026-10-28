@@ -76,8 +76,11 @@ export interface AuthStore {
   redeemCode(hash: string): Promise<{ code: CodeRecord; used: boolean } | undefined>;
   setCodeFamily(hash: string, familyId: string): Promise<void>;
 
-  /** A token of a revoked family is not kept. */
-  putRefresh(hash: string, r: RefreshRecord): Promise<void>;
+  /**
+   * Keeps the token and returns true. Returns false and keeps nothing when its family is revoked, or when
+   * `requireAccount` is set and the subject has no account (it was erased while the token was being issued).
+   */
+  putRefresh(hash: string, r: RefreshRecord, o?: { requireAccount?: boolean }): Promise<boolean>;
   /** Marks the token rotated and returns it; `used` is true when it had already been rotated. Undefined when unknown or revoked. */
   rotateRefresh(hash: string): Promise<{ token: RefreshRecord; used: boolean } | undefined>;
   /** Drops the family's refresh tokens and refuses any later one of it; `subject` is whose family it is. */
@@ -280,11 +283,14 @@ export class MemoryAuthStore implements AuthStore {
     if (c) c.familyId = familyId;
   }
 
-  async putRefresh(hash: string, r: RefreshRecord) {
+  async putRefresh(hash: string, r: RefreshRecord, o: { requireAccount?: boolean } = {}) {
     const now = this.#now();
     const expired = [...this.#refresh].filter(([, x]) => x.expiresAt <= now).map(([k]) => k);
     for (const k of expired) this.#refresh.delete(k);
-    if (!this.#revoked.has(r.familyId)) {
+    // Checked in the same step as the token is added, so an erase either comes first (and the token is refused)
+    // or finds the token and deletes it.
+    const keep = !this.#revoked.has(r.familyId) && (!o.requireAccount || this.#subjects.has(r.subject));
+    if (keep) {
       const kept = { ...structuredClone(r), used: false };
       this.#refresh.set(hash, kept);
       try {
@@ -295,6 +301,7 @@ export class MemoryAuthStore implements AuthStore {
       }
     }
     await this.#deleted('refresh', expired);
+    return keep;
   }
   async rotateRefresh(hash: string) {
     const r = this.#refresh.get(hash);
@@ -389,7 +396,8 @@ export class MemoryAuthStore implements AuthStore {
     const account = this.#subjects.get(subject);
     this.#subjects.delete(subject);
     if (account) this.#accounts.delete(account);
-    // The account last: if this fails part way, the learner can still sign in and delete again.
+    // The account's file last: if a delete fails part way, the account is gone from this process but still on disk,
+    // so after a restart the learner can sign in and delete again.
     await this.#deleted('refresh', refresh);
     await this.#deleted('revoked', revoked);
     if (account) await this.#deleted('accounts', [account]);

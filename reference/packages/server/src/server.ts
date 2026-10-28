@@ -39,6 +39,8 @@ export interface CourseServerOptions {
   practice?: PracticeCustody;
   /** Turns a request into the learner, or into the 401 to answer with. Required unless custody is practice. */
   authenticate?: AuthServer['authenticate'];
+  /** False when the learner's account was erased after the request was authenticated: official writes are then refused. */
+  hasLearner?: (subject: string) => Promise<boolean>;
   badges?: BadgeService;
   /** The server's origin, as learners reach it. */
   publicUrl: string;
@@ -118,6 +120,7 @@ export function createCourseServer(o: CourseServerOptions): CourseServer {
       custody: endpointCustody,
       practice: kind === 'practice' ? practice : undefined,
       badges: kind === 'official' ? o.badges : undefined,
+      hasLearner: kind === 'official' ? o.hasLearner : undefined,
       practiceUrl: kind === 'official' ? practiceUrl : undefined,
       now,
       uuid,

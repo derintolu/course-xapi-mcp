@@ -9,10 +9,11 @@
 // refresh token keys are the SHA-256 of the token; nothing raw that a client presents is written.
 // Every file is written to a temporary file in the same folder, synced, then renamed over the old one.
 // One process per folder: the locks here serialise writes inside this process only.
-import { createHash, randomUUID } from 'node:crypto';
-import { chmod, mkdir, open, readdir, readFile, rename, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createKeyedMutex } from '../custody/mutex.ts';
+import { privateDir, syncDir, writeFileAtomic } from '../private-files.ts';
 import { MemoryAuthStore, type DurableTable, type MemoryAuthStoreOptions } from './stores.ts';
 
 const TABLES: DurableTable[] = ['accounts', 'clients', 'refresh', 'revoked'];
@@ -27,42 +28,12 @@ interface EntryFile {
   value: unknown;
 }
 
-/** Makes the rename that just happened in `dir` durable. Not every platform can sync a folder; there it is skipped. */
-async function syncDir(dir: string) {
-  let fh;
-  try {
-    fh = await open(dir, 'r');
-    await fh.sync();
-  } catch {
-    // The rename itself is atomic either way.
-  } finally {
-    await fh?.close();
-  }
-}
-
-/** Writes `text` to `file` (mode 0600) through a synced temporary file and a rename; on failure no temporary file is left. */
-async function writeFileAtomic(file: string, text: string): Promise<void> {
-  const tmp = `${file}.${randomUUID()}.tmp`;
-  let fh;
-  try {
-    fh = await open(tmp, 'wx', 0o600);
-    await fh.writeFile(text);
-    await fh.sync();
-    await fh.close();
-    fh = undefined;
-    await rename(tmp, file);
-  } catch (e) {
-    await fh?.close().catch(() => undefined);
-    await rm(tmp, { force: true });
-    throw e;
-  }
-  await syncDir(dirname(file));
-}
-
-/** Creates `dir` if needed and makes it 0700, whatever made it before. */
-async function privateDir(dir: string) {
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  await chmod(dir, 0o700);
+/** The highest `seq` of `entries`, or `start` when that is higher. */
+export function highestSeq(start: number, entries: { seq: number }[]): number {
+  // A loop, not Math.max(...entries): spreading one argument per file overflows the stack past about 100 000 files.
+  let high = start;
+  for (const e of entries) if (e.seq > high) high = e.seq;
+  return high;
 }
 
 /**
@@ -97,7 +68,7 @@ export class DirectoryAuthStore extends MemoryAuthStore {
       }
       entries.sort((a, b) => a.seq - b.seq);
       for (const e of entries) store.restore(table, e.key, e.value);
-      store.#seq = Math.max(store.#seq, ...entries.map((e) => e.seq));
+      store.#seq = highestSeq(store.#seq, entries);
     }
     await store.restored();
     return store;

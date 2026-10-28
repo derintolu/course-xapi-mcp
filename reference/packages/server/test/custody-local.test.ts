@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -297,6 +298,22 @@ describe('DirectoryServerStore', () => {
     const all = await names(dir);
     expect(all.length).toBeGreaterThan(0);
     for (const name of all) expect(name).not.toContain(SUBJECT);
+  });
+
+  it('writes learner files 0600 in folders 0700 (R68), and leaves no temporary file', async () => {
+    const dir = join(await tempDir(), 'server');
+    // A folder some other step made with the usual 0755 is narrowed too.
+    await mkdir(dir, { mode: 0o755 });
+    const store = new DirectoryServerStore(dir);
+    await store.putState(SUBJECT, state());
+    await store.append(SUBJECT, [stmt(officialActor)]);
+    expect((await stat(dir)).mode & 0o777).toBe(0o700);
+    const entries = await readdir(dir, { withFileTypes: true, recursive: true });
+    expect(entries.map((e) => e.name).sort()).toEqual([createHash('sha256').update(SUBJECT).digest('hex'), 'state.json', 'statements.json'].sort());
+    for (const e of entries) {
+      const mode = (await stat(join(e.parentPath, e.name))).mode & 0o777;
+      expect(mode).toBe(e.isDirectory() ? 0o700 : 0o600);
+    }
   });
 
   it('survives a new instance over the same folder', async () => {
