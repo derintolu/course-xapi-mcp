@@ -3,7 +3,8 @@
 // option (LMS's LRS, the author's LRS, the server's own store), viewing and exporting, registrations and restarts.
 import { randomBytes, createHash } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { XapiAgent, XapiStatement } from '@course-xapi-mcp/core';
+import { actorKey, type XapiAgent, type XapiStatement } from '@course-xapi-mcp/core';
+import type { StateScope } from '../lib/index.ts';
 import { validateStatement } from '@course-xapi-mcp/core/xapi';
 import {
   COURSE_ID,
@@ -61,6 +62,35 @@ function lrsFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = { ...lrsHeaders, ...(init.headers as Record<string, string>) };
   if (OPTION1) return lms!.lrs.fetch(new Request(`${lms!.lrsUrl}/${path}`, { ...init, headers }));
   return fetch(`${LRS_URL!.replace(/\/+$/, '')}/${path}`, { ...init, headers });
+}
+
+/** The query that names one State API document. */
+const scopeQuery = (d: StateScope) => {
+  const q = new URLSearchParams({ activityId: d.activityId, agent: JSON.stringify(d.agent), stateId: d.stateId });
+  if (d.registration) q.set('registration', d.registration);
+  return q;
+};
+
+/**
+ * The State API documents the server wrote for this learner, found from traffic the suite sees, not from where a
+ * server is expected to keep them. Option 1: the PUTs the server sent the LMS's LRS with this learner's launch tokens.
+ * Option 2: the bundled test LRS lists the documents it holds; those under this learner's actor.
+ */
+async function stateDocuments(l: Learner): Promise<StateScope[]> {
+  if (OPTION1) {
+    const tokens = new Set(lms!.launches.filter((x) => x.registration === l.registration).map((x) => 'Basic ' + x.token));
+    const found = new Map<string, StateScope>();
+    for (const r of lms!.requests) {
+      if (r.method !== 'PUT' || !r.path.endsWith('/activities/state') || !tokens.has(r.authorization ?? '')) continue;
+      const registration = r.query.get('registration');
+      const d: StateScope = { activityId: r.query.get('activityId')!, agent: JSON.parse(r.query.get('agent')!), ...(registration ? { registration } : {}), stateId: r.query.get('stateId')! };
+      found.set(scopeQuery(d).toString(), d);
+    }
+    return [...found.values()];
+  }
+  const actor = actorKey((await l.record())[0]!.actor);
+  const all = (await (await lrsFetch('cxm-test/state')).json()) as StateScope[];
+  return all.filter((d) => actorKey(d.agent) === actor);
 }
 
 const registrations = (list: XapiStatement[]) => [...new Set(list.map((s) => s.context?.registration))];
@@ -220,13 +250,11 @@ describe.skipIf(!OFFICIAL)('the record holder', () => {
     const l = await learner();
     await place(l, 'intro');
     ok(await l.call('next_beat'));
-    const actor = (await l.record()).find((s) => verbOf(s) !== 'launched')!.actor;
-    // Erase the working state in the LRS: with and without the registration.
-    const regs = registrations(await l.record());
-    for (const registration of ['', ...regs]) {
-      const q = new URLSearchParams({ activityId: COURSE_ID, agent: JSON.stringify(actor) });
-      if (registration) q.set('registration', registration!);
-      const del = await lrsFetch(`activities/state?${q}`, { method: 'DELETE' });
+    // Erase every State API document the server wrote for this learner, wherever it put them.
+    const docs = await stateDocuments(l);
+    expect(docs.length).toBeGreaterThan(0);
+    for (const d of docs) {
+      const del = await lrsFetch(`activities/state?${scopeQuery(d)}`, { method: 'DELETE' });
       expect(del.status).toBe(204);
     }
     const r = await l.call('next_beat');
@@ -288,11 +316,12 @@ describe.skipIf(!OFFICIAL)('the record holder', () => {
     await place(l, 'intro');
     const held = await l.record();
     expect(held.length).toBeGreaterThan(0);
-    const actor = held[0]!.actor;
-    const ids = await (await lrsFetch(`activities/state?${new URLSearchParams({ activityId: COURSE_ID, agent: JSON.stringify(actor) })}`)).json();
-    expect(ids.length).toBeGreaterThan(0);
-    const withReg = await (await lrsFetch(`activities/state?${new URLSearchParams({ activityId: COURSE_ID, agent: JSON.stringify(actor), registration: held.at(-1)!.context.registration! })}`)).json();
-    expect(withReg.length).toBeGreaterThan(0);
+    const registration = held.at(-1)!.context.registration!;
+    const docs = await stateDocuments(l);
+    expect(docs.length).toBeGreaterThan(0);
+    // The registration is kept in the State API: as a document's scope, or inside a document.
+    const bodies = await Promise.all(docs.map(async (d) => (await lrsFetch(`activities/state?${scopeQuery(d)}`)).text()));
+    expect(docs.some((d) => d.registration === registration) || bodies.some((b) => b.includes(registration))).toBe(true);
   });
 
   it.skipIf(CUSTODY !== 'author-lrs')('[CXM-CUS-012] option 2: get_record and the export page are both read from the LRS', async () => {

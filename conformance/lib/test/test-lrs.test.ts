@@ -150,6 +150,22 @@ describe('test LRS', () => {
     expect((await send(lrs, '/about', { auth: 'Basic secret-token' })).status).toBe(200);
   });
 
+  it('lists its state documents with their scope, in-process and at /cxm-test/state', async () => {
+    const lrs = createTestLrs();
+    await send(lrs, stateQuery('one'), { method: 'PUT', body: '{}' });
+    await send(lrs, stateQuery('two') + '&registration=6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b', { method: 'PUT', body: '{}' });
+    await send(lrs, '/agents/profile?agent=' + encodeURIComponent(AGENT) + '&profileId=p', { method: 'PUT', body: '{}' });
+    const want = [
+      { activityId: 'https://example.org/act', agent: JSON.parse(AGENT), stateId: 'one' },
+      { activityId: 'https://example.org/act', agent: JSON.parse(AGENT), registration: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b', stateId: 'two' },
+    ];
+    expect(lrs.stateDocuments()).toEqual(want);
+    expect(await (await send(lrs, '/cxm-test/state', { version: null })).json()).toEqual(want);
+    expect((await send(lrs, '/cxm-test/state', { auth: null })).status).toBe(401);
+    await send(lrs, stateQuery('one'), { method: 'DELETE' });
+    expect(lrs.stateDocuments()).toEqual([want[1]]);
+  });
+
   it('reset clears statements and documents', async () => {
     const lrs = createTestLrs();
     await send(lrs, '/statements', { method: 'POST', body: JSON.stringify(statement()) });

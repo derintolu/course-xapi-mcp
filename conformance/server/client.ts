@@ -138,13 +138,16 @@ export function plainText(v: unknown, out: string[] = []): string[] {
  * Every tool result, resource and prompt this module's clients received, in order. `text` is the raw JSON; `plain`
  * holds every string in it unescaped, one per line, for scans.
  */
-export const transcript: { tool: string; args: unknown; raw: any; text: string; plain: string }[] = [];
-const see = (tool: string, args: unknown, raw: unknown) => transcript.push({ tool, args, raw, text: JSON.stringify(raw), plain: plainText(raw).join('\n') });
+export const transcript: { conn: number; tool: string; args: unknown; raw: any; text: string; plain: string }[] = [];
+const see = (conn: number, tool: string, args: unknown, raw: unknown) => transcript.push({ conn, tool, args, raw, text: JSON.stringify(raw), plain: plainText(raw).join('\n') });
+let connections = 0;
 
-/** Results the agent sees outside the learner's own export (get_record and the record export resource). */
-export const agentVisible = () => transcript.filter((t) => t.tool !== 'get_record' && t.tool !== 'resource:course-xapi-mcp://record/export');
+/** The learner's own export: get_record and the record export resource. */
+export const isExport = (t: { tool: string }) => t.tool === 'get_record' || t.tool === 'resource:course-xapi-mcp://record/export';
 
 export interface Mcp {
+  /** This connection's number in the transcript. */
+  id: number;
   client: Client;
   call(tool: string, args?: Record<string, unknown>): Promise<Result>;
   tools(): Promise<any[]>;
@@ -167,12 +170,14 @@ export async function connect(o: { url?: string; token?: string; era?: 'modern' 
   const tools = async () => (listed ??= (await client.listTools()).tools);
   // Listing first makes the SDK check every structuredContent against the tool's output schema.
   await tools();
+  const id = ++connections;
   return {
+    id,
     client,
     tools,
     async call(tool, args = {}) {
       const raw: any = await client.callTool({ name: tool, arguments: args });
-      see(tool, args, raw);
+      see(id, tool, args, raw);
       return { tool, isError: Boolean(raw.isError), data: raw.structuredContent, raw };
     },
     close: () => client.close(),
@@ -181,7 +186,7 @@ export async function connect(o: { url?: string; token?: string; era?: 'modern' 
 
 export async function readResource(m: Mcp, uri: string): Promise<string> {
   const r = await m.client.readResource({ uri });
-  see('resource:' + uri, {}, r);
+  see(m.id, 'resource:' + uri, {}, r);
   return r.contents.map((c: any) => c.text ?? '').join('');
 }
 

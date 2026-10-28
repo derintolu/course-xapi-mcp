@@ -31,12 +31,24 @@ export interface TestLrs {
   registerFetch(id: string, token: string): void;
   /** Clears statements, documents, tokens, fetch registrations and queued failures. Credentials and versions stay. */
   reset(): void;
+  /** The State API documents held, with the scope each was written under. Also served as `GET <base>/cxm-test/state`. */
+  stateDocuments(): StateScope[];
+}
+
+/** Where a State API document lives: its activityId, agent (as written), registration if any, and stateId. */
+export interface StateScope {
+  activityId: string;
+  agent: XapiAgent;
+  registration?: string;
+  stateId: string;
 }
 
 interface Doc {
   body: string;
   contentType: string;
   etag: string;
+  /** State documents only. */
+  scope?: StateScope;
 }
 
 const PAGE_MAX = 100;
@@ -228,7 +240,10 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
       const failed = preconditions();
       if (failed) return failed;
       const body = await req.text();
-      const doc = { body, contentType: req.headers.get('content-type') ?? 'application/octet-stream', etag: etagOf(body) };
+      const q = url.searchParams;
+      const scope: StateScope | undefined =
+        kind === 'state' ? { activityId: q.get('activityId')!, agent: JSON.parse(q.get('agent')!) as XapiAgent, ...(q.get('registration') ? { registration: q.get('registration')! } : {}), stateId: k.id } : undefined;
+      const doc: Doc = { body, contentType: req.headers.get('content-type') ?? 'application/octet-stream', etag: etagOf(body), ...(scope ? { scope } : {}) };
       docs.set(k.key, doc);
       return new Response(null, { status: 204, headers: { etag: doc.etag } });
     }
@@ -256,6 +271,8 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
     if (fetchId) return serveFetch(req, decodeURIComponent(fetchId[1]));
 
     if (!authorized(req)) return new Response('credentials required', { status: 401, headers: { 'www-authenticate': 'Basic realm="test-lrs"' } });
+    // Not xAPI: lets a test see where the system under test kept its state documents.
+    if (/\/cxm-test\/state\/?$/.test(url.pathname)) return req.method === 'GET' ? json(stateDocuments()) : text(405, 'GET only');
     const route = /\/(about|statements|activities\/state|agents\/profile)\/?$/.exec(url.pathname)?.[1];
     // xAPI: /about is how a client learns the versions, so it does not require the version header.
     if (route !== 'about' && !versionOk(req)) return text(400, `X-Experience-API-Version must be one of ${versions.join(', ')}`);
@@ -279,6 +296,10 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
     }
     for (const [k, v] of Object.entries(headers)) res.headers.set(k, v);
     return res;
+  }
+
+  function stateDocuments(): StateScope[] {
+    return [...docs.values()].flatMap((d) => (d.scope ? [structuredClone(d.scope)] : []));
   }
 
   async function toRequest(msg: IncomingMessage, base: string): Promise<Request> {
@@ -322,6 +343,7 @@ export function createTestLrs(o: TestLrsOptions = {}): TestLrs {
     addToken: (t) => void tokens.add(t),
     failNext: (n, status) => void (failures = { n, status }),
     registerFetch: (id, token) => void fetches.set(id, { token, used: false }),
+    stateDocuments,
     reset() {
       stored = [];
       byId = new Map();

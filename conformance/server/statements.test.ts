@@ -6,7 +6,7 @@
 //   B, placed at fix with intro and types skipped; the checkpoint fails until maxAttempts runs out, then passes.
 //   C, intro, then a success branch that jumps over types; the session at fix is ended with end_session.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CMI5, CXM_EXT, type XapiStatement } from '@course-xapi-mcp/core';
+import { CMI5, CXM_EXT, actorKey, type XapiStatement } from '@course-xapi-mcp/core';
 import { checkCmi5Order, checkProfile, validateStatement } from '@course-xapi-mcp/core/xapi';
 import {
   AU_IDS,
@@ -17,10 +17,10 @@ import {
   LMS_ACTOR,
   OFFICIAL,
   REPLY,
-  agentVisible,
   beatsUntil,
   finishFix,
   isDefined,
+  isExport,
   newLearner,
   newSince,
   ok,
@@ -49,6 +49,8 @@ const PLACEMENT_REASON = 'Placement chosen by the conformance client.';
 let lms: Lms | undefined;
 const learners: Learner[] = [];
 const runs: Record<'A' | 'B' | 'C', XapiStatement[]> = { A: [], B: [], C: [] };
+/** The learner (actor key) behind each connection that ran A, B or C. */
+const actorOfConnection = new Map<number, string>();
 
 async function run(name: keyof typeof runs, body: (l: Learner) => Promise<void>) {
   const l = await newLearner(lms);
@@ -57,6 +59,8 @@ async function run(name: keyof typeof runs, body: (l: Learner) => Promise<void>)
   const before = l.lms ? [] : await l.record();
   await body(l);
   runs[name] = await newSince(l, before);
+  const own = server(runs[name])[0];
+  if (own) actorOfConnection.set(l.mcp.id, actorKey(own.actor));
 }
 
 beforeAll(async () => {
@@ -378,16 +382,23 @@ describe('every result', () => {
     for (const t of transcript.filter((x) => !x.tool.startsWith('resource:'))) expect(t.raw.structuredContent.cxm.custody).toBe(CUSTODY);
   });
 
-  it('[CXM-SEC-004] no credential, token, actor account name or registration appears in a result the agent sees, except in the export', () => {
-    const secrets = new Set<string>();
+  it('[CXM-SEC-004] no credential or token in any result; no actor account name or registration outside the learner own export', () => {
+    // Credentials and tokens: never, the export included.
+    const credentials = new Set([btoa('test:test'), 'test:test', ...learners.flatMap((l) => (l.token ? [l.token] : [])), ...(lms?.launches ?? []).map((l) => l.token)]);
+    // Identifiers, with the learner they belong to.
+    const ids = new Map<string, string>();
     for (const s of all()) {
-      if (s.context?.registration) secrets.add(s.context.registration);
-      if (s.actor.account?.name) secrets.add(s.actor.account.name);
+      const who = actorKey(s.actor);
+      if (s.context?.registration) ids.set(s.context.registration, who);
+      if (s.actor.account?.name) ids.set(s.actor.account.name, who);
     }
-    for (const l of lms?.launches ?? []) secrets.add(l.token);
-    secrets.add(btoa('test:test'));
-    const visible = agentVisible();
-    expect(visible.length).toBeGreaterThan(40);
-    for (const t of visible) for (const secret of secrets) expect(t.plain.includes(secret), `${t.tool} shows ${secret}`).toBe(false);
+    expect(transcript.length).toBeGreaterThan(40);
+    expect(transcript.some(isExport)).toBe(true);
+    for (const t of transcript) {
+      for (const secret of credentials) expect(t.plain.includes(secret), `${t.tool} shows a credential`).toBe(false);
+      // The learner's own export may hold their own actor and registrations, and nobody else's.
+      const owner = isExport(t) ? actorOfConnection.get(t.conn) : undefined;
+      for (const [id, who] of ids) if (who !== owner) expect(t.plain.includes(id), `${t.tool} shows ${id}`).toBe(false);
+    }
   });
 });
