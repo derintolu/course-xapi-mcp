@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -126,9 +126,20 @@ describe('buildSite', () => {
   });
 
   it('publishes every schema with an $id that is its own URL', () => {
-    const schemas = bare.files.filter((f) => f.startsWith('schema/draft/') && f.endsWith('.json'));
-    expect(schemas.length).toBeGreaterThan(40);
+    const schemas = bare.files.filter((f) => f.startsWith('schema/') && f.endsWith('.json'));
+    expect(schemas.filter((f) => f.startsWith('schema/draft/')).length).toBeGreaterThan(40);
     for (const f of schemas) expect(JSON.parse(read(bare.dir, f)).$id, f).toBe(`${SITE}/${f}`);
+  });
+
+  it('builds each frozen snapshot in spec/<version> and schema/<version> beside the draft', () => {
+    const versions = readdirSync(new URL('../../spec/', import.meta.url)).filter((n) => /^\d+\.\d+$/.test(n));
+    expect(versions).toContain('0.2');
+    for (const v of versions) {
+      expect(bare.files).toContain(`spec/${v}/index.html`);
+      expect(bare.files).toContain(`spec/${v}/server/index.html`);
+      expect(bare.files).toContain(`schema/${v}/course.schema.json`);
+      expect(read(bare.dir, 'index.html')).toContain(`href="/spec/${v}/"`);
+    }
   });
 
   it('writes each section index once, with no <section>/index/index.html beside it', () => {
@@ -175,7 +186,7 @@ describe('hosting files', () => {
     const rules = headers.split(/\n\n+/).map((b) => b.trim().split('\n')).filter((l) => l[0]).map(([glob, ...lines]) => ({ re: new RegExp('^' + glob!.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/:\w+/g, '[^/]+').replace(/\*/g, '.*') + '$'), cors: lines.some((l) => /Access-Control-Allow-Origin/.test(l)) }));
     for (const f of bare.files) {
       const n = rules.filter((r) => r.cors && r.re.test('/' + f)).length;
-      const served = /\.(jsonld|xsd)$/.test(f) || f.startsWith('schema/draft/') && f.endsWith('.json');
+      const served = /\.(jsonld|xsd)$/.test(f) || f.startsWith('schema/') && f.endsWith('.json');
       expect(n, f).toBe(served ? 1 : 0);
     }
   });

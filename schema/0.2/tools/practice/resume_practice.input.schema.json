@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/0.2/tools/practice/resume_practice.input.schema.json",
+  "type": "object",
+  "properties": {
+    "record": {
+      "type": "string",
+      "maxLength": 4000000,
+      "description": "An exported practice copy, as JSON text."
+    }
+  },
+  "required": [
+    "record"
+  ],
+  "additionalProperties": false
+}

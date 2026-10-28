@@ -1,0 +1,109 @@
+{
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/0.2/tools/end_session.output.schema.json",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean"
+    },
+    "error": {
+      "type": "string"
+    },
+    "next": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "continue",
+            "return-to-lms",
+            "done"
+          ]
+        },
+        "lessonKey": {
+          "type": "string"
+        },
+        "returnURL": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "returnURL": {
+      "type": "string"
+    },
+    "delivery": {
+      "enum": [
+        "delivered",
+        "pending"
+      ]
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "course": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "full": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "digest",
+        "course",
+        "full"
+      ],
+      "additionalProperties": false
+    },
+    "cxm": {
+      "type": "object",
+      "properties": {
+        "custody": {
+          "enum": [
+            "lms-launched",
+            "author-lrs",
+            "server-kept",
+            "practice"
+          ]
+        },
+        "official": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "lesson": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "custody",
+        "official"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "ok",
+    "rules",
+    "cxm"
+  ],
+  "additionalProperties": true
+}

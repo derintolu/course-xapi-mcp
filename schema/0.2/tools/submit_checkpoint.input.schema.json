@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/0.2/tools/submit_checkpoint.input.schema.json",
+  "type": "object",
+  "properties": {
+    "response": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "The learner's checkpoint answer, word for word."
+    },
+    "files": {
+      "description": "For a code checkpoint: file name to the whole file, at most 10 files.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 65536
+      },
+      "maxProperties": 10
+    }
+  },
+  "required": [
+    "response"
+  ],
+  "additionalProperties": false
+}

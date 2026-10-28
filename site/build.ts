@@ -36,6 +36,17 @@ interface Concept {
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const pathOf = (iri: string) => iri.slice(SITE.length);
 
+/**
+ * The versions under `spec/` or `schema/`: `draft`, then each frozen snapshot (`0.2`, ...) that exists. A snapshot is
+ * built at /spec/<version>/ and /schema/<version>/ beside the draft.
+ */
+function versionsOf(top: string): string[] {
+  const dir = join(root, top);
+  const snapshots = existsSync(dir) ? readdirSync(dir).filter((n) => /^\d+\.\d+$/.test(n) && statSync(join(dir, n)).isDirectory()).sort() : [];
+  return ['draft', ...snapshots];
+}
+const versionLabel = (v: string) => (v === 'draft' ? `draft ${SPEC_VERSION}` : `version ${v} (frozen snapshot)`);
+
 // ---- Markdown -------------------------------------------------------------------------------------------------
 
 const slugify = (s: string) =>
@@ -142,7 +153,7 @@ function requiredIris(): string[] {
   add(irisIn(read('profile/xapi-profile.jsonld')));
   add(irisIn(JSON.stringify(buildProfile())));
   add(constantIris(constants));
-  for (const f of walkFiles(join(root, 'schema/draft')).filter((f) => f.endsWith('.json'))) add(irisIn(readFileSync(f, 'utf8')));
+  for (const v of versionsOf('schema')) for (const f of walkFiles(join(root, 'schema', v)).filter((f) => f.endsWith('.json'))) add(irisIn(readFileSync(f, 'utf8')));
   for (const code of Object.keys(ISSUE_CATALOG)) set.add(ERROR_HELP_BASE + code);
   return [...set].sort();
 }
@@ -203,7 +214,7 @@ export function hostingHeaders(files: readonly string[]): string {
     const link = `  Link: <${g}/index.jsonld>; rel="alternate"; type="application/ld+json"`;
     blocks.push(`${g}/index.jsonld\n${ld}`, `${g}\n${link}`, `${g}/\n${link}`);
   }
-  const schemaDirs = new Set(files.filter((f) => f.startsWith('schema/draft/') && f.endsWith('.json')).map((f) => posix.dirname(f)));
+  const schemaDirs = new Set(files.filter((f) => f.startsWith('schema/') && f.endsWith('.json')).map((f) => posix.dirname(f)));
   for (const d of [...schemaDirs].sort()) blocks.push(`/${d}/:file.json\n  Access-Control-Allow-Origin: *\n  Content-Type: application/schema+json`);
   blocks.push(`/course/v1/cxm.xsd\n  Access-Control-Allow-Origin: *\n  Content-Type: application/xml`);
   if (blocks.length > MAX_HEADER_BLOCKS) throw new Error(`_headers has ${blocks.length} blocks; the host allows ${MAX_HEADER_BLOCKS}`);
@@ -256,43 +267,45 @@ export async function buildSite(out: string, opts: BuildOptions = {}): Promise<B
       .filter((n) => n.endsWith('.md'))
       .sort()
       .map((f) => ({ f, name: f.slice(0, -3), url: f === 'index.md' ? urlBase : `${urlBase}${f.slice(0, -3)}/` }));
+  const specVersions = versionsOf('spec');
   const known = new Set<string>([
-    ...sectionPages(join(root, 'spec/draft'), '/spec/draft/').map((p) => p.url),
+    ...specVersions.flatMap((v) => sectionPages(join(root, 'spec', v), `/spec/${v}/`).map((p) => p.url)),
     ...(hasAuthoring ? sectionPages(authoringDir, '/authoring/').map((p) => p.url) : []),
   ]);
-  const markdownSection = (dir: string, urlBase: string, outBase: string) => {
+  const markdownSection = (dir: string, urlBase: string, outBase: string, label = versionLabel('draft')) => {
     for (const { f, name } of sectionPages(dir, urlBase)) {
       const { title, html } = renderMarkdown(readFileSync(join(dir, f), 'utf8'), urlBase, known, `${outBase}/${f}`);
-      const desc = `${title}, course-xapi-mcp draft ${SPEC_VERSION}.`;
+      const desc = `${title}, course-xapi-mcp ${label}.`;
       page(name === 'index' ? `${outBase}/index.html` : `${outBase}/${name}/index.html`, title, desc, html);
     }
   };
-  markdownSection(join(root, 'spec/draft'), '/spec/draft/', 'spec/draft');
+  for (const v of specVersions) markdownSection(join(root, 'spec', v), `/spec/${v}/`, `spec/${v}`, versionLabel(v));
   if (hasAuthoring) markdownSection(authoringDir, '/authoring/', 'authoring');
 
   // Schemas and the namespace.
-  const schemaDir = join(root, 'schema/draft');
-  const schemaFiles = walkFiles(schemaDir).filter((f) => f.endsWith('.json'));
-  for (const f of schemaFiles) copy(f, 'schema/draft/' + posix.relative(schemaDir, f).split('\\').join('/'));
-  copy(join(schemaDir, 'cxm.xsd'), 'course/v1/cxm.xsd');
-  copy(join(root, 'site/style.css'), 'style.css');
-
-  const schemaRows = schemaFiles
-    .map((f) => posix.relative(schemaDir, f).split('\\').join('/'))
-    .sort()
-    .map((rel) => `<li><a href="/schema/draft/${esc(rel)}">${esc(rel)}</a></li>`)
-    .join('\n');
-  page(
-    'schema/draft/index.html',
-    'Schemas',
-    'JSON Schemas for course packages and the course server tools.',
-    `<h1>Schemas</h1>
-<p class="lede">JSON Schema (draft ${SPEC_VERSION}) for the course and lesson files, and for the input and output of every course server tool. Where a schema and the prose disagree, the schema wins.</p>
+  for (const v of versionsOf('schema')) {
+    const schemaDir = join(root, 'schema', v);
+    const rels = walkFiles(schemaDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => posix.relative(schemaDir, f).split('\\').join('/'))
+      .sort();
+    for (const rel of rels) copy(join(schemaDir, rel), `schema/${v}/${rel}`);
+    const schemaRows = rels.map((rel) => `<li><a href="/schema/${v}/${esc(rel)}">${esc(rel)}</a></li>`).join('\n');
+    page(
+      `schema/${v}/index.html`,
+      v === 'draft' ? 'Schemas' : `Schemas, version ${v}`,
+      'JSON Schemas for course packages and the course server tools.',
+      `<h1>${v === 'draft' ? 'Schemas' : `Schemas, version ${esc(v)}`}</h1>
+<p class="lede">JSON Schema (${esc(versionLabel(v))}) for the course and lesson files, and for the input and output of every course server tool. Where a schema and the prose disagree, the schema wins.</p>
 <p>The XML Schema for the <code>cxm:</code> extension elements is <a href="/course/v1/cxm.xsd">cxm.xsd</a>.</p>
 <ul>
 ${schemaRows}
 </ul>`,
-  );
+    );
+  }
+  copy(join(root, 'schema/draft/cxm.xsd'), 'course/v1/cxm.xsd');
+  copy(join(root, 'site/style.css'), 'style.css');
+
   page(
     'course/v1/index.html',
     'The cxm namespace',
@@ -419,6 +432,7 @@ ${errorRows}
   );
 
   // Home.
+  const snapshots = specVersions.filter((v) => v !== 'draft');
   page(
     'index.html',
     'course-xapi-mcp',
@@ -429,6 +443,7 @@ ${errorRows}
 <li><a href="/spec/draft/">Specification</a>: the normative text, one page per conformance class.</li>
 ${hasAuthoring ? '<li><a href="/authoring/">Authoring guide</a>: converting an existing course, field by field.</li>\n' : ''}<li><a href="/xapi/">xAPI profile</a>: the verbs, activity types, extensions and statement templates, each with a JSON-LD document.</li>
 <li><a href="/schema/draft/">Schemas</a>: JSON Schema for packages and tools, and <a href="/course/v1/">the cxm XML namespace</a>.</li>
+${snapshots.map((v) => `<li>Version ${esc(v)}, frozen: <a href="/spec/${esc(v)}/">specification</a> and <a href="/schema/${esc(v)}/">schemas</a>.</li>\n`).join('')}
 <li><a href="/errors/">Validator codes</a>: every code with its fix.</li>
 <li><a href="/practice-learner/">Practice learner</a>: the account home page of practice runs.</li>
 </ul>`,

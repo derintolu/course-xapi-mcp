@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/0.2/tools/choose_placement.input.schema.json",
+  "type": "object",
+  "properties": {
+    "pathKey": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "An authored path key from start_placement."
+    },
+    "startLessonKey": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "A lesson key in that path."
+    },
+    "skip": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64
+      },
+      "description": "Lessons before the start lesson that the learner skips."
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 300,
+      "description": "One sentence on why this placement fits."
+    }
+  },
+  "required": [
+    "pathKey",
+    "startLessonKey",
+    "skip",
+    "reason"
+  ],
+  "additionalProperties": false
+}

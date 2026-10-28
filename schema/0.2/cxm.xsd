@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:cxm="https://course-xapi-mcp.sqwrlz.com/course/v1"
+           targetNamespace="https://course-xapi-mcp.sqwrlz.com/course/v1"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified">
+  <xs:annotation>
+    <xs:documentation>
+      Extension elements and attributes that course-xapi-mcp adds to a cmi5 course structure.
+    </xs:documentation>
+  </xs:annotation>
+
+  <xs:element name="course">
+    <xs:complexType>
+      <xs:attribute name="src" type="xs:anyURI" use="required"/>
+      <xs:attribute name="specVersion" type="xs:string" use="required"/>
+      <xs:attribute name="mcp" type="xs:anyURI" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="lesson">
+    <xs:complexType>
+      <xs:attribute name="src" type="xs:anyURI" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:element name="path">
+    <xs:complexType>
+      <xs:attribute name="src" type="xs:anyURI" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:attribute name="key" type="xs:string"/>
+
+  <xs:attribute name="role">
+    <xs:simpleType>
+      <xs:restriction base="xs:string">
+        <xs:enumeration value="placement"/>
+      </xs:restriction>
+    </xs:simpleType>
+  </xs:attribute>
+</xs:schema>

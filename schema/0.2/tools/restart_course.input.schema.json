@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/0.2/tools/restart_course.input.schema.json",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://course-xapi-mcp.sqwrlz.com/schema/0.2/tools/check_code.input.schema.json",
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "maxLength": 128,
+      "description": "The file name the step names."
+    },
+    "content": {
+      "type": "string",
+      "maxLength": 65536,
+      "description": "The whole file, as the learner edited it by hand."
+    }
+  },
+  "required": [
+    "file",
+    "content"
+  ],
+  "additionalProperties": false
+}
