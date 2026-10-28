@@ -31,6 +31,7 @@ import {
   didDocument,
   didWeb,
   generateKey,
+  keyPairMatches,
   signCredential,
   statusListCredential,
   type Assessed,
@@ -38,7 +39,7 @@ import {
   type SigningKey,
 } from '@course-xapi-mcp/badges';
 import { withLearnerLock } from '../custody/mutex.ts';
-import type { AppBadges, BadgeParts } from '../app.ts';
+import { ConfigError, type AppBadges, type BadgeParts, type IssuedCredential } from '../app.ts';
 import { DirectoryIssuerStore, MemoryIssuerStore, type AwardRecord, type CredentialRecord, type IssuerStore } from './issuer-store.ts';
 import { CLAIM_PATH, STATUS_LIST_PATH, createBadgeRoutes } from './routes.ts';
 
@@ -59,10 +60,10 @@ function authorityKey(authority: unknown): string | undefined {
   return JSON.stringify(sorted(authority));
 }
 
-/** The issuer record `get_record` appends in option 1: the `earned` statements and the credential ids. */
+/** The issuer record `get_record` appends in option 1: the `earned` statements and the credentials, each marked if revoked. */
 export interface IssuerRecordView {
   statements: XapiStatement[];
-  credentials: string[];
+  credentials: IssuedCredential[];
 }
 
 export type BadgeIssuer = AppBadges & { records(l: LearnerRef): Promise<IssuerRecordView> };
@@ -207,10 +208,27 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
   }
 
   /**
-   * Reads the official record: revokes credentials whose earning statement was voided, sends `earned` statements
-   * the record has not accepted yet (options 2 and 3) and, in option 1, finds path and course badges.
+   * Options 2 and 3: sends the `earned` statements the record has not accepted yet. Only under the learner's lock, and
+   * from the credentials as they are then, so it never writes beside a tool call or after an erase took them away.
    */
-  async function read(l: LearnerRef): Promise<Reading | undefined> {
+  async function resendEarned(l: LearnerRef): Promise<void> {
+    for (const c of await store.credentials(l.subject)) {
+      if (!c.earnedPending || c.revoked) continue;
+      try {
+        await custody.deliver(l, [c.earned]);
+        await store.setEarnedPending(c.id, false);
+      } catch {
+        // Sent again on the next read.
+      }
+    }
+  }
+
+  /**
+   * Reads the official record: revokes credentials whose earning statement was voided, sends `earned` statements
+   * the record has not accepted yet (options 2 and 3) and, in option 1, finds path and course badges. `locked`: the
+   * caller holds the learner's lock (a claim); otherwise the resend takes it.
+   */
+  async function read(l: LearnerRef, locked: boolean): Promise<Reading | undefined> {
     let statements: XapiStatement[];
     let receipt: string[];
     try {
@@ -229,17 +247,8 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
     }
     const present = new Set([...statements.map((s) => s.id), ...receipt].filter((id) => !voided.has(id)));
     if (option === 'lms-launched') await fromLmsSatisfied(l, statements, voided);
-    else {
-      for (const c of await store.credentials(l.subject)) {
-        if (!c.earnedPending || c.revoked) continue;
-        try {
-          await custody.deliver(l, [c.earned]);
-          await store.setEarnedPending(c.id, false);
-        } catch {
-          // Sent again on the next read.
-        }
-      }
-    }
+    else if (locked) await resendEarned(l);
+    else await withLearnerLock(l.subject, () => resendEarned(l));
     return { statements, present };
   }
 
@@ -248,8 +257,8 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
    * holder is seen to have accepted its earning statement, and stays so without a live read (option 1: the issuer
    * record keeps it when the LMS token no longer reads), until the statement is found voided.
    */
-  async function held(l: LearnerRef) {
-    const reading = await read(l);
+  async function held(l: LearnerRef, locked = false) {
+    const reading = await read(l, locked);
     const { all, live } = await credentialsOf(l.subject);
     const awards = await store.awards(l.subject);
     for (const a of awards) {
@@ -383,7 +392,7 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
       return withLearnerLock(l.subject, async () => {
         const badge = badges.get(badgeId);
         if (!badge) return { error: NOT_EARNED };
-        const h = await held(l);
+        const h = await held(l, true);
         const had = h.live.get(badgeId);
         if (had) return { credentialId: had.id, name: badge.name, again: true };
         const a = h.unclaimed.find((x) => x.badgeId === badgeId);
@@ -443,7 +452,7 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
 
     async records(l) {
       const all = await store.credentials(l.subject);
-      return { statements: all.map((c) => c.earned), credentials: all.map((c) => 'urn:uuid:' + c.id) };
+      return { statements: all.map((c) => c.earned), credentials: all.map((c) => ({ id: 'urn:uuid:' + c.id, revoked: c.revoked })) };
     },
   };
 }
@@ -455,6 +464,8 @@ export async function badgesFromConfig(p: BadgeParts, warn: (message: string) =>
   let key: SigningKey;
   if (p.config.badgeKey) {
     const { publicKeyMultibase, secretKeyMultibase } = p.config.badgeKey;
+    // Never echoes either key.
+    if (!(await keyPairMatches(p.config.badgeKey))) throw new ConfigError(['CXM_BADGE_KEY: the public key is not the one that belongs to the secret key, so no badge it signed would verify']);
     key = { id: `${did}#${publicKeyMultibase}`, controller: did, publicKeyMultibase, secretKeyMultibase };
   } else {
     key = await generateKey(did);

@@ -198,7 +198,8 @@ function parseLaunchData(body: unknown, auId: string): Pick<LaunchContext, 'cont
     moveOn: moveOn as LaunchContext['moveOn'],
     sessionId,
   };
-  if (typeof body.returnURL === 'string') out.returnURL = body.returnURL;
+  // Shown to the learner and the agent as the LMS link: http(s) only, never javascript: or data:.
+  if (typeof body.returnURL === 'string' && /^https?:$/.test(URL.parse(body.returnURL)?.protocol ?? '')) out.returnURL = body.returnURL;
   return out;
 }
 

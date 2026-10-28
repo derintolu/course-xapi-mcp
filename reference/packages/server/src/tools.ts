@@ -39,6 +39,7 @@ import {
   type StepData,
 } from '@course-xapi-mcp/core/session';
 import { awardsFor } from '@course-xapi-mcp/badges';
+import type { IssuedCredential } from './app.ts';
 import type { PracticeCustody } from './custody/practice.ts';
 import { withLearnerLock } from './custody/mutex.ts';
 import { BUSY, HOLDER_DOWN, StoreFailure, TREAT_AS_DATA, cxmBlock, guarded, makeResults, type Content, type ToolResult } from './results.ts';
@@ -104,7 +105,7 @@ function bindingOf(c: LaunchContext): LaunchBinding {
 const actorForOf = (c: Custody) => (c as Custody & { actorFor?: (subject: string) => Promise<XapiAgent> }).actorFor;
 /** Option 1: the badge issuer record, which `get_record` appends (design §11 BC-32). */
 const issuerRecordsOf = (b: BadgeService | undefined) =>
-  (b as (BadgeService & { records?: (l: LearnerRef) => Promise<{ statements: XapiStatement[]; credentials: string[] }> }) | undefined)?.records;
+  (b as (BadgeService & { records?: (l: LearnerRef) => Promise<{ statements: XapiStatement[]; credentials: IssuedCredential[] }> }) | undefined)?.records;
 /** The badge service's hook for statements the record holder accepted: it confirms the awards they earned (R52). */
 const onDeliveredOf = (b: BadgeService | undefined) => (b as (BadgeService & { onDelivered?: (l: LearnerRef, statementIds: string[]) => Promise<void> }) | undefined)?.onDelivered;
 const launchForOf = (c: Custody) => (c as Custody & { launchFor?: (l: LearnerRef, auKey?: string) => Promise<LaunchContext | { error: string }> }).launchFor;
@@ -353,7 +354,7 @@ export function createTools(d: ToolDeps) {
         const records = custody.option === 'lms-launched' ? issuerRecordsOf(d.badges) : undefined;
         if (!records) return ok(data, state.state);
         const issued = agentRecord(await guarded(() => records(b.learner)));
-        const issuerRecord = { holder: 'this course server, as badge issuer', ...issued, note: 'The badges this course server issued: the earned statements and the credential ids. It is authoritative for these badges.' };
+        const issuerRecord = { holder: 'this course server, as badge issuer', ...issued, note: 'The badges this course server issued: the earned statements and the credential ids. A credential marked revoked is no longer valid; never present it as a current badge. It is authoritative for these badges.' };
         return ok({ ...data, issuerRecord }, state.state);
       }
       const copy = await guarded(() => d.practice!.exportCopy(b.learner.handle!));

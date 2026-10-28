@@ -9,7 +9,8 @@ declare module '@digitalbazaar/ed25519-multikey' {
     secretKeyMultibase: string;
   }
   interface KeyPair {
-    signer(): unknown;
+    signer(): { sign(o: { data: Uint8Array }): Promise<Uint8Array> };
+    verifier(): { verify(o: { data: Uint8Array; signature: Uint8Array }): Promise<boolean> };
     export(o: { publicKey?: boolean; secretKey?: boolean; includeContext?: boolean }): Promise<Exported>;
   }
   export function generate(o?: { id?: string; controller?: string; seed?: Uint8Array }): Promise<KeyPair>;

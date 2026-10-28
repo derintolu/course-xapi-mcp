@@ -95,6 +95,22 @@ describe('launch', () => {
     expect(Date.parse(c.pairingExpiresAt) - Date.parse(c.initializedAt)).toBe(DEFAULTS.pairingTtlMs);
   });
 
+  it('keeps the LMS\'s returnURL only when it is an http(s) URL', async () => {
+    for (const [returnURL, kept] of [
+      ['https://lms.example/course?x=1', 'https://lms.example/course?x=1'],
+      ['http://lms.example/back', 'http://lms.example/back'],
+      ['javascript:alert(1)', undefined],
+      ['data:text/html,hi', undefined],
+      ['not a url', undefined],
+    ] as const) {
+      const { sim, bridge, launches, launchIdOf } = setup();
+      const l = await sim.launch(LESSON_AU, { returnURL });
+      const res = (await bridge.fetch(new Request(l.launchUrl)))!;
+      expect(res.status, returnURL).toBe(200);
+      expect((await launches.get(launchIdOf(res)))!.returnURL, returnURL).toBe(kept);
+    }
+  });
+
   it('captures the authority on the LMS\'s launched for the session, once, when it takes the launch', async () => {
     const { lrs, sim, bridge, launches, launchIdOf } = setup({ authority: true });
     const l = await sim.launch(LESSON_AU);

@@ -20,6 +20,18 @@ export async function generateKey(controllerDid: string): Promise<SigningKey> {
   return { id: k.id, controller: k.controller, publicKeyMultibase: k.publicKeyMultibase, secretKeyMultibase: k.secretKeyMultibase };
 }
 
+/** True when the secret key signs what the public key verifies: a mismatched pair would make every badge fail to verify. */
+export async function keyPairMatches(key: Pick<SigningKey, 'publicKeyMultibase' | 'secretKeyMultibase'>): Promise<boolean> {
+  try {
+    const pair = await Ed25519Multikey.from({ type: 'Multikey', id: 'urn:cxm:key-check#key', controller: 'urn:cxm:key-check', ...key });
+    const data = new TextEncoder().encode('course-xapi-mcp badge key check');
+    const signature = await pair.signer().sign({ data });
+    return await pair.verifier().verify({ data, signature });
+  } catch {
+    return false;
+  }
+}
+
 /** Returns a signed copy; `unsigned` is left untouched. */
 export async function signCredential(unsigned: object, key: SigningKey): Promise<object> {
   const pair = await Ed25519Multikey.from({ type: 'Multikey', ...key });

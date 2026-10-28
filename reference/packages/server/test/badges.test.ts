@@ -12,6 +12,7 @@ import { checkCmi5Order } from '@course-xapi-mcp/core/xapi';
 import { createLmsSim, createTestLrs } from '@course-xapi-mcp/conformance';
 import type { JWK } from 'jose';
 import {
+  ConfigError,
   MemoryServerStore,
   createApp,
   createAppFromConfig,
@@ -20,6 +21,7 @@ import {
   createServerKeptCustody,
   launchSubject,
   loadConfig,
+  withLearnerLock,
   type App,
   type AppConfig,
   type ServerStore,
@@ -506,6 +508,16 @@ describe('configuration', () => {
     }
   });
 
+  it('refuses to start with a CXM_BADGE_KEY whose public and secret keys are not one pair, without echoing either', async () => {
+    const [a, b] = [await generateKey(DID), await generateKey(DID)];
+    const config = env({ CXM_BADGE_KEY: JSON.stringify({ publicKeyMultibase: a.publicKeyMultibase, secretKeyMultibase: b.secretKeyMultibase }) });
+    const err = await createAppFromConfig(config, { course: await loadExample(), badges: (p) => badgesFromConfig(p, () => undefined) }).catch((e) => e);
+    expect(err).toBeInstanceOf(ConfigError);
+    expect(err.errors.join()).toMatch(/CXM_BADGE_KEY/);
+    expect(JSON.stringify(err.errors)).not.toContain(b.secretKeyMultibase);
+    expect(JSON.stringify(err.errors)).not.toContain(a.publicKeyMultibase);
+  });
+
   it('builds the service from the configuration only when the course server issues', async () => {
     const key = await generateKey(DID);
     const config: AppConfig = env({ CXM_BADGE_KEY: JSON.stringify({ publicKeyMultibase: key.publicKeyMultibase, secretKeyMultibase: key.secretKeyMultibase }), CXM_BADGE_ISSUER_NAME: 'Example Academy' });
@@ -716,9 +728,12 @@ describe('badges in option 1 (lms-launched)', () => {
     expect(earnedIn(o.lrs.statements())).toHaveLength(1);
     expect(o.sim.problems()).toEqual([]);
 
-    // get_record appends the issuer record: both earned statements and both credential ids.
+    // get_record appends the issuer record: both earned statements and both credential ids, each saying whether it
+    // was revoked, so the agent never presents a revoked badge as valid.
+    await o.issuer.revoke(secondId!);
     const record = (await second.call('get_record')).data;
-    expect(record.issuerRecord.credentials.sort()).toEqual(['urn:uuid:' + firstId, 'urn:uuid:' + secondId].sort());
+    const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : 1);
+    expect([...record.issuerRecord.credentials].sort(byId)).toEqual([{ id: 'urn:uuid:' + firstId, revoked: false }, { id: 'urn:uuid:' + secondId, revoked: true }].sort(byId));
     const kept = earnedIn(record.issuerRecord.statements);
     expect(kept).toHaveLength(2);
     // The copy sent inside the session is the very statement the issuer record keeps (R51): one id, one content
@@ -765,6 +780,41 @@ describe('badges in option 1 (lms-launched)', () => {
     } finally {
       o.lrs.failNext(0, 200);
     }
+  });
+});
+
+describe('pending earned statements', () => {
+  it('are sent again only under the learner\'s lock, never by an unlocked read while another call (an erase) holds it', async () => {
+    const earned: string[] = [];
+    const down = { earned: true };
+    const watched = (c: Custody): Custody => ({
+      ...c,
+      option: c.option,
+      official: c.official,
+      deliver: async (l, st) => {
+        if (st.some((x) => x.verb.id === OB_XAPI.earned)) {
+          if (down.earned) throw new Error('record holder down');
+          earned.push(...st.map((x) => x.id));
+        }
+        return c.deliver(l, st);
+      },
+    });
+    const { app, browser, call, subjects } = await optionThree({ wrap: watched });
+    await finishCourse(call);
+    // The claim signs the credential, but the record holder does not take its earned: it stays pending.
+    expect(credentialLinks(await (await claim(app, browser, LESSON_BADGE, { did: 'did:example:wallet' })).text())).toHaveLength(1);
+    expect(earned).toEqual([]);
+    down.earned = false;
+    const [subject] = [...subjects];
+    let read: Promise<unknown> | undefined;
+    await withLearnerLock(subject!, async () => {
+      // Another call (say, the record erase) holds the lock: a read of the badges must not write meanwhile.
+      read = call('get_badges');
+      await new Promise((r) => setTimeout(r, 100));
+      expect(earned).toEqual([]);
+    });
+    await read;
+    expect(earned).toHaveLength(1);
   });
 });
 

@@ -38,9 +38,15 @@ export type AppBadges = BadgeService & {
   revokeLearner(subject: string): Promise<number>;
   /** The record holder accepted these statements (a tool call's delivery, inside the learner's lock): confirms the awards they earned. */
   onDelivered?(l: LearnerRef, statementIds: string[]): Promise<void>;
-  /** Option 1: the issuer record (`earned` statements and credential ids) that `get_record` appends. */
-  records?(l: LearnerRef): Promise<{ statements: XapiStatement[]; credentials: string[] }>;
+  /** Option 1: the issuer record (`earned` statements and credentials) that `get_record` appends. */
+  records?(l: LearnerRef): Promise<{ statements: XapiStatement[]; credentials: IssuedCredential[] }>;
 };
+
+/** A credential in the option 1 issuer record: its id, and whether it was revoked (never present it as valid then). */
+export interface IssuedCredential {
+  id: string;
+  revoked: boolean;
+}
 
 export interface AppOptions {
   course: CourseModel;
