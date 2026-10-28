@@ -35,6 +35,8 @@ export type AppBadges = BadgeService & {
   routes(req: Request): Promise<Response | undefined>;
   /** Revokes every credential issued to this learner subject; returns how many. */
   revokeLearner(subject: string): Promise<number>;
+  /** The record holder accepted these statements (a tool call's delivery, inside the learner's lock): confirms the awards they earned. */
+  onDelivered?(l: LearnerRef, statementIds: string[]): Promise<void>;
   /** Option 1: the issuer record (`earned` statements and credential ids) that `get_record` appends. */
   records?(l: LearnerRef): Promise<{ statements: XapiStatement[]; credentials: string[] }>;
 };

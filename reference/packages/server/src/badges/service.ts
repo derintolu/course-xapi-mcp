@@ -370,6 +370,17 @@ export function createBadgeService(o: BadgeServiceOptions): BadgeIssuer {
       }
     },
 
+    /**
+     * The record holder accepted these statements (R52: in option 1, "the LMS accepted the delivery"): confirms the
+     * learner's awards they earned, so those badges stay listed without a later read. Runs inside the tool call's
+     * learner lock and takes no lock itself.
+     */
+    async onDelivered(l, statementIds) {
+      if (l.kind !== 'official') return;
+      const ids = new Set(statementIds);
+      for (const a of await store.awards(l.subject)) if (!a.confirmed && ids.has(a.earningStatementId)) await store.setConfirmed(l.subject, a.badgeId, a.earningStatementId, true);
+    },
+
     async revokeLearner(subject) {
       // Called inside the record erase's learner lock: it must not take the lock itself. Only the status bits stay.
       return store.eraseLearner(subject);

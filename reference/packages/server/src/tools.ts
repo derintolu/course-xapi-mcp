@@ -98,6 +98,8 @@ const actorForOf = (c: Custody) => (c as Custody & { actorFor?: (subject: string
 /** Option 1: the badge issuer record, which `get_record` appends (design §11 BC-32). */
 const issuerRecordsOf = (b: BadgeService | undefined) =>
   (b as (BadgeService & { records?: (l: LearnerRef) => Promise<{ statements: XapiStatement[]; credentials: string[] }> }) | undefined)?.records;
+/** The badge service's hook for statements the record holder accepted: it confirms the awards they earned (R52). */
+const onDeliveredOf = (b: BadgeService | undefined) => (b as (BadgeService & { onDelivered?: (l: LearnerRef, statementIds: string[]) => Promise<void> }) | undefined)?.onDelivered;
 const launchForOf = (c: Custody) => (c as Custody & { launchFor?: (l: LearnerRef, auKey?: string) => Promise<LaunchContext | { error: string }> }).launchFor;
 
 export function createTools(d: ToolDeps) {
@@ -147,6 +149,20 @@ export function createTools(d: ToolDeps) {
     return { learner: { kind: 'practice', subject: 'practice:' + handle, actor: copy.actor as XapiAgent, handle } };
   }
 
+  /**
+   * Tells the badge service the record holder accepted these statements (inside the learner's lock). A failure here
+   * only delays confirmation to the next read of the record, so it never fails the call.
+   */
+  async function accepted(l: LearnerRef, statements: XapiStatement[]): Promise<void> {
+    const hook = official ? onDeliveredOf(d.badges) : undefined;
+    if (!hook || statements.length === 0) return;
+    try {
+      await hook(l, statements.map((s) => s.id));
+    } catch {
+      // Confirmed on the next read of the record instead.
+    }
+  }
+
   /** Saves `state` with `statements` as its outbox, delivers them, then clears the outbox. */
   async function commit(l: LearnerRef, state: LearnerState, statements: XapiStatement[], etag: string | undefined): Promise<'delivered' | 'pending' | undefined> {
     const saved = await guarded(() => custody.save(l, { ...state, outbox: statements }, etag));
@@ -156,6 +172,7 @@ export function createTools(d: ToolDeps) {
     } catch {
       return 'pending';
     }
+    await accepted(l, statements);
     await clearOutbox(l, state, saved.etag);
     return 'delivered';
   }
@@ -203,6 +220,7 @@ export function createTools(d: ToolDeps) {
         } catch {
           return err(HOLDER_DOWN, state);
         }
+        await accepted(l, state.outbox);
         // Delivering may have changed the stored copy's version (practice keeps statements beside the state). Take the
         // new version only when the stored state is still the one loaded; otherwise another process advanced meanwhile.
         const again = await guarded(() => custody.load(l));

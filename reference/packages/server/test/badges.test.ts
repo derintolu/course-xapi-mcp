@@ -187,6 +187,8 @@ async function exported(app: App, browser: Jar): Promise<XapiStatement[]> {
   return ((await (await app.fetch(req('/record/export.json', { cookies: browser }))).json()) as { record: { statements: XapiStatement[] } }).record.statements;
 }
 
+const badgeIds = (list: { badgeId: string }[]) => list.map((b) => b.badgeId).sort();
+
 function* values(v: unknown): Generator<unknown> {
   yield v;
   if (v && typeof v === 'object') for (const x of Object.values(v)) yield* values(x);
@@ -680,5 +682,56 @@ describe('badges in option 1 (lms-launched)', () => {
     } finally {
       o.lrs.failNext(0, 200);
     }
+  });
+
+  it('a lesson badge the LMS accepted is confirmed by the delivery itself, with no read before the LMS stops answering (R52)', async () => {
+    const o = await optionOne();
+    const { registration } = await firstLesson(o);
+    const lesson = await secondLesson(o, registration);
+    // Nobody looked at the badges while the LMS answered; now its token stops working.
+    o.lrs.failNext(1000, 401);
+    try {
+      expect(ids((await lesson.call('get_badges')).data.badges)).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+      expect(claimable(await claimPage(o.app, lesson.browser)).sort()).toEqual([FIRST_LESSON_BADGE, LESSON_BADGE].sort());
+      const [id] = credentialLinks(await (await claim(o.app, lesson.browser, LESSON_BADGE, { did: 'did:example:wallet' })).text());
+      expect(await verifyCredential(await credential(o.app, lesson.browser, id!), await didDocs(o.app))).toEqual({ verified: true, errors: [] });
+      // Path badges still need the LMS's satisfied, which cannot be read.
+      expect(ids((await lesson.call('get_badges')).data.badges)).not.toContain(PATH_BADGE);
+    } finally {
+      o.lrs.failNext(0, 200);
+    }
+  });
+});
+
+describe('confirmation by delivery', () => {
+  it('a pending delivery confirms nothing; redelivering it on the next call confirms the award without a read', async () => {
+    const down = { deliver: false, record: false };
+    const flaky = (c: Custody): Custody => ({
+      ...c,
+      option: c.option,
+      official: c.official,
+      deliver: async (l, st) => {
+        if (down.deliver) throw new Error('record holder down');
+        return c.deliver(l, st);
+      },
+      record: async (l) => {
+        if (down.record) throw new Error('record holder down');
+        return c.record(l);
+      },
+    });
+    const { call } = await optionThree({ wrap: flaky });
+    expect((await call('start_placement')).isError).toBe(false);
+    // The step that finishes fix-the-config is not accepted: its statements stay in the outbox.
+    const failing = async (name: string, args: Record<string, unknown> = {}) => {
+      if (name === 'choose_branch' && args.branch === 'done') Object.assign(down, { deliver: true, record: true });
+      return call(name, args);
+    };
+    const last = (await teachExample(failing)).at(-1)!;
+    expect(last.r.data.delivery).toBe('pending');
+    expect((await call('get_badges')).data.badges).toEqual([]);
+    // The record holder accepts again but still cannot be read: the redelivery alone confirms the awards.
+    down.deliver = false;
+    expect((await call('end_session')).isError).toBe(false);
+    expect(badgeIds((await call('get_badges')).data.badges)).toEqual([LESSON_BADGE, PATH_BADGE].sort());
   });
 });
