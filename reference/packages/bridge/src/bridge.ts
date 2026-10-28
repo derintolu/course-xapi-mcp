@@ -17,7 +17,18 @@ import {
   type XapiStatement,
 } from '@course-xapi-mcp/core';
 import { buildDefined, isoDuration, type Cmi5Context } from '@course-xapi-mcp/core/xapi';
-import { Cmi5FetchError, createLrsClient, fetchAuthToken, LrsError, type LrsClient } from '@course-xapi-mcp/lrs-client';
+import {
+  Cmi5FetchError,
+  createGuardedFetch,
+  createLrsClient,
+  fetchAuthToken,
+  isLoopbackHost,
+  isPublicAddress,
+  literalAddress,
+  LrsError,
+  type LrsClient,
+  type ResolveHost,
+} from '@course-xapi-mcp/lrs-client';
 import { errorPage, launchPage, PAGE_CSP } from './page.ts';
 import { newPairingCode } from './pairing.ts';
 
@@ -29,8 +40,14 @@ export interface BridgeOptions {
   /** Milliseconds since the epoch. Default `Date.now`. */
   now?: () => number;
   uuid?: () => string;
-  /** Used for the cmi5 fetch URL and the LMS's LRS. */
+  /** Used for the cmi5 fetch URL and the LMS's LRS (tests). Requests through it are still checked by `resolveHost`. */
   fetch?: typeof fetch;
+  /**
+   * Resolves the LMS's host names (default: DNS). Every request the bridge makes reaches public addresses only (and
+   * loopback ones for a loopback host, which a launch link may name only when the bridge itself runs on loopback),
+   * checked again when the socket connects, and never follows a redirect.
+   */
+  resolveHost?: ResolveHost;
   /**
    * Runs `fn` while no tool call for this launch's learner is in flight (the course server's per-learner lock).
    * `sweep` checks and terminates a launch inside it, so it never sends `terminated` while a call is still writing
@@ -62,8 +79,16 @@ const COOKIE_MAX_AGE = DEFAULTS.pairingTtlMs / 1000;
 const LAUNCH_MODES = ['Normal', 'Browse', 'Review'] as const;
 const MOVE_ONS = ['Passed', 'Completed', 'CompletedAndPassed', 'CompletedOrPassed', 'NotApplicable'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isLoopback = (hostname: string) =>
-  hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || hostname === '0.0.0.0' || /^127\.\d+\.\d+\.\d+$/.test(hostname);
+
+/**
+ * The fetch for requests to an LMS URL: public addresses only, or loopback ones too when the URL's host names this
+ * machine (which `safeUrl` lets a launch link do only on a loopback bridge). The custody uses it for the same LMS.
+ */
+export function lmsFetch(o: { fetch?: typeof fetch; resolveHost?: ResolveHost } = {}): (url: string) => typeof fetch {
+  const remote = createGuardedFetch({ fetch: o.fetch, resolveHost: o.resolveHost });
+  const local = createGuardedFetch({ fetch: o.fetch, resolveHost: o.resolveHost, allowLoopback: true });
+  return (url) => (isLoopbackHost(new URL(url).hostname) ? local : remote);
+}
 
 class LaunchRefused extends Error {
   readonly status: number;
@@ -81,7 +106,8 @@ const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 
 /**
  * https, or http on a loopback host (local development and tests). Loopback hosts are accepted only when the bridge itself
- * runs on loopback, so a launch link cannot make a public bridge probe its own machine.
+ * runs on loopback, so a launch link cannot make a public bridge probe its own machine; a non-public address literal is
+ * never accepted. Names are checked again, against what they resolve to, when each request connects (`lmsFetch`).
  */
 function safeUrl(raw: string | null, bridgeOnLoopback: boolean): URL | undefined {
   if (!raw) return undefined;
@@ -92,7 +118,9 @@ function safeUrl(raw: string | null, bridgeOnLoopback: boolean): URL | undefined
     return undefined;
   }
   if (u.username || u.password) return undefined;
-  if (isLoopback(u.hostname)) return bridgeOnLoopback && (u.protocol === 'https:' || u.protocol === 'http:') ? u : undefined;
+  if (isLoopbackHost(u.hostname)) return bridgeOnLoopback && (u.protocol === 'https:' || u.protocol === 'http:') ? u : undefined;
+  const address = literalAddress(u.hostname);
+  if (address !== undefined && !isPublicAddress(address)) return undefined;
   return u.protocol === 'https:' ? u : undefined;
 }
 
@@ -203,7 +231,7 @@ async function launchedAuthority(lrs: LrsClient, k: { actor: XapiAgent; registra
 export function createBridge(o: BridgeOptions): Bridge {
   const now = o.now ?? Date.now;
   const uuid = o.uuid ?? randomUUID;
-  const f = o.fetch ?? fetch;
+  const fetchFor = lmsFetch({ fetch: o.fetch, resolveHost: o.resolveHost });
   const store = o.launches;
   const lock = o.lock ?? (<T>(_c: LaunchContext, fn: () => Promise<T>) => fn());
   /** Launches this bridge started that have not ended yet: the ones `sweep` looks at. */
@@ -216,7 +244,7 @@ export function createBridge(o: BridgeOptions): Bridge {
   const pending = new Map<string, { launch: LaunchContext; endpoint: string; token: string; statement: XapiStatement }>();
 
   const iso = (ms: number) => new Date(ms).toISOString();
-  const client = (endpoint: string, token: string): LrsClient => createLrsClient({ endpoint, auth: { type: 'token', value: token }, fetch: f });
+  const client = (endpoint: string, token: string): LrsClient => createLrsClient({ endpoint, auth: { type: 'token', value: token }, fetch: fetchFor(endpoint) });
 
   function au(key: string): { auId: string; title: string } | undefined {
     if (Object.hasOwn(o.course.lessons, key)) return o.course.lessons[key];
@@ -251,7 +279,7 @@ export function createBridge(o: BridgeOptions): Bridge {
     const key = q.get('au') ?? '';
     const target = au(key);
     if (!target) throw bad('The lesson in this link is not part of this course.');
-    const onLoopback = isLoopback(url.hostname);
+    const onLoopback = isLoopbackHost(url.hostname);
     const endpoint = safeUrl(q.get('endpoint'), onLoopback);
     if (!endpoint) throw bad('The record store address in this link is not allowed.');
     const fetchUrl = safeUrl(q.get('fetch'), onLoopback);
@@ -264,7 +292,7 @@ export function createBridge(o: BridgeOptions): Bridge {
     if (!URL.canParse(activityId)) throw bad('The activity in this link is not valid.');
 
     try {
-      const token = await fetchAuthToken(fetchUrl.href, f);
+      const token = await fetchAuthToken(fetchUrl.href, fetchFor(fetchUrl.href));
       const tokenFetchedAt = now();
       const lrs = client(endpoint.href, token);
       const state = await lrs.getState({ activityId, agent: actor, registration, stateId: 'LMS.LaunchData' });

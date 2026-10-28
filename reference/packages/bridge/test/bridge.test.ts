@@ -23,7 +23,10 @@ const course = {
   },
 } as unknown as CourseModel;
 
-function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; authority?: boolean } = {}) {
+/** The LMS's hosts resolve to a public address in tests, unless a test says otherwise. */
+const publicHost = async () => ['93.184.216.34'];
+
+function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; authority?: boolean; resolveHost?: BridgeOptions['resolveHost'] } = {}) {
   const lrs = createTestLrs({ authority: o.authority });
   const sim = createLmsSim({
     lrs,
@@ -34,17 +37,17 @@ function setup(o: { bridgeUrl?: string; onSent?: BridgeOptions['onSent']; author
       { auId: PLACEMENT_AU, url: `${o.bridgeUrl ?? BRIDGE}?au=placement`, moveOn: 'NotApplicable' },
     ],
   });
-  const calls: { method: string; url: string }[] = [];
+  const calls: { method: string; url: string; redirect?: RequestRedirect }[] = [];
   const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const req = new Request(input, init);
-    calls.push({ method: req.method, url: req.url });
+    calls.push({ method: req.method, url: req.url, redirect: init?.redirect });
     return lrs.fetch(req);
   }) as typeof fetch;
   // A fixed clock a second ahead of the simulator's wall-clock statements, advanced by hand.
   let t = Date.now() + 1000;
   const clock = { now: () => t, advance: (ms: number) => (t += ms) };
   const launches = new MemoryLaunchStore();
-  const bridge = createBridge({ course, mcpUrl: MCP_URL, launches, now: clock.now, fetch: f, onSent: o.onSent });
+  const bridge = createBridge({ course, mcpUrl: MCP_URL, launches, now: clock.now, fetch: f, onSent: o.onSent, resolveHost: o.resolveHost ?? publicHost });
   const fetchPosts = () => calls.filter((c) => c.method === 'POST' && c.url.includes('/cmi5/fetch/')).length;
   const launchIdOf = (res: Response) => /cxm_launch=([^;]+)/.exec(res.headers.get('set-cookie') ?? '')![1];
   return { lrs, sim, bridge, launches, clock, calls, fetchPosts, launchIdOf };
@@ -468,6 +471,51 @@ describe('refused launches', () => {
       expect(res.status).toBe(400);
       expect(calls).toHaveLength(before);
     }
+  });
+
+  it.each(['https://10.0.0.5/xapi', 'https://172.20.1.1/xapi', 'https://192.168.0.9/xapi', 'https://169.254.169.254/xapi', 'https://100.64.0.1/xapi', 'https://[fd00::1]/xapi', 'https://[::ffff:a00:5]/xapi'])(
+    'refuses a private address (%s) as fetch URL or endpoint, before any request',
+    async (address) => {
+      for (const param of ['fetch', 'endpoint']) {
+        const { sim, bridge, calls } = setup();
+        const u = new URL((await sim.launch(LESSON_AU)).launchUrl);
+        u.searchParams.set(param, param === 'fetch' ? `${address}/cmi5/fetch/x` : address);
+        const res = (await bridge.fetch(new Request(u)))!;
+        expect(res.status, param).toBe(400);
+        expect(calls, param).toHaveLength(0);
+      }
+    },
+  );
+
+  it.each(['https://[::ffff:7f00:1]/xapi', 'https://localhost./xapi', 'https://LOCALHOST/xapi', 'https://[::]/xapi', 'https://0.0.0.0/xapi', 'https://a.localhost./xapi'])(
+    'a public bridge refuses every spelling of this machine (%s)',
+    async (loopback) => {
+      for (const param of ['fetch', 'endpoint']) {
+        const { sim, bridge, calls } = setup();
+        const u = new URL((await sim.launch(LESSON_AU)).launchUrl);
+        u.searchParams.set(param, param === 'fetch' ? `${loopback}/cmi5/fetch/x` : loopback);
+        const res = (await bridge.fetch(new Request(u)))!;
+        expect(res.status, param).toBe(400);
+        expect(calls, param).toHaveLength(0);
+      }
+    },
+  );
+
+  it('refuses an LMS whose host name resolves to a non-public address, and sends it nothing', async () => {
+    const { sim, bridge, calls, lrs } = setup({ resolveHost: async () => ['10.1.2.3'] });
+    const res = (await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!;
+    expect(res.status).toBe(502);
+    expect(calls).toHaveLength(0);
+    expect(verbs(lrs)).toEqual([ADL_VERBS.launched]);
+  });
+
+  it('never follows a redirect from the LMS: every request it makes refuses them', async () => {
+    const { sim, bridge, calls, clock, launchIdOf } = setup();
+    const id = launchIdOf((await bridge.fetch(new Request((await sim.launch(LESSON_AU)).launchUrl)))!);
+    clock.advance(31 * MIN);
+    await bridge.terminate(id);
+    expect(calls.length).toBeGreaterThanOrEqual(5);
+    for (const c of calls) expect(c.redirect, `${c.method} ${c.url}`).toBe('error');
   });
 
   it('a loopback bridge accepts a loopback fetch URL', async () => {

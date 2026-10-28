@@ -2,11 +2,14 @@
 // OAuth clients: dynamic registration (RFC 7591, public clients only) and client id metadata documents
 // (an https `client_id` naming a JSON document that lists the client's redirect URIs).
 import { randomBytes } from 'node:crypto';
-import { lookup } from 'node:dns/promises';
 import { request } from 'node:https';
-import { BlockList, isIP, type LookupFunction } from 'node:net';
+import { isIP } from 'node:net';
 import { Readable } from 'node:stream';
+import { guardedLookup, isPublicAddress, resolveWithDns, type ResolveHost } from '@course-xapi-mcp/lrs-client';
 import type { AuthStore, ClientRecord } from './stores.ts';
+
+// The address guard is shared with the launch bridge's LMS requests.
+export { guardedLookup, isPublicAddress, resolveWithDns, type ResolveHost };
 
 /** Metadata documents and request bodies are read up to 64 KB. */
 export const BODY_LIMIT = 65_536;
@@ -120,29 +123,6 @@ function isMetadataDocumentUrl(clientId: string): boolean {
   }
 }
 
-/** Addresses a metadata document fetch must never reach: private, loopback, link-local, shared, reserved, multicast. */
-const NON_PUBLIC = new BlockList();
-for (const [net, bits] of [
-  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
-  ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 3],
-] as const) NON_PUBLIC.addSubnet(net, bits, 'ipv4');
-for (const [net, bits] of [
-  // ::/96 covers ::, ::1 and IPv4-compatible forms such as ::127.0.0.1; ::ffff:0:0:0/96 is IPv4-translated;
-  // 64:ff9b::/96 and 64:ff9b:1::/48 are NAT64; 2002::/16 is 6to4; fec0::/10 is deprecated site-local.
-  ['::', 96], ['::ffff:0:0:0', 96], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['100::', 64], ['2001:db8::', 32], ['2002::', 16],
-  ['fc00::', 7], ['fe80::', 10], ['fec0::', 10], ['ff00::', 8],
-] as const) NON_PUBLIC.addSubnet(net, bits, 'ipv6');
-
-export function isPublicAddress(address: string): boolean {
-  const family = isIP(address);
-  if (family === 0) return false;
-  return !NON_PUBLIC.check(address, family === 4 ? 'ipv4' : 'ipv6');
-}
-
-export type ResolveHost = (hostname: string) => Promise<string[]>;
-
-export const resolveWithDns: ResolveHost = async (hostname) => (await lookup(hostname, { all: true, verbatim: true })).map((a) => a.address);
-
 /** True when the host is an IP literal on the public internet, or a name whose every address is. */
 async function isPublicHost(hostname: string, resolveHost: ResolveHost): Promise<boolean> {
   const bare = hostname.startsWith('[') ? hostname.slice(1, -1) : hostname;
@@ -154,28 +134,6 @@ async function isPublicHost(hostname: string, resolveHost: ResolveHost): Promise
   } catch {
     return false;
   }
-}
-
-/**
- * A socket `lookup` that resolves through `resolveHost` and refuses the connection unless every address is
- * public. Because it runs when the socket connects, a name that resolves differently the second time
- * (DNS rebinding) still cannot reach a private address.
- */
-export function guardedLookup(resolveHost: ResolveHost): LookupFunction {
-  return (hostname, options, callback) => {
-    resolveHost(hostname).then(
-      (addresses) => {
-        if (addresses.length === 0 || !addresses.every(isPublicAddress)) {
-          callback(Object.assign(new Error('refusing a non-public address for ' + hostname), { code: 'ENOTFOUND' }), '', 0);
-        } else if (options.all) {
-          (callback as unknown as (e: null, a: { address: string; family: number }[]) => void)(null, addresses.map((a) => ({ address: a, family: isIP(a) })));
-        } else {
-          callback(null, addresses[0], isIP(addresses[0]));
-        }
-      },
-      (err: NodeJS.ErrnoException) => callback(err, '', 0),
-    );
-  };
 }
 
 /** GET over node:https with the guarded lookup. Redirects are never followed; the signal bounds the whole exchange. */

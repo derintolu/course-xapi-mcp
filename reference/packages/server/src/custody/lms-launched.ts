@@ -16,7 +16,8 @@ import {
   type RecordView,
   type XapiStatement,
 } from '@course-xapi-mcp/core';
-import { createLrsClient, type LrsClient, type XapiVersion } from '@course-xapi-mcp/lrs-client';
+import { lmsFetch } from '@course-xapi-mcp/bridge';
+import { createLrsClient, type LrsClient, type ResolveHost, type XapiVersion } from '@course-xapi-mcp/lrs-client';
 
 type Receipt = NonNullable<RecordView['receipt']>;
 
@@ -36,6 +37,8 @@ export function createLmsLaunchedCustody(o: {
   /** Where the learner asks the LMS to delete their record; given as the deletion link ahead of the launch's `returnURL`. */
   recordHolderUrl?: string;
   fetch?: typeof fetch;
+  /** Resolves the LMS's host names (default: DNS): requests reach public addresses only, as the bridge's do. */
+  resolveHost?: ResolveHost;
 }): Custody & {
   launchFor(l: LearnerRef, auKey?: string): Promise<LaunchContext | { error: string }>;
   /** Puts statements the launch bridge sent itself (`initialized`, a sweeper's `terminated`) into the launch's receipt. */
@@ -44,11 +47,12 @@ export function createLmsLaunchedCustody(o: {
   const courseId = o.course.id;
   /** The xAPI version each LMS endpoint speaks, learnt once; one entry per endpoint, not per launch. */
   const versions = new Map<string, XapiVersion>();
+  const fetchFor = lmsFetch({ fetch: o.fetch, resolveHost: o.resolveHost });
 
   /** A client per call: the token belongs to one launch, so nothing per launch is kept here. */
   function clientFor(c: LaunchContext): LrsClient {
     const known = versions.get(c.endpoint);
-    const client = createLrsClient({ endpoint: c.endpoint, auth: { type: 'token', value: c.authToken }, version: known ?? 'auto', fetch: o.fetch });
+    const client = createLrsClient({ endpoint: c.endpoint, auth: { type: 'token', value: c.authToken }, version: known ?? 'auto', fetch: fetchFor(c.endpoint) });
     if (!known) {
       client.version().then(
         (v) => void versions.set(c.endpoint, v),

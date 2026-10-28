@@ -17,6 +17,7 @@ import {
 } from '@course-xapi-mcp/core';
 import { loadPackage, readDir, readZip } from '@course-xapi-mcp/core/package';
 import { createBridge, startSweeper, type Bridge } from '@course-xapi-mcp/bridge';
+import type { ResolveHost } from '@course-xapi-mcp/lrs-client';
 import { createAuthServer, launchSubject } from './auth/auth-server.ts';
 import { isLoopbackHost } from './auth/clients.ts';
 import { createOidcFederation } from './auth/oidc.ts';
@@ -169,6 +170,8 @@ export interface FromConfigOptions {
   badges?: (parts: BadgeParts) => AppBadges | undefined | Promise<AppBadges | undefined>;
   /** Replaces fetch for the LRS, the LMS and cmi5 token requests (tests). The OpenID Provider uses the global fetch. */
   lrsFetch?: typeof fetch;
+  /** Resolves the LMS's host names for the bridge and option 1 custody (tests; default DNS). */
+  resolveHost?: ResolveHost;
   /** Milliseconds since the epoch, for every part (tests). */
   now?: () => number;
   /** How often the bridge looks for idle option-1 sessions to end. Default 60 s. */
@@ -219,7 +222,7 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
     }
     case 'lms-launched': {
       launches = new MemoryLaunchStore();
-      const lms = createLmsLaunchedCustody({ course, launches, recordHolderUrl: config.recordHolderUrl, fetch: o.lrsFetch });
+      const lms = createLmsLaunchedCustody({ course, launches, recordHolderUrl: config.recordHolderUrl, fetch: o.lrsFetch, resolveHost: o.resolveHost });
       custody = lms;
       auth = authFor('launch-paired', { launches });
       // The bridge sends `initialized` and the sweeper's `terminated` itself; the custody lists them in the receipt.
@@ -229,6 +232,7 @@ export async function createAppFromConfig(config: AppConfig, o: FromConfigOption
         launches,
         now,
         fetch: o.lrsFetch,
+        resolveHost: o.resolveHost,
         lock: (c, fn) => withLearnerLock(launchSubject(c), fn),
         onSent: (c, statements) => lms.recordSent(c, statements),
       });

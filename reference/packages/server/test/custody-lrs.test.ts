@@ -314,7 +314,10 @@ describe('author-LRS custody', () => {
 
 // LMS-launched (option 1)
 
-function lmsSetup(o: { recordHolderUrl?: string } = {}) {
+/** The LMS's host resolves to a public address in tests. */
+const publicHost = async () => ['93.184.216.34'];
+
+function lmsSetup(o: { recordHolderUrl?: string; resolveHost?: (host: string) => Promise<string[]> } = {}) {
   const lrs = createTestLrs();
   const { f, seen } = lrsFetch(lrs);
   const sim = createLmsSim({
@@ -327,7 +330,7 @@ function lmsSetup(o: { recordHolderUrl?: string } = {}) {
     ],
   });
   const launches = new MemoryLaunchStore();
-  const custody = createLmsLaunchedCustody({ course: COURSE, launches, fetch: f, ...o });
+  const custody = createLmsLaunchedCustody({ course: COURSE, launches, fetch: f, resolveHost: publicHost, ...o });
 
   /** What the bridge does on a launch: fetch the token once, read LMS.LaunchData, keep the LaunchContext. */
   async function launch(auId: string, auKey: string, o: { registration?: string } = {}): Promise<LaunchContext> {
@@ -383,6 +386,21 @@ describe('LMS-launched custody', () => {
     }
     const posts = seen.filter((s) => s.method === 'POST' && s.url.pathname.endsWith('/statements'));
     expect(posts.at(-1)!.headers.get('authorization')).toBe('Basic ' + c.authToken);
+  });
+
+  it('never reaches an LMS endpoint whose host now resolves to a non-public address', async () => {
+    let target = ['93.184.216.34'];
+    const { seen, lrs, custody, launch, learnerOf, ctxOf } = lmsSetup({ resolveHost: async () => target });
+    const c = await launch(AU1, 'l1');
+    await custody.deliver(learnerOf(c), defined(ctxOf(c), AU1, ['initialized']));
+    expect(seen.length).toBeGreaterThan(0);
+    // The name now resolves into the private network: nothing is sent there.
+    target = ['10.0.0.8'];
+    const before = { seen: seen.length, stored: lrs.statements().length };
+    await expect(custody.deliver(learnerOf(c), defined(ctxOf(c), AU1, ['completed']))).rejects.toThrow('the record holder is not responding');
+    expect((await custody.record(learnerOf(c))).complete).toBe(false);
+    expect(seen.length).toBe(before.seen);
+    expect(lrs.statements()).toHaveLength(before.stored);
   });
 
   it('keeps working state in the LMS\'s State API with If-None-Match then If-Match, and a stale save conflicts', async () => {
@@ -532,7 +550,7 @@ describe('LMS-launched custody', () => {
   it('load refuses a state the LMS returns without an ETag', async () => {
     const { lrs, launches, launch, learnerOf } = lmsSetup();
     const c = await launch(AU1, 'l1');
-    const custody = createLmsLaunchedCustody({ course: COURSE, launches, fetch: noStateEtag(lrs) });
+    const custody = createLmsLaunchedCustody({ course: COURSE, launches, fetch: noStateEtag(lrs), resolveHost: publicHost });
     await custody.save(learnerOf(c), learnerState(c.registration), undefined);
     await expect(custody.load(learnerOf(c))).rejects.toThrow(NO_VERSION);
   });

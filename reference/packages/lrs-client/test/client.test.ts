@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { StoreConflictError } from '@course-xapi-mcp/core';
 import { Cmi5FetchError, LrsError, createLrsClient, fetchAuthToken } from '../src/index.ts';
 
-type Call = { url: string; method: string; headers: Headers; body?: string };
+type Call = { url: string; method: string; headers: Headers; body?: string; redirect?: RequestRedirect };
 type Reply = { status?: number; body?: unknown; headers?: Record<string, string> };
 
 function stub(handler: (call: Call, n: number) => Reply | Promise<Reply>) {
@@ -14,6 +14,7 @@ function stub(handler: (call: Call, n: number) => Reply | Promise<Reply>) {
       method: init?.method ?? 'GET',
       headers: new Headers(init?.headers),
       body: typeof init?.body === 'string' ? init.body : undefined,
+      redirect: init?.redirect,
     };
     calls.push(call);
     const r = await handler(call, calls.length);
@@ -187,6 +188,17 @@ describe('failures', () => {
   });
 });
 
+describe('redirects', () => {
+  it('every LRS request refuses redirects, so credentials never follow one', async () => {
+    const { f, calls } = stub((c) => (c.url.endsWith('/about') ? { body: { version: ['1.0.3'] } } : c.method === 'GET' ? { body: { statements: [] } } : { status: 204 }));
+    const c = createLrsClient({ endpoint: 'https://lrs.example/xapi', auth: basic, fetch: f });
+    await c.putStatement(stmt('s1'));
+    await c.getStatements({ agent });
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    for (const call of calls) expect(call.redirect, call.url).toBe('error');
+  });
+});
+
 describe('fetchAuthToken', () => {
   it('returns auth-token and POSTs', async () => {
     const { f, calls } = stub(() => ({ body: { 'auth-token': 'dG9r' } }));
@@ -198,6 +210,11 @@ describe('fetchAuthToken', () => {
     const err = await fetchAuthToken('https://lms.example/fetch', f).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(Cmi5FetchError);
     expect((err as Cmi5FetchError).code).toBe('1');
+  });
+  it('never follows a redirect', async () => {
+    const { f, calls } = stub(() => ({ body: { 'auth-token': 'dG9r' } }));
+    await fetchAuthToken('https://lms.example/fetch', f);
+    expect(calls[0]!.redirect).toBe('error');
   });
   it('maps an unrecognised reply to code 3', async () => {
     const { f } = stub(() => ({ status: 500, body: { nope: true } }));

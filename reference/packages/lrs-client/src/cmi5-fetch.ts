@@ -16,7 +16,7 @@ export async function fetchAuthToken(fetchUrl: string, f: typeof fetch = fetch):
   let res: Response;
   let json: unknown;
   try {
-    res = await f(fetchUrl, { method: 'POST', signal: AbortSignal.timeout(10000) });
+    res = await f(fetchUrl, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000) });
     json = await res.json().catch(() => undefined);
   } catch {
     throw new LrsError(0, 'the record holder is not responding; try again shortly');

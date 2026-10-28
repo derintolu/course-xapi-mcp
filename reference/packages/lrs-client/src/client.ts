@@ -68,6 +68,8 @@ export function createLrsClient(o: {
         method: init.method,
         headers: { 'X-Experience-API-Version': ver, Authorization: authorization, ...init.headers },
         body: init.body,
+        // Never follow a redirect: it would carry the credential to wherever it points.
+        redirect: 'error',
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
